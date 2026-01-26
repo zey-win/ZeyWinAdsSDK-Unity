@@ -364,6 +364,54 @@ namespace ZeyWinAds
             return _isBannerVisible ? _cachedBanner : null;
         }
 
+        /// <summary>
+        /// Sets the custom banner height for phones.
+        /// Call before showing the banner for the change to take effect.
+        /// </summary>
+        /// <param name="height">Height in pixels</param>
+        public static void SetBannerHeight(float height)
+        {
+            BannerAd.SetBannerHeight(height);
+        }
+
+        /// <summary>
+        /// Sets the custom banner height for tablets.
+        /// Call before showing the banner for the change to take effect.
+        /// </summary>
+        /// <param name="height">Height in pixels</param>
+        public static void SetTabletBannerHeight(float height)
+        {
+            BannerAd.SetTabletBannerHeight(height);
+        }
+
+        /// <summary>
+        /// Sets the custom banner height for both phones and tablets.
+        /// Call before showing the banner for the change to take effect.
+        /// </summary>
+        /// <param name="phoneHeight">Height in pixels for phones</param>
+        /// <param name="tabletHeight">Height in pixels for tablets</param>
+        public static void SetBannerHeights(float phoneHeight, float tabletHeight)
+        {
+            BannerAd.SetBannerHeights(phoneHeight, tabletHeight);
+        }
+
+        /// <summary>
+        /// Resets banner heights to default values (50px for phones, 90px for tablets).
+        /// </summary>
+        public static void ResetBannerHeights()
+        {
+            BannerAd.ResetBannerHeights();
+        }
+
+        /// <summary>
+        /// Gets the current effective banner height based on device type.
+        /// </summary>
+        /// <returns>Banner height in pixels</returns>
+        public static float GetBannerHeight()
+        {
+            return BannerAd.GetCurrentBannerHeight();
+        }
+
         #endregion
 
         #region Internal Methods

@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using ZeyWinAds.Core;
@@ -37,8 +36,7 @@ namespace ZeyWinAds.Ads
         private AdVideoPlayer _videoPlayer;
         private GameObject _rewardPanel;
         private Button _claimButton;
-        private Text _progressText;
-        private Coroutine _imageTimerCoroutine;
+        private CloseButton _closeButton;
 
         // State
         private bool _adCompleted;
@@ -78,8 +76,9 @@ namespace ZeyWinAds.Ads
             // Create container for ad content
             _adContainer = _canvas.CreateFullscreenContainer("RewardedContainer");
 
-            // Create progress indicator
-            CreateProgressIndicator();
+            // Create close button with timer (same as interstitial)
+            _closeButton = _canvas.CreateCloseButton(OnCloseButtonClicked);
+            _closeButton.gameObject.SetActive(true);
 
             // Display based on media type
             if (AdData.GetMediaType() == MediaType.Video)
@@ -95,6 +94,10 @@ namespace ZeyWinAds.Ads
         private void ShowVideoAd()
         {
             Debug.Log($"[ZeyWinAds] Loading rewarded video: {AdData.media_url}");
+
+            // Disable close button until video completes
+            _closeButton.SetInteractable(false);
+            _closeButton.SetText("");
 
             var videoObj = new GameObject("RewardedVideoPlayer");
             videoObj.transform.SetParent(_adContainer.transform, false);
@@ -126,71 +129,36 @@ namespace ZeyWinAds.Ads
             // Use duration from server if available, otherwise default
             float duration = AdData.duration_sec.HasValue ? AdData.duration_sec.Value : ImageDurationSeconds;
 
-            // Start image timer
-            _imageTimerCoroutine = _canvas.StartCoroutine(ImageTimerCoroutine(duration));
-        }
-
-        private IEnumerator ImageTimerCoroutine(float duration)
-        {
-            float elapsed = 0f;
-
-            while (elapsed < duration)
-            {
-                elapsed += Time.deltaTime;
-                float remaining = duration - elapsed;
-
-                // Update progress indicator
-                if (_progressText != null)
-                {
-                    int remainingInt = Mathf.CeilToInt(remaining);
-                    _progressText.text = remainingInt > 0 ? $"{remainingInt}s" : "";
-                }
-
-                yield return null;
-            }
-
-            // Image viewing complete
-            OnImageComplete();
-        }
-
-        private void CreateProgressIndicator()
-        {
-            var progressObj = new GameObject("ProgressIndicator");
-            progressObj.transform.SetParent(_canvas.transform, false);
-
-            // Get safe area insets and convert to canvas units
-            Rect safeArea = Screen.safeArea;
-            float topInset = Screen.height - (safeArea.y + safeArea.height);
-            float leftInset = safeArea.x;
-            float scaleFactor = _canvas.GetScaleFactor();
-
-            var rectTransform = progressObj.AddComponent<RectTransform>();
-            rectTransform.anchorMin = new Vector2(0, 1);
-            rectTransform.anchorMax = new Vector2(0, 1);
-            rectTransform.pivot = new Vector2(0, 1);
-            rectTransform.anchoredPosition = new Vector2(20 + leftInset / scaleFactor, -20 - topInset / scaleFactor);
-            rectTransform.sizeDelta = new Vector2(100, 30);
-
-            _progressText = progressObj.AddComponent<Text>();
-            _progressText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            _progressText.fontSize = 18;
-            _progressText.color = Color.white;
-            _progressText.alignment = TextAnchor.MiddleLeft;
-            _progressText.text = "";
-
-            // Add shadow for visibility
-            var shadow = progressObj.AddComponent<Shadow>();
-            shadow.effectColor = new Color(0, 0, 0, 0.5f);
-            shadow.effectDistance = new Vector2(1, -1);
+            // Start timer on close button (same style as interstitial)
+            _closeButton.StartTimer(duration, OnImageComplete);
         }
 
         private void OnVideoProgress(float progress, float duration)
         {
-            if (_progressText != null)
+            if (_closeButton != null)
             {
                 int remaining = Mathf.CeilToInt(duration * (1 - progress));
-                _progressText.text = remaining > 0 ? $"{remaining}s" : "";
+                _closeButton.SetText(remaining > 0 ? $"{remaining}" : "");
             }
+        }
+
+        private void OnCloseButtonClicked()
+        {
+            // For rewarded ads, close button click is ignored until ad completes
+            // After completion, user must claim reward via the reward panel
+            if (!_adCompleted)
+            {
+                Debug.Log("[ZeyWinAds] Cannot close rewarded ad yet - must complete viewing");
+                return;
+            }
+
+            // If reward panel is showing, let user claim via that
+            if (_rewardPanel != null)
+            {
+                return;
+            }
+
+            Close();
         }
 
         private void OnVideoComplete()
@@ -212,10 +180,10 @@ namespace ZeyWinAds.Ads
             // Track completion
             TrackComplete();
 
-            // Hide progress indicator
-            if (_progressText != null)
+            // Hide close button (reward panel will have its own close)
+            if (_closeButton != null)
             {
-                _progressText.gameObject.SetActive(false);
+                _closeButton.gameObject.SetActive(false);
             }
 
             // Show reward panel
@@ -226,11 +194,10 @@ namespace ZeyWinAds.Ads
         {
             Debug.LogWarning($"[ZeyWinAds] Rewarded ad error: {error}");
 
-            // Stop image timer if running
-            if (_imageTimerCoroutine != null && _canvas != null)
+            // Stop close button timer if running
+            if (_closeButton != null)
             {
-                _canvas.StopCoroutine(_imageTimerCoroutine);
-                _imageTimerCoroutine = null;
+                _closeButton.StopTimer();
             }
 
             // On error, allow closing but no reward
@@ -368,11 +335,10 @@ namespace ZeyWinAds.Ads
 
             Debug.Log("[ZeyWinAds] Closing rewarded ad");
 
-            // Stop image timer if running
-            if (_imageTimerCoroutine != null && _canvas != null)
+            // Stop close button timer if running
+            if (_closeButton != null)
             {
-                _canvas.StopCoroutine(_imageTimerCoroutine);
-                _imageTimerCoroutine = null;
+                _closeButton.StopTimer();
             }
 
             // Cleanup video player
@@ -396,7 +362,7 @@ namespace ZeyWinAds.Ads
             _adContainer = null;
             _rewardPanel = null;
             _claimButton = null;
-            _progressText = null;
+            _closeButton = null;
 
             OnClose();
         }

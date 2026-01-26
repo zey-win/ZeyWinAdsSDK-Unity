@@ -15,14 +15,80 @@ namespace ZeyWinAds.Ads
         public override AdType AdType => AdType.Banner;
 
         /// <summary>
-        /// Standard banner height in pixels
+        /// Default banner height in pixels
         /// </summary>
-        public const float BannerHeight = 50f;
+        public const float DefaultBannerHeight = 50f;
 
         /// <summary>
-        /// Standard banner height for tablets in pixels
+        /// Default banner height for tablets in pixels
         /// </summary>
-        public const float TabletBannerHeight = 90f;
+        public const float DefaultTabletBannerHeight = 90f;
+
+        /// <summary>
+        /// Custom banner height in pixels (null = use default)
+        /// </summary>
+        private static float? _customBannerHeight = null;
+
+        /// <summary>
+        /// Custom banner height for tablets in pixels (null = use default)
+        /// </summary>
+        private static float? _customTabletBannerHeight = null;
+
+        /// <summary>
+        /// Current banner height in pixels (considering device type and custom settings)
+        /// </summary>
+        public static float BannerHeight => _customBannerHeight ?? DefaultBannerHeight;
+
+        /// <summary>
+        /// Current banner height for tablets in pixels
+        /// </summary>
+        public static float TabletBannerHeight => _customTabletBannerHeight ?? DefaultTabletBannerHeight;
+
+        /// <summary>
+        /// Sets the custom banner height for phones
+        /// </summary>
+        /// <param name="height">Height in pixels (use null to reset to default)</param>
+        public static void SetBannerHeight(float? height)
+        {
+            _customBannerHeight = height;
+        }
+
+        /// <summary>
+        /// Sets the custom banner height for tablets
+        /// </summary>
+        /// <param name="height">Height in pixels (use null to reset to default)</param>
+        public static void SetTabletBannerHeight(float? height)
+        {
+            _customTabletBannerHeight = height;
+        }
+
+        /// <summary>
+        /// Sets the custom banner height for both phones and tablets
+        /// </summary>
+        /// <param name="phoneHeight">Height in pixels for phones (use null to reset to default)</param>
+        /// <param name="tabletHeight">Height in pixels for tablets (use null to reset to default)</param>
+        public static void SetBannerHeights(float? phoneHeight, float? tabletHeight)
+        {
+            _customBannerHeight = phoneHeight;
+            _customTabletBannerHeight = tabletHeight;
+        }
+
+        /// <summary>
+        /// Resets banner heights to default values
+        /// </summary>
+        public static void ResetBannerHeights()
+        {
+            _customBannerHeight = null;
+            _customTabletBannerHeight = null;
+        }
+
+        /// <summary>
+        /// Gets the current effective banner height based on device type
+        /// </summary>
+        public static float GetCurrentBannerHeight()
+        {
+            return DeviceInfo.GetDeviceType() == "tablet" ? TabletBannerHeight : BannerHeight;
+        }
 
         /// <summary>
         /// Current banner position
