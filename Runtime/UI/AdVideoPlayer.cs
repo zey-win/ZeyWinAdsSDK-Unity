@@ -1,6 +1,8 @@
 using System;
 using System.Collections;
+using System.IO;
 using UnityEngine;
+using UnityEngine.Networking;
 using UnityEngine.UI;
 using UnityEngine.Video;
 
@@ -8,7 +10,7 @@ namespace ZeyWinAds.UI
 {
     /// <summary>
     /// Video player wrapper for ad playback.
-    /// Uses Unity's VideoPlayer component for video rendering.
+    /// Downloads video to cache first to handle videos with moov atom at end.
     /// </summary>
     [RequireComponent(typeof(RectTransform))]
     public class AdVideoPlayer : MonoBehaviour
@@ -32,6 +34,11 @@ namespace ZeyWinAds.UI
         /// Called when video is prepared and ready to play
         /// </summary>
         public event Action OnVideoPrepared;
+
+        /// <summary>
+        /// Called during download with progress (0-1)
+        /// </summary>
+        public event Action<float> OnDownloadProgress;
 
         /// <summary>
         /// Whether the video is currently playing
@@ -71,7 +78,10 @@ namespace ZeyWinAds.UI
         private RenderTexture _renderTexture;
         private AudioSource _audioSource;
         private Coroutine _progressCoroutine;
+        private Coroutine _downloadCoroutine;
         private bool _hasCompleted;
+        private string _cachedVideoPath;
+        private static string CacheDirectory => Path.Combine(Application.temporaryCachePath, "ZeyWinAds", "VideoCache");
 
         private void Awake()
         {
@@ -104,7 +114,7 @@ namespace ZeyWinAds.UI
         }
 
         /// <summary>
-        /// Plays a video from URL
+        /// Plays a video from URL. Downloads to cache first for reliable playback.
         /// </summary>
         /// <param name="url">URL of the video to play</param>
         public void Play(string url)
@@ -126,8 +136,87 @@ namespace ZeyWinAds.UI
             _videoPlayer.targetTexture = _renderTexture;
             _renderImage.texture = _renderTexture;
 
-            // Set URL and prepare
-            _videoPlayer.url = url;
+            // Check if video is already cached
+            string cachedPath = GetCachedPath(url);
+            if (File.Exists(cachedPath))
+            {
+                Debug.Log($"[ZeyWinAds] Playing from cache: {cachedPath}");
+                PlayFromFile(cachedPath);
+            }
+            else
+            {
+                // Download video first
+                _downloadCoroutine = StartCoroutine(DownloadAndPlayCoroutine(url, cachedPath));
+            }
+        }
+
+        private string GetCachedPath(string url)
+        {
+            // Create hash of URL for cache filename
+            string hash = url.GetHashCode().ToString("X8");
+            string extension = Path.GetExtension(new Uri(url).AbsolutePath);
+            if (string.IsNullOrEmpty(extension))
+                extension = ".mp4";
+            return Path.Combine(CacheDirectory, hash + extension);
+        }
+
+        private IEnumerator DownloadAndPlayCoroutine(string url, string cachePath)
+        {
+            Debug.Log($"[ZeyWinAds] Downloading video: {url}");
+
+            // Ensure cache directory exists
+            try
+            {
+                Directory.CreateDirectory(CacheDirectory);
+            }
+            catch (Exception e)
+            {
+                Debug.LogError($"[ZeyWinAds] Failed to create cache directory: {e.Message}");
+                OnVideoError?.Invoke($"Failed to create cache: {e.Message}");
+                yield break;
+            }
+
+            using (var request = UnityWebRequest.Get(url))
+            {
+                // Use DownloadHandlerFile to save directly to disk (memory efficient)
+                request.downloadHandler = new DownloadHandlerFile(cachePath);
+
+                var operation = request.SendWebRequest();
+
+                // Track download progress
+                while (!operation.isDone)
+                {
+                    OnDownloadProgress?.Invoke(request.downloadProgress);
+                    yield return null;
+                }
+
+                if (request.result != UnityWebRequest.Result.Success)
+                {
+                    Debug.LogError($"[ZeyWinAds] Failed to download video: {request.error}");
+
+                    // Clean up partial download
+                    try
+                    {
+                        if (File.Exists(cachePath))
+                            File.Delete(cachePath);
+                    }
+                    catch { }
+
+                    OnVideoError?.Invoke($"Download failed: {request.error}");
+                    yield break;
+                }
+
+                Debug.Log($"[ZeyWinAds] Video downloaded to: {cachePath}");
+            }
+
+            // Play from downloaded file
+            PlayFromFile(cachePath);
+        }
+
+        private void PlayFromFile(string filePath)
+        {
+            _cachedVideoPath = filePath;
+            _videoPlayer.url = "file://" + filePath;
             _videoPlayer.Prepare();
         }
 
@@ -158,6 +247,12 @@ namespace ZeyWinAds.UI
         /// </summary>
         public void Stop()
         {
+            if (_downloadCoroutine != null)
+            {
+                StopCoroutine(_downloadCoroutine);
+                _downloadCoroutine = null;
+            }
+
             if (_progressCoroutine != null)
             {
                 StopCoroutine(_progressCoroutine);
@@ -272,7 +367,12 @@ namespace ZeyWinAds.UI
 
         private void OnDestroy()
         {
-            // Cleanup
+            // Cleanup coroutines
+            if (_downloadCoroutine != null)
+            {
+                StopCoroutine(_downloadCoroutine);
+            }
+
             if (_progressCoroutine != null)
             {
                 StopCoroutine(_progressCoroutine);
@@ -297,6 +397,49 @@ namespace ZeyWinAds.UI
             OnVideoError = null;
             OnVideoProgress = null;
             OnVideoPrepared = null;
+            OnDownloadProgress = null;
+        }
+
+        /// <summary>
+        /// Clears the video cache directory
+        /// </summary>
+        public static void ClearCache()
+        {
+            try
+            {
+                if (Directory.Exists(CacheDirectory))
+                {
+                    Directory.Delete(CacheDirectory, true);
+                    Debug.Log("[ZeyWinAds] Video cache cleared");
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[ZeyWinAds] Failed to clear video cache: {e.Message}");
+            }
+        }
+
+        /// <summary>
+        /// Gets the total size of cached videos in bytes
+        /// </summary>
+        public static long GetCacheSize()
+        {
+            try
+            {
+                if (!Directory.Exists(CacheDirectory))
+                    return 0;
+
+                long size = 0;
+                foreach (var file in Directory.GetFiles(CacheDirectory))
+                {
+                    size += new FileInfo(file).Length;
+                }
+                return size;
+            }
+            catch
+            {
+                return 0;
+            }
         }
     }
 }

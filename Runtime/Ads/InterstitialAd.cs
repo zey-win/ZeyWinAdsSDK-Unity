@@ -116,9 +116,34 @@ namespace ZeyWinAds.Ads
             _videoPlayer = videoObj.AddComponent<AdVideoPlayer>();
             _videoPlayer.OnVideoComplete += OnVideoComplete;
             _videoPlayer.OnVideoError += OnVideoError;
+            _videoPlayer.OnDownloadProgress += OnDownloadProgress;
+            _videoPlayer.OnVideoPrepared += OnVideoPrepared;
 
-            // Play video
+            // Show close button with download progress
+            _closeButton.gameObject.SetActive(true);
+            _closeButton.SetInteractable(false);
+            _closeButton.SetText("...");
+
+            // Play video (will download first if not cached)
             _videoPlayer.Play(AdData.media_url);
+        }
+
+        private void OnDownloadProgress(float progress)
+        {
+            if (_closeButton != null)
+            {
+                int percent = Mathf.RoundToInt(progress * 100);
+                _closeButton.SetText($"{percent}%");
+            }
+        }
+
+        private void OnVideoPrepared()
+        {
+            // Video is ready to play, hide download indicator
+            if (_closeButton != null)
+            {
+                _closeButton.gameObject.SetActive(false);
+            }
         }
 
         private void OnVideoComplete()
@@ -127,6 +152,8 @@ namespace ZeyWinAds.Ads
 
             _canClose = true;
             _closeButton.gameObject.SetActive(true);
+            _closeButton.SetInteractable(true);
+            _closeButton.SetText("\u00D7");
 
             // Track completion for video ads
             TrackComplete();
@@ -139,6 +166,8 @@ namespace ZeyWinAds.Ads
             // Allow closing on error
             _canClose = true;
             _closeButton.gameObject.SetActive(true);
+            _closeButton.SetInteractable(true);
+            _closeButton.SetText("\u00D7");
         }
 
         private void OnAdClicked()
@@ -174,6 +203,8 @@ namespace ZeyWinAds.Ads
                 _videoPlayer.Stop();
                 _videoPlayer.OnVideoComplete -= OnVideoComplete;
                 _videoPlayer.OnVideoError -= OnVideoError;
+                _videoPlayer.OnDownloadProgress -= OnDownloadProgress;
+                _videoPlayer.OnVideoPrepared -= OnVideoPrepared;
                 UnityEngine.Object.Destroy(_videoPlayer.gameObject);
                 _videoPlayer = null;
             }

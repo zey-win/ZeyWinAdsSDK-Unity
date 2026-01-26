@@ -113,8 +113,13 @@ namespace ZeyWinAds.Ads
             _videoPlayer.OnVideoComplete += OnVideoComplete;
             _videoPlayer.OnVideoError += OnMediaError;
             _videoPlayer.OnVideoProgress += OnVideoProgress;
+            _videoPlayer.OnDownloadProgress += OnDownloadProgress;
+            _videoPlayer.OnVideoPrepared += OnVideoPrepared;
 
-            // Play video
+            // Show "Loading..." while downloading
+            _closeButton.SetText("...");
+
+            // Play video (will download first if not cached)
             _videoPlayer.Play(AdData.media_url);
         }
 
@@ -131,6 +136,21 @@ namespace ZeyWinAds.Ads
 
             // Start timer on close button (same style as interstitial)
             _closeButton.StartTimer(duration, OnImageComplete);
+        }
+
+        private void OnDownloadProgress(float progress)
+        {
+            if (_closeButton != null)
+            {
+                int percent = Mathf.RoundToInt(progress * 100);
+                _closeButton.SetText($"{percent}%");
+            }
+        }
+
+        private void OnVideoPrepared()
+        {
+            // Video ready to play - progress will now show remaining time
+            Debug.Log("[ZeyWinAds] Rewarded video prepared");
         }
 
         private void OnVideoProgress(float progress, float duration)
@@ -353,6 +373,8 @@ namespace ZeyWinAds.Ads
                 _videoPlayer.OnVideoComplete -= OnVideoComplete;
                 _videoPlayer.OnVideoError -= OnMediaError;
                 _videoPlayer.OnVideoProgress -= OnVideoProgress;
+                _videoPlayer.OnDownloadProgress -= OnDownloadProgress;
+                _videoPlayer.OnVideoPrepared -= OnVideoPrepared;
                 UnityEngine.Object.Destroy(_videoPlayer.gameObject);
                 _videoPlayer = null;
             }
