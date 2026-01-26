@@ -8,7 +8,7 @@ Mobile advertising SDK for Unity games. Supports interstitial, rewarded, and ban
 
 1. Open **Window > Package Manager**
 2. Click **+** button → **Add package from git URL**
-3. Enter: `https://github.com/AdrianGroszworker/zeywinads.git?path=unity-sdk/Assets/ZeyWinAds`
+3. Enter: `https://github.com/thewhiteapps/ZeyWinAdsSDK-Unity.git`
 4. Click **Add**
 
 ### Manual Installation
