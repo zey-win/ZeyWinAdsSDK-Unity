@@ -41,7 +41,9 @@ namespace ZeyWinAds.Ads
         // State
         private bool _adCompleted;
         private bool _rewardClaimed;
+        private bool _canSkip;
         private int _rewardAmount;
+        private float _skipAfterSeconds;
 
         /// <summary>
         /// Creates a new rewarded ad instance
@@ -95,9 +97,13 @@ namespace ZeyWinAds.Ads
         {
             Debug.Log($"[ZeyWinAds] Loading rewarded video: {AdData.media_url}");
 
-            // Disable close button until video completes
+            // Get skip time from server (0 or null = no skip, must watch full video)
+            _skipAfterSeconds = AdData.skip_after_sec.HasValue ? AdData.skip_after_sec.Value : 0;
+            _canSkip = false;
+
+            // Disable close button until skip is allowed or video completes
             _closeButton.SetInteractable(false);
-            _closeButton.SetText("");
+            _closeButton.SetText("...");
 
             var videoObj = new GameObject("RewardedVideoPlayer");
             videoObj.transform.SetParent(_adContainer.transform, false);
@@ -115,9 +121,6 @@ namespace ZeyWinAds.Ads
             _videoPlayer.OnVideoProgress += OnVideoProgress;
             _videoPlayer.OnDownloadProgress += OnDownloadProgress;
             _videoPlayer.OnVideoPrepared += OnVideoPrepared;
-
-            // Show "Loading..." while downloading
-            _closeButton.SetText("...");
 
             // Play video (will download first if not cached)
             _videoPlayer.Play(AdData.media_url);
@@ -149,36 +152,60 @@ namespace ZeyWinAds.Ads
 
         private void OnVideoPrepared()
         {
-            // Video ready to play - progress will now show remaining time
-            Debug.Log("[ZeyWinAds] Rewarded video prepared");
+            Debug.Log($"[ZeyWinAds] Rewarded video prepared, skip_after={_skipAfterSeconds}s");
+
+            // If skip is allowed, start timer to enable skip button
+            if (_skipAfterSeconds > 0)
+            {
+                _closeButton.StartTimer(_skipAfterSeconds, OnSkipAvailable);
+            }
+            // Otherwise, show remaining video time (updated in OnVideoProgress)
+        }
+
+        private void OnSkipAvailable()
+        {
+            Debug.Log("[ZeyWinAds] Skip now available");
+            _canSkip = true;
+            _closeButton.SetInteractable(true);
+            _closeButton.SetText("\u00D7"); // Show X when skip is available
         }
 
         private void OnVideoProgress(float progress, float duration)
         {
-            if (_closeButton != null)
-            {
-                int remaining = Mathf.CeilToInt(duration * (1 - progress));
-                _closeButton.SetText(remaining > 0 ? $"{remaining}" : "");
-            }
+            // Don't update text if skip timer is running (CloseButton handles it)
+            // or if skip is already available
+            if (_closeButton == null || _skipAfterSeconds > 0)
+                return;
+
+            // No skip allowed - show remaining video time
+            int remaining = Mathf.CeilToInt(duration * (1 - progress));
+            _closeButton.SetText(remaining > 0 ? $"{remaining}" : "");
         }
 
         private void OnCloseButtonClicked()
         {
-            // For rewarded ads, close button click is ignored until ad completes
-            // After completion, user must claim reward via the reward panel
-            if (!_adCompleted)
-            {
-                Debug.Log("[ZeyWinAds] Cannot close rewarded ad yet - must complete viewing");
-                return;
-            }
-
             // If reward panel is showing, let user claim via that
             if (_rewardPanel != null)
             {
                 return;
             }
 
-            Close();
+            // If skip is available, allow closing (no reward)
+            if (_canSkip)
+            {
+                Debug.Log("[ZeyWinAds] User skipped rewarded ad - no reward given");
+                Close();
+                return;
+            }
+
+            // If ad completed, close (reward already handled via panel)
+            if (_adCompleted)
+            {
+                Close();
+                return;
+            }
+
+            Debug.Log("[ZeyWinAds] Cannot close rewarded ad yet - must complete viewing or wait for skip");
         }
 
         private void OnVideoComplete()
@@ -228,69 +255,120 @@ namespace ZeyWinAds.Ads
 
         private void ShowRewardPanel()
         {
-            _rewardPanel = new GameObject("RewardPanel");
-            _rewardPanel.transform.SetParent(_canvas.transform, false);
+            // Semi-transparent overlay
+            var overlay = new GameObject("RewardOverlay");
+            overlay.transform.SetParent(_canvas.transform, false);
+            var overlayRect = overlay.AddComponent<RectTransform>();
+            overlayRect.anchorMin = Vector2.zero;
+            overlayRect.anchorMax = Vector2.one;
+            overlayRect.sizeDelta = Vector2.zero;
+            var overlayImage = overlay.AddComponent<Image>();
+            overlayImage.color = new Color(0, 0, 0, 0.7f);
 
-            // Setup panel rect
+            _rewardPanel = new GameObject("RewardPanel");
+            _rewardPanel.transform.SetParent(overlay.transform, false);
+
+            // Panel - responsive width (80% of screen, max 400)
             var panelRect = _rewardPanel.AddComponent<RectTransform>();
             panelRect.anchorMin = new Vector2(0.5f, 0.5f);
             panelRect.anchorMax = new Vector2(0.5f, 0.5f);
             panelRect.pivot = new Vector2(0.5f, 0.5f);
-            panelRect.sizeDelta = new Vector2(300, 200);
+            float panelWidth = Mathf.Min(Screen.width * 0.8f, 400);
+            panelRect.sizeDelta = new Vector2(panelWidth, 320);
 
             // Panel background
             var panelImage = _rewardPanel.AddComponent<Image>();
-            panelImage.color = new Color(0.1f, 0.1f, 0.1f, 0.95f);
+            panelImage.color = new Color(0.12f, 0.12f, 0.14f, 1f);
 
-            // Add layout
+            // Layout
             var layout = _rewardPanel.AddComponent<VerticalLayoutGroup>();
             layout.childAlignment = TextAnchor.MiddleCenter;
-            layout.spacing = 20;
-            layout.padding = new RectOffset(20, 20, 30, 30);
+            layout.spacing = 16;
+            layout.padding = new RectOffset(24, 24, 32, 32);
             layout.childControlWidth = true;
             layout.childControlHeight = false;
+            layout.childForceExpandWidth = true;
 
-            // Success text
-            var successObj = new GameObject("SuccessText");
-            successObj.transform.SetParent(_rewardPanel.transform, false);
-            var successText = successObj.AddComponent<Text>();
-            successText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            successText.fontSize = 24;
-            successText.color = Color.white;
-            successText.alignment = TextAnchor.MiddleCenter;
-            successText.text = "Ad Complete!";
-            var successLayout = successObj.AddComponent<LayoutElement>();
-            successLayout.preferredHeight = 40;
+            // Checkmark circle
+            var checkContainer = new GameObject("CheckContainer");
+            checkContainer.transform.SetParent(_rewardPanel.transform, false);
+            var checkContainerLayout = checkContainer.AddComponent<LayoutElement>();
+            checkContainerLayout.preferredHeight = 80;
+            checkContainerLayout.preferredWidth = 80;
 
-            // Reward text
-            var rewardObj = new GameObject("RewardText");
-            rewardObj.transform.SetParent(_rewardPanel.transform, false);
-            var rewardText = rewardObj.AddComponent<Text>();
-            rewardText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            rewardText.fontSize = 18;
-            rewardText.color = new Color(0.8f, 0.8f, 0.8f);
-            rewardText.alignment = TextAnchor.MiddleCenter;
-            rewardText.text = $"You earned {_rewardAmount} reward(s)";
-            var rewardLayout = rewardObj.AddComponent<LayoutElement>();
-            rewardLayout.preferredHeight = 30;
+            var checkCircle = new GameObject("CheckCircle");
+            checkCircle.transform.SetParent(checkContainer.transform, false);
+            var checkCircleRect = checkCircle.AddComponent<RectTransform>();
+            checkCircleRect.anchorMin = new Vector2(0.5f, 0.5f);
+            checkCircleRect.anchorMax = new Vector2(0.5f, 0.5f);
+            checkCircleRect.sizeDelta = new Vector2(80, 80);
+            var checkCircleImage = checkCircle.AddComponent<Image>();
+            checkCircleImage.color = new Color(0.18f, 0.8f, 0.44f, 1f); // Green
+
+            var checkText = new GameObject("CheckText");
+            checkText.transform.SetParent(checkCircle.transform, false);
+            var checkTextRect = checkText.AddComponent<RectTransform>();
+            checkTextRect.anchorMin = Vector2.zero;
+            checkTextRect.anchorMax = Vector2.one;
+            checkTextRect.sizeDelta = Vector2.zero;
+            var checkLabel = checkText.AddComponent<Text>();
+            checkLabel.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            checkLabel.fontSize = 48;
+            checkLabel.color = Color.white;
+            checkLabel.alignment = TextAnchor.MiddleCenter;
+            checkLabel.text = "\u2713"; // Checkmark
+
+            // Title
+            var titleObj = new GameObject("TitleText");
+            titleObj.transform.SetParent(_rewardPanel.transform, false);
+            var titleText = titleObj.AddComponent<Text>();
+            titleText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            titleText.fontSize = 28;
+            titleText.fontStyle = FontStyle.Bold;
+            titleText.color = Color.white;
+            titleText.alignment = TextAnchor.MiddleCenter;
+            titleText.text = "Reward Earned!";
+            var titleLayout = titleObj.AddComponent<LayoutElement>();
+            titleLayout.preferredHeight = 36;
+
+            // Subtitle
+            var subtitleObj = new GameObject("SubtitleText");
+            subtitleObj.transform.SetParent(_rewardPanel.transform, false);
+            var subtitleText = subtitleObj.AddComponent<Text>();
+            subtitleText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            subtitleText.fontSize = 18;
+            subtitleText.color = new Color(0.7f, 0.7f, 0.7f);
+            subtitleText.alignment = TextAnchor.MiddleCenter;
+            subtitleText.text = "Thanks for watching";
+            var subtitleLayout = subtitleObj.AddComponent<LayoutElement>();
+            subtitleLayout.preferredHeight = 24;
+
+            // Spacer
+            var spacer = new GameObject("Spacer");
+            spacer.transform.SetParent(_rewardPanel.transform, false);
+            var spacerLayout = spacer.AddComponent<LayoutElement>();
+            spacerLayout.preferredHeight = 8;
 
             // Claim button
             var buttonObj = new GameObject("ClaimButton");
             buttonObj.transform.SetParent(_rewardPanel.transform, false);
 
-            var buttonRect = buttonObj.AddComponent<RectTransform>();
-            buttonRect.sizeDelta = new Vector2(200, 50);
-
             var buttonImage = buttonObj.AddComponent<Image>();
-            buttonImage.color = new Color(0.2f, 0.7f, 0.3f);
+            buttonImage.color = new Color(0.18f, 0.8f, 0.44f, 1f); // Green
 
             _claimButton = buttonObj.AddComponent<Button>();
             _claimButton.targetGraphic = buttonImage;
             _claimButton.onClick.AddListener(OnClaimButtonClicked);
 
+            // Button hover colors
+            var colors = _claimButton.colors;
+            colors.highlightedColor = new Color(0.22f, 0.9f, 0.5f, 1f);
+            colors.pressedColor = new Color(0.14f, 0.65f, 0.36f, 1f);
+            _claimButton.colors = colors;
+
             var buttonLayout = buttonObj.AddComponent<LayoutElement>();
-            buttonLayout.preferredHeight = 50;
-            buttonLayout.preferredWidth = 200;
+            buttonLayout.preferredHeight = 56;
+            buttonLayout.flexibleWidth = 1;
 
             // Button text
             var buttonTextObj = new GameObject("ButtonText");
@@ -302,10 +380,11 @@ namespace ZeyWinAds.Ads
 
             var buttonText = buttonTextObj.AddComponent<Text>();
             buttonText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            buttonText.fontSize = 20;
+            buttonText.fontSize = 22;
+            buttonText.fontStyle = FontStyle.Bold;
             buttonText.color = Color.white;
             buttonText.alignment = TextAnchor.MiddleCenter;
-            buttonText.text = "Claim Reward";
+            buttonText.text = "CLAIM";
         }
 
         private void ShowCloseOption()

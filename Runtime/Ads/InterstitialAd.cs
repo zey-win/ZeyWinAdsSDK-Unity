@@ -27,6 +27,7 @@ namespace ZeyWinAds.Ads
         // State
         private bool _canClose;
         private float _showTime;
+        private float _skipAfterSeconds;
 
         /// <summary>
         /// Creates a new interstitial ad instance
@@ -53,6 +54,10 @@ namespace ZeyWinAds.Ads
             var clickHandler = _adContainer.AddComponent<UnityEngine.UI.Button>();
             clickHandler.onClick.AddListener(OnAdClicked);
 
+            // Create close button first (video ads need it for download progress)
+            _closeButton = _canvas.CreateCloseButton(OnCloseButtonClicked);
+            _closeButton.gameObject.SetActive(false);
+
             // Display based on media type
             if (AdData.GetMediaType() == MediaType.Video)
             {
@@ -61,24 +66,12 @@ namespace ZeyWinAds.Ads
             else
             {
                 ShowImageAd();
-            }
-
-            // Create close button
-            _closeButton = _canvas.CreateCloseButton(OnCloseButtonClicked);
-
-            if (AdData.GetMediaType() == MediaType.Image)
-            {
-                // For images, show close button with timer (button visible but shows countdown)
+                // For images, show close button with timer
                 _closeButton.gameObject.SetActive(true);
                 _closeButton.StartTimer(ImageCloseDelay, () =>
                 {
                     _canClose = true;
                 });
-            }
-            else
-            {
-                // For videos, hide close button until video completes
-                _closeButton.gameObject.SetActive(false);
             }
         }
 
@@ -101,6 +94,9 @@ namespace ZeyWinAds.Ads
         private void ShowVideoAd()
         {
             Debug.Log($"[ZeyWinAds] Loading interstitial video: {AdData.media_url}");
+
+            // Get skip time from server (0 or null = wait until video ends)
+            _skipAfterSeconds = AdData.skip_after_sec.HasValue ? AdData.skip_after_sec.Value : 0;
 
             // Create video player
             var videoObj = new GameObject("AdVideoPlayer");
@@ -139,11 +135,27 @@ namespace ZeyWinAds.Ads
 
         private void OnVideoPrepared()
         {
-            // Video is ready to play, hide download indicator
-            if (_closeButton != null)
+            Debug.Log($"[ZeyWinAds] Interstitial video prepared, skip_after={_skipAfterSeconds}s");
+
+            if (_skipAfterSeconds > 0)
             {
+                // Start skip countdown timer
+                _closeButton.gameObject.SetActive(true);
+                _closeButton.StartTimer(_skipAfterSeconds, OnSkipAvailable);
+            }
+            else
+            {
+                // No skip - hide close button until video ends
                 _closeButton.gameObject.SetActive(false);
             }
+        }
+
+        private void OnSkipAvailable()
+        {
+            Debug.Log("[ZeyWinAds] Skip now available");
+            _canClose = true;
+            _closeButton.SetInteractable(true);
+            _closeButton.SetText("\u00D7");
         }
 
         private void OnVideoComplete()

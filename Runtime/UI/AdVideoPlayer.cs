@@ -74,6 +74,7 @@ namespace ZeyWinAds.UI
         public float CurrentTime => _videoPlayer != null ? (float)_videoPlayer.time : 0f;
 
         private VideoPlayer _videoPlayer;
+        private GameObject _imageContainer;
         private RawImage _renderImage;
         private RenderTexture _renderTexture;
         private AudioSource _audioSource;
@@ -94,7 +95,7 @@ namespace ZeyWinAds.UI
             _videoPlayer = gameObject.AddComponent<VideoPlayer>();
             _videoPlayer.playOnAwake = false;
             _videoPlayer.renderMode = VideoRenderMode.RenderTexture;
-            _videoPlayer.aspectRatio = VideoAspectRatio.FitOutside; // Scale to fill (crop edges)
+            _videoPlayer.aspectRatio = VideoAspectRatio.NoScaling; // We handle aspect ratio manually
             _videoPlayer.source = VideoSource.Url;
 
             // Setup audio
@@ -103,8 +104,20 @@ namespace ZeyWinAds.UI
             _videoPlayer.audioOutputMode = VideoAudioOutputMode.AudioSource;
             _videoPlayer.SetTargetAudioSource(0, _audioSource);
 
-            // Create render image (transparent until video is ready)
-            _renderImage = gameObject.AddComponent<RawImage>();
+            // Add mask to this container to clip overflow
+            gameObject.AddComponent<RectMask2D>();
+
+            // Create child image that will be sized for aspect fill
+            _imageContainer = new GameObject("VideoImage");
+            _imageContainer.transform.SetParent(transform, false);
+
+            var imageRect = _imageContainer.AddComponent<RectTransform>();
+            imageRect.anchorMin = new Vector2(0.5f, 0.5f);
+            imageRect.anchorMax = new Vector2(0.5f, 0.5f);
+            imageRect.pivot = new Vector2(0.5f, 0.5f);
+            imageRect.anchoredPosition = Vector2.zero;
+
+            _renderImage = _imageContainer.AddComponent<RawImage>();
             _renderImage.color = Color.clear;
 
             // Subscribe to events
@@ -128,13 +141,6 @@ namespace ZeyWinAds.UI
             Debug.Log($"[ZeyWinAds] Playing video: {url}");
 
             _hasCompleted = false;
-
-            // Setup render texture based on screen size
-            int width = Mathf.Min(Screen.width, 1920);
-            int height = Mathf.Min(Screen.height, 1080);
-            _renderTexture = new RenderTexture(width, height, 0);
-            _videoPlayer.targetTexture = _renderTexture;
-            _renderImage.texture = _renderTexture;
 
             // Check if video is already cached
             string cachedPath = GetCachedPath(url);
@@ -301,7 +307,17 @@ namespace ZeyWinAds.UI
 
         private void OnPrepareCompleted(VideoPlayer source)
         {
-            Debug.Log("[ZeyWinAds] Video prepared, starting playback");
+            Debug.Log($"[ZeyWinAds] Video prepared: {source.width}x{source.height}, starting playback");
+
+            // Create render texture at video's native resolution
+            int videoWidth = (int)source.width;
+            int videoHeight = (int)source.height;
+            _renderTexture = new RenderTexture(videoWidth, videoHeight, 0);
+            _videoPlayer.targetTexture = _renderTexture;
+            _renderImage.texture = _renderTexture;
+
+            // Apply aspect fill scaling
+            ApplyAspectFill();
 
             // Make render image visible now that video is ready
             if (_renderImage != null)
@@ -320,6 +336,51 @@ namespace ZeyWinAds.UI
                 StopCoroutine(_progressCoroutine);
             }
             _progressCoroutine = StartCoroutine(TrackProgressCoroutine());
+        }
+
+        private void ApplyAspectFill()
+        {
+            if (_videoPlayer == null || _imageContainer == null)
+                return;
+
+            var containerRect = GetComponent<RectTransform>();
+            var imageRect = _imageContainer.GetComponent<RectTransform>();
+
+            if (containerRect == null || imageRect == null)
+                return;
+
+            // Get container size (screen size)
+            float containerWidth = containerRect.rect.width > 0 ? containerRect.rect.width : Screen.width;
+            float containerHeight = containerRect.rect.height > 0 ? containerRect.rect.height : Screen.height;
+
+            // Get video dimensions
+            float videoWidth = _videoPlayer.width;
+            float videoHeight = _videoPlayer.height;
+
+            if (videoWidth <= 0 || videoHeight <= 0)
+                return;
+
+            float videoAspect = videoWidth / videoHeight;
+            float containerAspect = containerWidth / containerHeight;
+
+            float width, height;
+
+            // Aspect Fill: scale to cover container completely (crop edges)
+            if (videoAspect > containerAspect)
+            {
+                // Video is wider - match height, overflow width
+                height = containerHeight;
+                width = height * videoAspect;
+            }
+            else
+            {
+                // Video is taller - match width, overflow height
+                width = containerWidth;
+                height = width / videoAspect;
+            }
+
+            imageRect.sizeDelta = new Vector2(width, height);
+            Debug.Log($"[ZeyWinAds] Video aspect fill: container={containerWidth}x{containerHeight}, video={videoWidth}x{videoHeight}, result={width}x{height}");
         }
 
         private void OnLoopPointReached(VideoPlayer source)
