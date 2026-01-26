@@ -55,12 +55,12 @@ namespace ZeyWinAds
         {
             if (string.IsNullOrEmpty(apiKey))
             {
-                Logger.Error("API key cannot be null or empty");
+                Core.Logger.Error("API key cannot be null or empty");
                 return;
             }
 
             AdClient.Instance.Initialize(apiKey);
-            Logger.Log("SDK initialized successfully");
+            Core.Logger.Log("SDK initialized successfully");
 
             // Configure and start the AdLoader
             if (preloadSettings != null)
@@ -93,7 +93,7 @@ namespace ZeyWinAds
         /// <param name="level">The log level to set</param>
         public static void SetLogLevel(LogLevel level)
         {
-            Logger.SetLogLevel(level);
+            Core.Logger.SetLogLevel(level);
         }
 
         #region Interstitial Ads
@@ -106,7 +106,7 @@ namespace ZeyWinAds
             // Check if already preloaded
             if (AdLoader.Instance.IsAdReady(AdType.Interstitial))
             {
-                Logger.Debug("Interstitial already preloaded");
+                Core.Logger.Debug("Interstitial already preloaded");
                 OnAdLoaded?.Invoke(AdType.Interstitial);
                 return;
             }
@@ -151,7 +151,7 @@ namespace ZeyWinAds
             // Fallback to cached response
             if (_cachedInterstitial == null)
             {
-                Logger.Warn("No interstitial ad loaded. Call LoadInterstitial() first.");
+                Core.Logger.Warn("No interstitial ad loaded. Call LoadInterstitial() first.");
                 onClose?.Invoke();
                 return;
             }
@@ -176,7 +176,7 @@ namespace ZeyWinAds
             // Check if already preloaded
             if (AdLoader.Instance.IsAdReady(AdType.Rewarded))
             {
-                Logger.Debug("Rewarded already preloaded");
+                Core.Logger.Debug("Rewarded already preloaded");
                 OnAdLoaded?.Invoke(AdType.Rewarded);
                 return;
             }
@@ -230,7 +230,7 @@ namespace ZeyWinAds
             // Fallback to cached response
             if (_cachedRewarded == null)
             {
-                Logger.Warn("No rewarded ad loaded. Call LoadRewarded() first.");
+                Core.Logger.Warn("No rewarded ad loaded. Call LoadRewarded() first.");
                 onClose?.Invoke();
                 return;
             }
@@ -256,7 +256,7 @@ namespace ZeyWinAds
             // Check if already preloaded
             if (AdLoader.Instance.IsAdReady(AdType.Banner))
             {
-                Logger.Debug("Banner already preloaded");
+                Core.Logger.Debug("Banner already preloaded");
                 OnAdLoaded?.Invoke(AdType.Banner);
                 return;
             }
@@ -292,14 +292,14 @@ namespace ZeyWinAds
                 bannerAd.Show();
 
                 OnAdOpened?.Invoke(AdType.Banner);
-                Logger.Log("Banner shown at {0}", position);
+                Core.Logger.Log("Banner shown at {0}", position);
                 return;
             }
 
             // Fallback to cached response
             if (_cachedBanner == null)
             {
-                Logger.Warn("No banner ad loaded. Call LoadBanner() first.");
+                Core.Logger.Warn("No banner ad loaded. Call LoadBanner() first.");
                 return;
             }
 
@@ -311,7 +311,7 @@ namespace ZeyWinAds
 
             OnAdOpened?.Invoke(AdType.Banner);
 
-            Logger.Log("Banner shown at {0}", position);
+            Core.Logger.Log("Banner shown at {0}", position);
         }
 
         /// <summary>
@@ -333,7 +333,7 @@ namespace ZeyWinAds
 
             OnAdClosed?.Invoke(AdType.Banner);
 
-            Logger.Log("Banner hidden");
+            Core.Logger.Log("Banner hidden");
         }
 
         /// <summary>
@@ -370,13 +370,13 @@ namespace ZeyWinAds
 
         private static void OnAdPreloaded(AdType adType)
         {
-            Logger.Debug("{0} ad preloaded and ready", adType);
+            Core.Logger.Debug("{0} ad preloaded and ready", adType);
             OnAdLoaded?.Invoke(adType);
         }
 
         private static void OnPreloadFailed(AdType adType, string error)
         {
-            Logger.Warn("Preload failed for {0}: {1}", adType, error);
+            Core.Logger.Warn("Preload failed for {0}: {1}", adType, error);
             OnAdFailedToLoad?.Invoke(adType, error);
         }
 
@@ -384,32 +384,32 @@ namespace ZeyWinAds
         {
             if (!AdClient.Instance.IsInitialized)
             {
-                Logger.Error("SDK not initialized. Call ZeyWinAds.Initialize() first.");
+                Core.Logger.Error("SDK not initialized. Call ZeyWinAds.Initialize() first.");
                 OnAdFailedToLoad?.Invoke(adType, "SDK not initialized");
                 return;
             }
 
             if (_loadingAds.Contains(adType))
             {
-                Logger.Warn("{0} ad is already loading", adType);
+                Core.Logger.Warn("{0} ad is already loading", adType);
                 return;
             }
 
             _loadingAds.Add(adType);
-            Logger.Log("Loading {0} ad...", adType);
+            Core.Logger.Log("Loading {0} ad...", adType);
 
             AdClient.Instance.RequestAd(adType,
                 onSuccess: (response) =>
                 {
                     _loadingAds.Remove(adType);
                     CacheAd(adType, response);
-                    Logger.Log("{0} ad loaded successfully", adType);
+                    Core.Logger.Log("{0} ad loaded successfully", adType);
                     OnAdLoaded?.Invoke(adType);
                 },
                 onError: (error) =>
                 {
                     _loadingAds.Remove(adType);
-                    Logger.Warn("Failed to load {0} ad: {1}", adType, error);
+                    Core.Logger.Warn("Failed to load {0} ad: {1}", adType, error);
                     OnAdFailedToLoad?.Invoke(adType, error);
                 }
             );
@@ -438,7 +438,7 @@ namespace ZeyWinAds
 
             OnAdOpened?.Invoke(adType);
 
-            Logger.Log("Showing {0} ad: {1}", adType, ad.ad_id);
+            Core.Logger.Log("Showing {0} ad: {1}", adType, ad.ad_id);
         }
 
         private static void TrackImpression(AdResponse ad)

@@ -58,6 +58,19 @@ namespace ZeyWinAds.Core
         }
 
         /// <summary>
+        /// Logs a debug message with formatting. Only shown when LogLevel is Debug.
+        /// </summary>
+        [System.Diagnostics.Conditional("UNITY_EDITOR")]
+        [System.Diagnostics.Conditional("ZEYWINADS_DEBUG")]
+        public static void Debug(string format, params object[] args)
+        {
+            if (_currentLogLevel >= LogLevel.Debug)
+            {
+                UnityEngine.Debug.Log($"{TAG} {string.Format(format, args)}");
+            }
+        }
+
+        /// <summary>
         /// Logs an info message. Shown when LogLevel is Info or higher.
         /// </summary>
         public static void Log(string message)
