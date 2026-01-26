@@ -104,22 +104,34 @@ namespace ZeyWinAds.Core
         }
 
         /// <summary>
-        /// Tracks an event with full request body (alternative method)
+        /// Tracks an event with full request body (POST method)
         /// </summary>
         public void TrackEvent(string eventType, string adId, Action onSuccess = null, Action<string> onError = null)
         {
             if (!_isInitialized)
             {
+                Debug.LogWarning("[ZeyWinAds] Cannot track event - not initialized");
                 onError?.Invoke("ZeyWinAds not initialized");
                 return;
             }
 
             EventRequest request = new EventRequest(_bundleId, _apiKey, adId, eventType);
             string endpoint = GetCurrentEndpoint() + "/events";
+            string jsonBody = JsonUtility.ToJson(request);
 
-            StartCoroutine(PostRequestCoroutine(endpoint, JsonUtility.ToJson(request),
-                (response) => onSuccess?.Invoke(),
-                onError,
+            Debug.Log($"[ZeyWinAds] Tracking event via POST: {eventType} for ad {adId}");
+            Debug.Log($"[ZeyWinAds] POST to: {endpoint}");
+            Debug.Log($"[ZeyWinAds] Body: {jsonBody}");
+
+            StartCoroutine(PostRequestCoroutine(endpoint, jsonBody,
+                (response) => {
+                    Debug.Log($"[ZeyWinAds] Event tracked successfully: {eventType}");
+                    onSuccess?.Invoke();
+                },
+                (error) => {
+                    Debug.LogError($"[ZeyWinAds] Event tracking failed: {eventType} - {error}");
+                    onError?.Invoke(error);
+                },
                 0));
         }
 

@@ -93,23 +93,30 @@ namespace ZeyWinAds.Ads
             // Calculate banner height based on device type
             float bannerHeight = DeviceInfo.GetDeviceType() == "tablet" ? TabletBannerHeight : BannerHeight;
 
-            // Position based on setting
+            // Get safe area offsets
+            Rect safeArea = Screen.safeArea;
+            float topInset = Screen.height - (safeArea.y + safeArea.height);
+            float bottomInset = safeArea.y;
+
+            // Position based on setting with safe area
             if (Position == BannerPosition.Top)
             {
                 rectTransform.anchorMin = new Vector2(0, 1);
                 rectTransform.anchorMax = new Vector2(1, 1);
                 rectTransform.pivot = new Vector2(0.5f, 1);
-                rectTransform.anchoredPosition = Vector2.zero;
+                rectTransform.anchoredPosition = new Vector2(0, -topInset);
             }
             else // Bottom
             {
                 rectTransform.anchorMin = new Vector2(0, 0);
                 rectTransform.anchorMax = new Vector2(1, 0);
                 rectTransform.pivot = new Vector2(0.5f, 0);
-                rectTransform.anchoredPosition = Vector2.zero;
+                rectTransform.anchoredPosition = new Vector2(0, bottomInset);
             }
 
             rectTransform.sizeDelta = new Vector2(0, bannerHeight);
+
+            Debug.Log($"[ZeyWinAds] Banner safe area - top inset: {topInset}, bottom inset: {bottomInset}");
 
             // Background
             var background = _bannerContainer.AddComponent<Image>();
@@ -248,20 +255,26 @@ namespace ZeyWinAds.Ads
                 var rectTransform = _bannerContainer.GetComponent<RectTransform>();
                 float bannerHeight = DeviceInfo.GetDeviceType() == "tablet" ? TabletBannerHeight : BannerHeight;
 
+                // Get safe area offsets
+                Rect safeArea = Screen.safeArea;
+                float topInset = Screen.height - (safeArea.y + safeArea.height);
+                float bottomInset = safeArea.y;
+
                 if (Position == BannerPosition.Top)
                 {
                     rectTransform.anchorMin = new Vector2(0, 1);
                     rectTransform.anchorMax = new Vector2(1, 1);
                     rectTransform.pivot = new Vector2(0.5f, 1);
+                    rectTransform.anchoredPosition = new Vector2(0, -topInset);
                 }
                 else
                 {
                     rectTransform.anchorMin = new Vector2(0, 0);
                     rectTransform.anchorMax = new Vector2(1, 0);
                     rectTransform.pivot = new Vector2(0.5f, 0);
+                    rectTransform.anchoredPosition = new Vector2(0, bottomInset);
                 }
 
-                rectTransform.anchoredPosition = Vector2.zero;
                 rectTransform.sizeDelta = new Vector2(0, bannerHeight);
             }
         }

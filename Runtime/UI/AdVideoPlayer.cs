@@ -93,9 +93,9 @@ namespace ZeyWinAds.UI
             _videoPlayer.audioOutputMode = VideoAudioOutputMode.AudioSource;
             _videoPlayer.SetTargetAudioSource(0, _audioSource);
 
-            // Create render image
+            // Create render image (transparent until video is ready)
             _renderImage = gameObject.AddComponent<RawImage>();
-            _renderImage.color = Color.white;
+            _renderImage.color = Color.clear;
 
             // Subscribe to events
             _videoPlayer.prepareCompleted += OnPrepareCompleted;
@@ -207,6 +207,12 @@ namespace ZeyWinAds.UI
         private void OnPrepareCompleted(VideoPlayer source)
         {
             Debug.Log("[ZeyWinAds] Video prepared, starting playback");
+
+            // Make render image visible now that video is ready
+            if (_renderImage != null)
+            {
+                _renderImage.color = Color.white;
+            }
 
             OnVideoPrepared?.Invoke();
 

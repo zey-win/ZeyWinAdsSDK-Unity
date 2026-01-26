@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using ZeyWinAds.Core;
@@ -7,9 +8,9 @@ using ZeyWinAds.UI;
 namespace ZeyWinAds.Ads
 {
     /// <summary>
-    /// Fullscreen rewarded video ad. Users must watch the entire video to earn a reward.
-    /// No skip button is shown until the video completes.
-    /// Shows "Claim Reward" button after video ends.
+    /// Fullscreen rewarded ad. Users must watch video or view image for required time to earn a reward.
+    /// No skip button is shown until completion.
+    /// Shows "Claim Reward" button after completion.
     /// </summary>
     public class RewardedAd : BaseAd
     {
@@ -19,6 +20,11 @@ namespace ZeyWinAds.Ads
         /// Default reward amount if not specified by server
         /// </summary>
         public int DefaultRewardAmount { get; set; } = 1;
+
+        /// <summary>
+        /// Duration in seconds for image ads before reward is available
+        /// </summary>
+        public float ImageDurationSeconds { get; set; } = 5f;
 
         /// <summary>
         /// Callback invoked when the user earns a reward
@@ -31,9 +37,11 @@ namespace ZeyWinAds.Ads
         private AdVideoPlayer _videoPlayer;
         private GameObject _rewardPanel;
         private Button _claimButton;
+        private Text _progressText;
+        private Coroutine _imageTimerCoroutine;
 
         // State
-        private bool _videoCompleted;
+        private bool _adCompleted;
         private bool _rewardClaimed;
         private int _rewardAmount;
 
@@ -57,9 +65,9 @@ namespace ZeyWinAds.Ads
 
         protected override void OnShow()
         {
-            Debug.Log($"[ZeyWinAds] Showing rewarded ad: {AdData.ad_id}");
+            Debug.Log($"[ZeyWinAds] Showing rewarded ad: {AdData.ad_id}, type: {AdData.media_type}");
 
-            _videoCompleted = false;
+            _adCompleted = false;
             _rewardClaimed = false;
             _rewardAmount = DefaultRewardAmount;
 
@@ -70,29 +78,79 @@ namespace ZeyWinAds.Ads
             // Create container for ad content
             _adContainer = _canvas.CreateFullscreenContainer("RewardedContainer");
 
-            // Create video player (rewarded ads are always video)
+            // Create progress indicator
+            CreateProgressIndicator();
+
+            // Display based on media type
+            if (AdData.GetMediaType() == MediaType.Video)
+            {
+                ShowVideoAd();
+            }
+            else
+            {
+                ShowImageAd();
+            }
+        }
+
+        private void ShowVideoAd()
+        {
+            Debug.Log($"[ZeyWinAds] Loading rewarded video: {AdData.media_url}");
+
             var videoObj = new GameObject("RewardedVideoPlayer");
             videoObj.transform.SetParent(_adContainer.transform, false);
 
-            _videoPlayer = videoObj.AddComponent<AdVideoPlayer>();
-            _videoPlayer.OnVideoComplete += OnVideoComplete;
-            _videoPlayer.OnVideoError += OnVideoError;
-            _videoPlayer.OnVideoProgress += OnVideoProgress;
-
-            // Setup fullscreen video
+            // Setup fullscreen rect BEFORE adding AdVideoPlayer
             var rectTransform = videoObj.AddComponent<RectTransform>();
             rectTransform.anchorMin = Vector2.zero;
             rectTransform.anchorMax = Vector2.one;
             rectTransform.sizeDelta = Vector2.zero;
             rectTransform.anchoredPosition = Vector2.zero;
 
-            // Create progress indicator (shows remaining time)
-            CreateProgressIndicator();
+            _videoPlayer = videoObj.AddComponent<AdVideoPlayer>();
+            _videoPlayer.OnVideoComplete += OnVideoComplete;
+            _videoPlayer.OnVideoError += OnMediaError;
+            _videoPlayer.OnVideoProgress += OnVideoProgress;
 
             // Play video
             _videoPlayer.Play(AdData.media_url);
+        }
 
-            // Note: No close button or skip button until video completes
+        private void ShowImageAd()
+        {
+            Debug.Log($"[ZeyWinAds] Loading rewarded image: {AdData.media_url}");
+
+            // Create image display
+            var imageDisplay = _canvas.CreateImageDisplay(_adContainer.transform, AdData.media_url);
+            imageDisplay.name = "RewardedImage";
+
+            // Use duration from server if available, otherwise default
+            float duration = AdData.duration_sec.HasValue ? AdData.duration_sec.Value : ImageDurationSeconds;
+
+            // Start image timer
+            _imageTimerCoroutine = _canvas.StartCoroutine(ImageTimerCoroutine(duration));
+        }
+
+        private IEnumerator ImageTimerCoroutine(float duration)
+        {
+            float elapsed = 0f;
+
+            while (elapsed < duration)
+            {
+                elapsed += Time.deltaTime;
+                float remaining = duration - elapsed;
+
+                // Update progress indicator
+                if (_progressText != null)
+                {
+                    int remainingInt = Mathf.CeilToInt(remaining);
+                    _progressText.text = remainingInt > 0 ? $"{remainingInt}s" : "";
+                }
+
+                yield return null;
+            }
+
+            // Image viewing complete
+            OnImageComplete();
         }
 
         private void CreateProgressIndicator()
@@ -100,19 +158,24 @@ namespace ZeyWinAds.Ads
             var progressObj = new GameObject("ProgressIndicator");
             progressObj.transform.SetParent(_canvas.transform, false);
 
+            // Get safe area insets
+            Rect safeArea = Screen.safeArea;
+            float topInset = Screen.height - (safeArea.y + safeArea.height);
+            float leftInset = safeArea.x;
+
             var rectTransform = progressObj.AddComponent<RectTransform>();
             rectTransform.anchorMin = new Vector2(0, 1);
             rectTransform.anchorMax = new Vector2(0, 1);
             rectTransform.pivot = new Vector2(0, 1);
-            rectTransform.anchoredPosition = new Vector2(20, -20);
+            rectTransform.anchoredPosition = new Vector2(20 + leftInset, -20 - topInset);
             rectTransform.sizeDelta = new Vector2(100, 30);
 
-            var text = progressObj.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = 18;
-            text.color = Color.white;
-            text.alignment = TextAnchor.MiddleLeft;
-            text.text = "";
+            _progressText = progressObj.AddComponent<Text>();
+            _progressText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            _progressText.fontSize = 18;
+            _progressText.color = Color.white;
+            _progressText.alignment = TextAnchor.MiddleLeft;
+            _progressText.text = "";
 
             // Add shadow for visibility
             var shadow = progressObj.AddComponent<Shadow>();
@@ -122,41 +185,55 @@ namespace ZeyWinAds.Ads
 
         private void OnVideoProgress(float progress, float duration)
         {
-            // Update progress indicator
-            var progressText = _canvas.transform.Find("ProgressIndicator")?.GetComponent<Text>();
-            if (progressText != null)
+            if (_progressText != null)
             {
                 int remaining = Mathf.CeilToInt(duration * (1 - progress));
-                progressText.text = remaining > 0 ? $"{remaining}s" : "";
+                _progressText.text = remaining > 0 ? $"{remaining}s" : "";
             }
         }
 
         private void OnVideoComplete()
         {
             Debug.Log("[ZeyWinAds] Rewarded video completed");
+            OnAdComplete();
+        }
 
-            _videoCompleted = true;
+        private void OnImageComplete()
+        {
+            Debug.Log("[ZeyWinAds] Rewarded image timer completed");
+            OnAdComplete();
+        }
+
+        private void OnAdComplete()
+        {
+            _adCompleted = true;
 
             // Track completion
             TrackComplete();
 
             // Hide progress indicator
-            var progressIndicator = _canvas.transform.Find("ProgressIndicator");
-            if (progressIndicator != null)
+            if (_progressText != null)
             {
-                progressIndicator.gameObject.SetActive(false);
+                _progressText.gameObject.SetActive(false);
             }
 
             // Show reward panel
             ShowRewardPanel();
         }
 
-        private void OnVideoError(string error)
+        private void OnMediaError(string error)
         {
-            Debug.LogWarning($"[ZeyWinAds] Rewarded video error: {error}");
+            Debug.LogWarning($"[ZeyWinAds] Rewarded ad error: {error}");
+
+            // Stop image timer if running
+            if (_imageTimerCoroutine != null && _canvas != null)
+            {
+                _canvas.StopCoroutine(_imageTimerCoroutine);
+                _imageTimerCoroutine = null;
+            }
 
             // On error, allow closing but no reward
-            _videoCompleted = false;
+            _adCompleted = false;
             ShowCloseOption();
         }
 
@@ -192,7 +269,7 @@ namespace ZeyWinAds.Ads
             successText.fontSize = 24;
             successText.color = Color.white;
             successText.alignment = TextAnchor.MiddleCenter;
-            successText.text = "Video Complete!";
+            successText.text = "Ad Complete!";
             var successLayout = successObj.AddComponent<LayoutElement>();
             successLayout.preferredHeight = 40;
 
@@ -244,7 +321,7 @@ namespace ZeyWinAds.Ads
 
         private void ShowCloseOption()
         {
-            // Show a simple close button when video fails
+            // Show a simple close button when ad fails
             var closeButton = _canvas.CreateCloseButton(Close);
             closeButton.gameObject.SetActive(true);
         }
@@ -258,10 +335,19 @@ namespace ZeyWinAds.Ads
 
             Debug.Log($"[ZeyWinAds] Reward claimed: {_rewardAmount}");
 
-            // Track reward
-            if (AdData != null && !string.IsNullOrEmpty(AdData.reward_url))
+            // Track reward via POST
+            if (AdData != null)
             {
-                AdClient.Instance.TrackEvent(AdData.reward_url);
+                AdClient.Instance.TrackEvent("reward", AdData.ad_id,
+                    onSuccess: () => Debug.Log($"[ZeyWinAds] Reward tracked for ad: {AdData.ad_id}"),
+                    onError: (error) => Debug.LogError($"[ZeyWinAds] Failed to track reward: {error}")
+                );
+
+                // Also try URL-based tracking if available
+                if (!string.IsNullOrEmpty(AdData.reward_url))
+                {
+                    AdClient.Instance.TrackEvent(AdData.reward_url);
+                }
             }
 
             // Invoke reward callback
@@ -281,12 +367,19 @@ namespace ZeyWinAds.Ads
 
             Debug.Log("[ZeyWinAds] Closing rewarded ad");
 
+            // Stop image timer if running
+            if (_imageTimerCoroutine != null && _canvas != null)
+            {
+                _canvas.StopCoroutine(_imageTimerCoroutine);
+                _imageTimerCoroutine = null;
+            }
+
             // Cleanup video player
             if (_videoPlayer != null)
             {
                 _videoPlayer.Stop();
                 _videoPlayer.OnVideoComplete -= OnVideoComplete;
-                _videoPlayer.OnVideoError -= OnVideoError;
+                _videoPlayer.OnVideoError -= OnMediaError;
                 _videoPlayer.OnVideoProgress -= OnVideoProgress;
                 UnityEngine.Object.Destroy(_videoPlayer.gameObject);
                 _videoPlayer = null;
@@ -302,6 +395,7 @@ namespace ZeyWinAds.Ads
             _adContainer = null;
             _rewardPanel = null;
             _claimButton = null;
+            _progressText = null;
 
             OnClose();
         }

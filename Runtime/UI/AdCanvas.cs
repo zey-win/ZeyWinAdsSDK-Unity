@@ -70,6 +70,19 @@ namespace ZeyWinAds.UI
         }
 
         /// <summary>
+        /// Gets the safe area insets (top, bottom, left, right)
+        /// </summary>
+        public static (float top, float bottom, float left, float right) GetSafeAreaInsets()
+        {
+            Rect safeArea = Screen.safeArea;
+            float top = Screen.height - (safeArea.y + safeArea.height);
+            float bottom = safeArea.y;
+            float left = safeArea.x;
+            float right = Screen.width - (safeArea.x + safeArea.width);
+            return (top, bottom, left, right);
+        }
+
+        /// <summary>
         /// Creates a fullscreen container with a dark background
         /// </summary>
         /// <param name="name">Name for the container</param>
@@ -93,7 +106,7 @@ namespace ZeyWinAds.UI
         }
 
         /// <summary>
-        /// Creates a close button in the top-right corner
+        /// Creates a close button in the top-right corner (respects safe area)
         /// </summary>
         /// <param name="onClick">Callback when button is clicked</param>
         /// <returns>The created CloseButton component</returns>
@@ -102,12 +115,17 @@ namespace ZeyWinAds.UI
             var buttonObj = new GameObject("CloseButton");
             buttonObj.transform.SetParent(_root.transform, false);
 
+            // Get safe area insets
+            Rect safeArea = Screen.safeArea;
+            float topInset = Screen.height - (safeArea.y + safeArea.height);
+            float rightInset = Screen.width - (safeArea.x + safeArea.width);
+
             var rectTransform = buttonObj.AddComponent<RectTransform>();
             rectTransform.anchorMin = new Vector2(1, 1);
             rectTransform.anchorMax = new Vector2(1, 1);
             rectTransform.pivot = new Vector2(1, 1);
-            rectTransform.anchoredPosition = new Vector2(-20, -20);
-            rectTransform.sizeDelta = new Vector2(44, 44);
+            rectTransform.anchoredPosition = new Vector2(-40 - rightInset, -40 - topInset);
+            rectTransform.sizeDelta = new Vector2(100, 100);
 
             // Button background
             var buttonImage = buttonObj.AddComponent<Image>();
@@ -133,7 +151,7 @@ namespace ZeyWinAds.UI
 
             var text = textObj.AddComponent<Text>();
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = 28;
+            text.fontSize = 56;
             text.color = Color.white;
             text.alignment = TextAnchor.MiddleCenter;
             text.text = "\u00D7"; // Multiplication sign as X

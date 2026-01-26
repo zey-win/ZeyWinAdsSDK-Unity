@@ -106,16 +106,16 @@ namespace ZeyWinAds.Ads
             var videoObj = new GameObject("AdVideoPlayer");
             videoObj.transform.SetParent(_adContainer.transform, false);
 
-            _videoPlayer = videoObj.AddComponent<AdVideoPlayer>();
-            _videoPlayer.OnVideoComplete += OnVideoComplete;
-            _videoPlayer.OnVideoError += OnVideoError;
-
-            // Setup fullscreen video
+            // Setup fullscreen rect BEFORE adding AdVideoPlayer
             var rectTransform = videoObj.AddComponent<RectTransform>();
             rectTransform.anchorMin = Vector2.zero;
             rectTransform.anchorMax = Vector2.one;
             rectTransform.sizeDelta = Vector2.zero;
             rectTransform.anchoredPosition = Vector2.zero;
+
+            _videoPlayer = videoObj.AddComponent<AdVideoPlayer>();
+            _videoPlayer.OnVideoComplete += OnVideoComplete;
+            _videoPlayer.OnVideoError += OnVideoError;
 
             // Play video
             _videoPlayer.Play(AdData.media_url);
