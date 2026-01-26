@@ -201,7 +201,8 @@ namespace ZeyWinAds.Ads
             }
 
             // On error, allow closing but no reward
-            _adCompleted = false;
+            // Set _adCompleted = true so close button works (but don't show reward panel)
+            _adCompleted = true;
             ShowCloseOption();
         }
 
@@ -289,9 +290,13 @@ namespace ZeyWinAds.Ads
 
         private void ShowCloseOption()
         {
-            // Show a simple close button when ad fails
-            var closeButton = _canvas.CreateCloseButton(Close);
-            closeButton.gameObject.SetActive(true);
+            // Enable existing close button when ad fails (allow closing without reward)
+            if (_closeButton != null)
+            {
+                _closeButton.SetInteractable(true);
+                _closeButton.SetText("\u00D7");
+                _closeButton.gameObject.SetActive(true);
+            }
         }
 
         private void OnClaimButtonClicked()
