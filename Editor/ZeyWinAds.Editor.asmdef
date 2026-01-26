@@ -1,0 +1,18 @@
+{
+  "name": "ZeyWinAds.Editor",
+  "rootNamespace": "ZeyWinAds.Editor",
+  "references": [
+    "ZeyWinAds.Runtime"
+  ],
+  "includePlatforms": [
+    "Editor"
+  ],
+  "excludePlatforms": [],
+  "allowUnsafeCode": false,
+  "overrideReferences": false,
+  "precompiledReferences": [],
+  "autoReferenced": true,
+  "defineConstraints": [],
+  "versionDefines": [],
+  "noEngineReferences": false
+}

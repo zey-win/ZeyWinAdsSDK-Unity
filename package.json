@@ -1,0 +1,23 @@
+{
+  "name": "com.zeywin.ads",
+  "version": "1.0.0",
+  "displayName": "ZeyWin Ads SDK",
+  "description": "Mobile advertising SDK for Unity games. Supports interstitial, rewarded, and banner ads.",
+  "unity": "2020.3",
+  "keywords": [
+    "ads",
+    "advertising",
+    "monetization",
+    "interstitial",
+    "rewarded",
+    "banner"
+  ],
+  "author": {
+    "name": "ZeyWin",
+    "url": "https://zeywin.com"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/AdrianGroszworker/zeywinads.git"
+  }
+}
