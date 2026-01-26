@@ -70,7 +70,7 @@ namespace ZeyWinAds.UI
         }
 
         /// <summary>
-        /// Gets the safe area insets (top, bottom, left, right)
+        /// Gets the safe area insets (top, bottom, left, right) in screen pixels
         /// </summary>
         public static (float top, float bottom, float left, float right) GetSafeAreaInsets()
         {
@@ -80,6 +80,14 @@ namespace ZeyWinAds.UI
             float left = safeArea.x;
             float right = Screen.width - (safeArea.x + safeArea.width);
             return (top, bottom, left, right);
+        }
+
+        /// <summary>
+        /// Gets the canvas scale factor for converting screen pixels to canvas units
+        /// </summary>
+        public float GetScaleFactor()
+        {
+            return _canvas != null ? _canvas.scaleFactor : 1f;
         }
 
         /// <summary>
@@ -115,16 +123,17 @@ namespace ZeyWinAds.UI
             var buttonObj = new GameObject("CloseButton");
             buttonObj.transform.SetParent(_root.transform, false);
 
-            // Get safe area insets
+            // Get safe area insets and convert to canvas units
             Rect safeArea = Screen.safeArea;
             float topInset = Screen.height - (safeArea.y + safeArea.height);
             float rightInset = Screen.width - (safeArea.x + safeArea.width);
+            float scaleFactor = GetScaleFactor();
 
             var rectTransform = buttonObj.AddComponent<RectTransform>();
             rectTransform.anchorMin = new Vector2(1, 1);
             rectTransform.anchorMax = new Vector2(1, 1);
             rectTransform.pivot = new Vector2(1, 1);
-            rectTransform.anchoredPosition = new Vector2(-40 - rightInset, -40 - topInset);
+            rectTransform.anchoredPosition = new Vector2(-40 - rightInset / scaleFactor, -40 - topInset / scaleFactor);
             rectTransform.sizeDelta = new Vector2(100, 100);
 
             // Button background
