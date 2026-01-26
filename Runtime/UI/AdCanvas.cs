@@ -146,35 +146,79 @@ namespace ZeyWinAds.UI
         }
 
         /// <summary>
-        /// Creates an image display element
+        /// Creates an image display element with aspect ratio fill (covers screen, crops edges)
         /// </summary>
         /// <param name="parent">Parent transform</param>
         /// <param name="imageUrl">URL of the image to load</param>
         /// <returns>The created GameObject</returns>
         public GameObject CreateImageDisplay(Transform parent, string imageUrl)
         {
+            // Create a container that clips content
+            var containerObj = new GameObject("ImageContainer");
+            containerObj.transform.SetParent(parent, false);
+
+            var containerRect = containerObj.AddComponent<RectTransform>();
+            containerRect.anchorMin = Vector2.zero;
+            containerRect.anchorMax = Vector2.one;
+            containerRect.sizeDelta = Vector2.zero;
+            containerRect.anchoredPosition = Vector2.zero;
+
+            // Add mask to clip overflowing content
+            var mask = containerObj.AddComponent<RectMask2D>();
+
+            // Create image inside container
             var imageObj = new GameObject("ImageDisplay");
-            imageObj.transform.SetParent(parent, false);
+            imageObj.transform.SetParent(containerObj.transform, false);
 
             var rectTransform = imageObj.AddComponent<RectTransform>();
-            rectTransform.anchorMin = Vector2.zero;
-            rectTransform.anchorMax = Vector2.one;
-            rectTransform.sizeDelta = Vector2.zero;
+            rectTransform.anchorMin = new Vector2(0.5f, 0.5f);
+            rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            rectTransform.pivot = new Vector2(0.5f, 0.5f);
             rectTransform.anchoredPosition = Vector2.zero;
 
             var rawImage = imageObj.AddComponent<RawImage>();
             rawImage.color = Color.white;
 
-            // Load image
+            // Load image and apply aspect fill scaling
             LoadImage(imageUrl, (texture) =>
             {
-                if (texture != null && rawImage != null)
+                if (texture != null && rawImage != null && containerRect != null)
                 {
                     rawImage.texture = texture;
+                    ApplyAspectFill(rectTransform, containerRect, texture.width, texture.height);
                 }
             });
 
-            return imageObj;
+            return containerObj;
+        }
+
+        /// <summary>
+        /// Applies aspect fill scaling (image covers container, edges may be cropped)
+        /// </summary>
+        private void ApplyAspectFill(RectTransform imageRect, RectTransform containerRect, float imageWidth, float imageHeight)
+        {
+            float containerWidth = containerRect.rect.width > 0 ? containerRect.rect.width : Screen.width;
+            float containerHeight = containerRect.rect.height > 0 ? containerRect.rect.height : Screen.height;
+
+            float imageAspect = imageWidth / imageHeight;
+            float containerAspect = containerWidth / containerHeight;
+
+            float width, height;
+
+            if (imageAspect > containerAspect)
+            {
+                // Image is wider - match height, overflow width
+                height = containerHeight;
+                width = height * imageAspect;
+            }
+            else
+            {
+                // Image is taller - match width, overflow height
+                width = containerWidth;
+                height = width / imageAspect;
+            }
+
+            imageRect.sizeDelta = new Vector2(width, height);
         }
 
         /// <summary>

@@ -84,7 +84,7 @@ namespace ZeyWinAds.UI
             _videoPlayer = gameObject.AddComponent<VideoPlayer>();
             _videoPlayer.playOnAwake = false;
             _videoPlayer.renderMode = VideoRenderMode.RenderTexture;
-            _videoPlayer.aspectRatio = VideoAspectRatio.FitInside;
+            _videoPlayer.aspectRatio = VideoAspectRatio.FitOutside; // Scale to fill (crop edges)
             _videoPlayer.source = VideoSource.Url;
 
             // Setup audio

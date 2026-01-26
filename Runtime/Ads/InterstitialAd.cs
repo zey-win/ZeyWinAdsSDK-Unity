@@ -63,18 +63,22 @@ namespace ZeyWinAds.Ads
                 ShowImageAd();
             }
 
-            // Create close button (initially hidden for videos, delayed for images)
+            // Create close button
             _closeButton = _canvas.CreateCloseButton(OnCloseButtonClicked);
-            _closeButton.gameObject.SetActive(false);
 
             if (AdData.GetMediaType() == MediaType.Image)
             {
-                // For images, show close button after delay
+                // For images, show close button with timer (button visible but shows countdown)
+                _closeButton.gameObject.SetActive(true);
                 _closeButton.StartTimer(ImageCloseDelay, () =>
                 {
                     _canClose = true;
-                    _closeButton.gameObject.SetActive(true);
                 });
+            }
+            else
+            {
+                // For videos, hide close button until video completes
+                _closeButton.gameObject.SetActive(false);
             }
         }
 

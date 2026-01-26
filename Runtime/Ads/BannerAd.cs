@@ -129,28 +129,67 @@ namespace ZeyWinAds.Ads
                 return;
             }
 
-            // Create image container
+            // Create mask container for clipping
+            var maskObj = new GameObject("BannerMask");
+            maskObj.transform.SetParent(_bannerContainer.transform, false);
+
+            var maskRect = maskObj.AddComponent<RectTransform>();
+            maskRect.anchorMin = Vector2.zero;
+            maskRect.anchorMax = Vector2.one;
+            maskRect.sizeDelta = Vector2.zero;
+            maskRect.anchoredPosition = Vector2.zero;
+
+            maskObj.AddComponent<RectMask2D>();
+
+            // Create image inside mask
             var imageObj = new GameObject("BannerImage");
-            imageObj.transform.SetParent(_bannerContainer.transform, false);
+            imageObj.transform.SetParent(maskObj.transform, false);
 
             var imageRect = imageObj.AddComponent<RectTransform>();
-            imageRect.anchorMin = Vector2.zero;
-            imageRect.anchorMax = Vector2.one;
-            imageRect.sizeDelta = Vector2.zero;
+            imageRect.anchorMin = new Vector2(0.5f, 0.5f);
+            imageRect.anchorMax = new Vector2(0.5f, 0.5f);
+            imageRect.pivot = new Vector2(0.5f, 0.5f);
             imageRect.anchoredPosition = Vector2.zero;
 
             _bannerImage = imageObj.AddComponent<RawImage>();
             _bannerImage.color = Color.white;
 
-            // Load image asynchronously
+            // Load image asynchronously with aspect fill
             _canvas.LoadImage(AdData.media_url, (texture) =>
             {
-                if (texture != null && _bannerImage != null)
+                if (texture != null && _bannerImage != null && maskRect != null)
                 {
                     _bannerImage.texture = texture;
+                    ApplyBannerAspectFill(imageRect, maskRect, texture.width, texture.height);
                     Debug.Log("[ZeyWinAds] Banner image loaded");
                 }
             });
+        }
+
+        private void ApplyBannerAspectFill(RectTransform imageRect, RectTransform containerRect, float imageWidth, float imageHeight)
+        {
+            float containerWidth = containerRect.rect.width > 0 ? containerRect.rect.width : Screen.width;
+            float containerHeight = containerRect.rect.height > 0 ? containerRect.rect.height : BannerHeight;
+
+            float imageAspect = imageWidth / imageHeight;
+            float containerAspect = containerWidth / containerHeight;
+
+            float width, height;
+
+            if (imageAspect > containerAspect)
+            {
+                // Image is wider - match height, overflow width
+                height = containerHeight;
+                width = height * imageAspect;
+            }
+            else
+            {
+                // Image is taller - match width, overflow height
+                width = containerWidth;
+                height = width / imageAspect;
+            }
+
+            imageRect.sizeDelta = new Vector2(width, height);
         }
 
         private void OnBannerClicked()
