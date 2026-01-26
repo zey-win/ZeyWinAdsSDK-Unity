@@ -93,30 +93,31 @@ namespace ZeyWinAds.Ads
             // Calculate banner height based on device type
             float bannerHeight = DeviceInfo.GetDeviceType() == "tablet" ? TabletBannerHeight : BannerHeight;
 
-            // Get safe area offsets
+            // Get safe area offsets and scale factor
             Rect safeArea = Screen.safeArea;
             float topInset = Screen.height - (safeArea.y + safeArea.height);
             float bottomInset = safeArea.y;
+            float scaleFactor = _canvas.GetScaleFactor();
 
-            // Position based on setting with safe area
+            // Position based on setting with safe area (convert pixels to canvas units)
             if (Position == BannerPosition.Top)
             {
                 rectTransform.anchorMin = new Vector2(0, 1);
                 rectTransform.anchorMax = new Vector2(1, 1);
                 rectTransform.pivot = new Vector2(0.5f, 1);
-                rectTransform.anchoredPosition = new Vector2(0, -topInset);
+                rectTransform.anchoredPosition = new Vector2(0, -topInset / scaleFactor);
             }
             else // Bottom
             {
                 rectTransform.anchorMin = new Vector2(0, 0);
                 rectTransform.anchorMax = new Vector2(1, 0);
                 rectTransform.pivot = new Vector2(0.5f, 0);
-                rectTransform.anchoredPosition = new Vector2(0, bottomInset);
+                rectTransform.anchoredPosition = new Vector2(0, bottomInset / scaleFactor);
             }
 
             rectTransform.sizeDelta = new Vector2(0, bannerHeight);
 
-            Debug.Log($"[ZeyWinAds] Banner safe area - top inset: {topInset}, bottom inset: {bottomInset}");
+            Debug.Log($"[ZeyWinAds] Banner safe area - top: {topInset}, bottom: {bottomInset}, scale: {scaleFactor}");
 
             // Background
             var background = _bannerContainer.AddComponent<Image>();
@@ -250,29 +251,30 @@ namespace ZeyWinAds.Ads
 
             Position = newPosition;
 
-            if (_bannerContainer != null)
+            if (_bannerContainer != null && _canvas != null)
             {
                 var rectTransform = _bannerContainer.GetComponent<RectTransform>();
                 float bannerHeight = DeviceInfo.GetDeviceType() == "tablet" ? TabletBannerHeight : BannerHeight;
 
-                // Get safe area offsets
+                // Get safe area offsets and scale factor
                 Rect safeArea = Screen.safeArea;
                 float topInset = Screen.height - (safeArea.y + safeArea.height);
                 float bottomInset = safeArea.y;
+                float scaleFactor = _canvas.GetScaleFactor();
 
                 if (Position == BannerPosition.Top)
                 {
                     rectTransform.anchorMin = new Vector2(0, 1);
                     rectTransform.anchorMax = new Vector2(1, 1);
                     rectTransform.pivot = new Vector2(0.5f, 1);
-                    rectTransform.anchoredPosition = new Vector2(0, -topInset);
+                    rectTransform.anchoredPosition = new Vector2(0, -topInset / scaleFactor);
                 }
                 else
                 {
                     rectTransform.anchorMin = new Vector2(0, 0);
                     rectTransform.anchorMax = new Vector2(1, 0);
                     rectTransform.pivot = new Vector2(0.5f, 0);
-                    rectTransform.anchoredPosition = new Vector2(0, bottomInset);
+                    rectTransform.anchoredPosition = new Vector2(0, bottomInset / scaleFactor);
                 }
 
                 rectTransform.sizeDelta = new Vector2(0, bannerHeight);

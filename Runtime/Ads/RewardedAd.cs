@@ -158,16 +158,17 @@ namespace ZeyWinAds.Ads
             var progressObj = new GameObject("ProgressIndicator");
             progressObj.transform.SetParent(_canvas.transform, false);
 
-            // Get safe area insets
+            // Get safe area insets and convert to canvas units
             Rect safeArea = Screen.safeArea;
             float topInset = Screen.height - (safeArea.y + safeArea.height);
             float leftInset = safeArea.x;
+            float scaleFactor = _canvas.GetScaleFactor();
 
             var rectTransform = progressObj.AddComponent<RectTransform>();
             rectTransform.anchorMin = new Vector2(0, 1);
             rectTransform.anchorMax = new Vector2(0, 1);
             rectTransform.pivot = new Vector2(0, 1);
-            rectTransform.anchoredPosition = new Vector2(20 + leftInset, -20 - topInset);
+            rectTransform.anchoredPosition = new Vector2(20 + leftInset / scaleFactor, -20 - topInset / scaleFactor);
             rectTransform.sizeDelta = new Vector2(100, 30);
 
             _progressText = progressObj.AddComponent<Text>();
