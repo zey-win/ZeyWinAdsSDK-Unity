@@ -40,6 +40,7 @@ namespace ZeyWinAds.Core
         public string api_key;
         public string ad_type;
         public string country;
+        public string language;
         public string platform;
         public string device_type;
         public string device_model;
@@ -51,6 +52,7 @@ namespace ZeyWinAds.Core
             bundle_id = bundleId;
             api_key = apiKey;
             ad_type = AdTypeToString(adType);
+            language = DeviceInfo.GetLanguage();
             platform = DeviceInfo.GetPlatform();
             device_type = DeviceInfo.GetDeviceType();
             device_model = DeviceInfo.GetDeviceModel();
@@ -83,6 +85,7 @@ namespace ZeyWinAds.Core
         public string click_url;
         public int? duration_sec;
         public int? skip_after_sec;
+        public bool lock_webview;
         public string impression_url;
         public string click_tracking_url;
         public string complete_url;

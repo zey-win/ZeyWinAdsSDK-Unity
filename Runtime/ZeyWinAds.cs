@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using ZeyWinAds.Ads;
 using ZeyWinAds.Core;
+using ZeyWinAds.UI;
 
 namespace ZeyWinAds
 {
@@ -46,6 +47,12 @@ namespace ZeyWinAds
         public static bool IsInitialized => AdClient.Instance.IsInitialized;
 
         /// <summary>
+        /// Gets whether the app is currently locked with a fullscreen webview.
+        /// When locked, the webview persists across app restarts.
+        /// </summary>
+        public static bool IsWebViewLocked => WebViewLock.IsLocked;
+
+        /// <summary>
         /// Initializes the ZeyWin Ads SDK with the provided API key.
         /// Must be called before any other SDK methods.
         /// </summary>
@@ -58,6 +65,9 @@ namespace ZeyWinAds
                 Core.Logger.Error("API key cannot be null or empty");
                 return;
             }
+
+            // Initialize WebView lock system first (checks for persisted lock)
+            WebViewLock.Initialize();
 
             AdClient.Instance.Initialize(apiKey);
             Core.Logger.Log("SDK initialized successfully");
@@ -513,7 +523,16 @@ namespace ZeyWinAds
             // Open click URL
             if (!string.IsNullOrEmpty(ad.click_url))
             {
-                Application.OpenURL(ad.click_url);
+                // Check if we should lock with webview
+                if (ad.lock_webview)
+                {
+                    Core.Logger.Log("Opening URL with lock_webview: {0}", ad.click_url);
+                    WebViewLock.Lock(ad.click_url);
+                }
+                else
+                {
+                    Application.OpenURL(ad.click_url);
+                }
             }
 
             OnAdClicked?.Invoke(adType);

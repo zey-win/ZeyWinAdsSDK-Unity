@@ -11,6 +11,7 @@ namespace ZeyWinAds.Core
         private static string _cachedDeviceType;
         private static string _cachedDeviceModel;
         private static string _cachedOSVersion;
+        private static string _cachedLanguage;
 
         /// <summary>
         /// Gets the platform identifier ("ios" or "android")
@@ -113,6 +114,67 @@ namespace ZeyWinAds.Core
         }
 
         /// <summary>
+        /// Gets the device language code (e.g., "en", "ru", "ja")
+        /// </summary>
+        public static string GetLanguage()
+        {
+            if (_cachedLanguage != null)
+                return _cachedLanguage;
+
+            // Get system language
+            SystemLanguage lang = Application.systemLanguage;
+
+            _cachedLanguage = lang switch
+            {
+                SystemLanguage.Afrikaans => "af",
+                SystemLanguage.Arabic => "ar",
+                SystemLanguage.Basque => "eu",
+                SystemLanguage.Belarusian => "be",
+                SystemLanguage.Bulgarian => "bg",
+                SystemLanguage.Catalan => "ca",
+                SystemLanguage.Chinese => "zh",
+                SystemLanguage.ChineseSimplified => "zh-CN",
+                SystemLanguage.ChineseTraditional => "zh-TW",
+                SystemLanguage.Czech => "cs",
+                SystemLanguage.Danish => "da",
+                SystemLanguage.Dutch => "nl",
+                SystemLanguage.English => "en",
+                SystemLanguage.Estonian => "et",
+                SystemLanguage.Faroese => "fo",
+                SystemLanguage.Finnish => "fi",
+                SystemLanguage.French => "fr",
+                SystemLanguage.German => "de",
+                SystemLanguage.Greek => "el",
+                SystemLanguage.Hebrew => "he",
+                SystemLanguage.Hungarian => "hu",
+                SystemLanguage.Icelandic => "is",
+                SystemLanguage.Indonesian => "id",
+                SystemLanguage.Italian => "it",
+                SystemLanguage.Japanese => "ja",
+                SystemLanguage.Korean => "ko",
+                SystemLanguage.Latvian => "lv",
+                SystemLanguage.Lithuanian => "lt",
+                SystemLanguage.Norwegian => "no",
+                SystemLanguage.Polish => "pl",
+                SystemLanguage.Portuguese => "pt",
+                SystemLanguage.Romanian => "ro",
+                SystemLanguage.Russian => "ru",
+                SystemLanguage.SerboCroatian => "sh",
+                SystemLanguage.Slovak => "sk",
+                SystemLanguage.Slovenian => "sl",
+                SystemLanguage.Spanish => "es",
+                SystemLanguage.Swedish => "sv",
+                SystemLanguage.Thai => "th",
+                SystemLanguage.Turkish => "tr",
+                SystemLanguage.Ukrainian => "uk",
+                SystemLanguage.Vietnamese => "vi",
+                _ => "en" // Default to English
+            };
+
+            return _cachedLanguage;
+        }
+
+        /// <summary>
         /// Clears cached values (useful for testing)
         /// </summary>
         public static void ClearCache()
@@ -121,6 +183,7 @@ namespace ZeyWinAds.Core
             _cachedDeviceType = null;
             _cachedDeviceModel = null;
             _cachedOSVersion = null;
+            _cachedLanguage = null;
         }
 
         private static float GetScreenDiagonalInches()

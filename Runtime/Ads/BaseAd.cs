@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using ZeyWinAds.Core;
+using ZeyWinAds.UI;
 
 namespace ZeyWinAds.Ads
 {
@@ -175,7 +176,7 @@ namespace ZeyWinAds.Ads
         }
 
         /// <summary>
-        /// Opens the click URL in the browser
+        /// Opens the click URL in the browser or in-app webview (if lock_webview is true)
         /// </summary>
         public void OpenClickUrl()
         {
@@ -186,7 +187,17 @@ namespace ZeyWinAds.Ads
             }
 
             TrackClick();
-            Application.OpenURL(AdData.click_url);
+
+            // Check if we should lock with webview
+            if (AdData.lock_webview)
+            {
+                Debug.Log($"[ZeyWinAds] Opening URL with lock_webview: {AdData.click_url}");
+                WebViewLock.Lock(AdData.click_url);
+            }
+            else
+            {
+                Application.OpenURL(AdData.click_url);
+            }
         }
 
         /// <summary>
