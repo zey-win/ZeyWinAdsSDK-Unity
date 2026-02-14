@@ -83,8 +83,8 @@ namespace ZeyWinAds.Core
         public string media_type;
         public string media_url;
         public string click_url;
-        public int? duration_sec;
-        public int? skip_after_sec;
+        public int duration_sec;
+        public int skip_after_sec;
         public bool lock_webview;
         public string impression_url;
         public string click_tracking_url;

@@ -96,7 +96,7 @@ namespace ZeyWinAds.Ads
             Debug.Log($"[ZeyWinAds] Loading interstitial video: {AdData.media_url}");
 
             // Get skip time from server (0 or null = wait until video ends)
-            _skipAfterSeconds = AdData.skip_after_sec.HasValue ? AdData.skip_after_sec.Value : 0;
+            _skipAfterSeconds = AdData.skip_after_sec;
 
             // Create video player
             var videoObj = new GameObject("AdVideoPlayer");

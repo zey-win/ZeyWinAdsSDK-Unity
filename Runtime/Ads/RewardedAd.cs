@@ -98,7 +98,7 @@ namespace ZeyWinAds.Ads
             Debug.Log($"[ZeyWinAds] Loading rewarded video: {AdData.media_url}");
 
             // Get skip time from server (0 or null = no skip, must watch full video)
-            _skipAfterSeconds = AdData.skip_after_sec.HasValue ? AdData.skip_after_sec.Value : 0;
+            _skipAfterSeconds = AdData.skip_after_sec;
             _canSkip = false;
 
             // Disable close button until skip is allowed or video completes
@@ -135,7 +135,7 @@ namespace ZeyWinAds.Ads
             imageDisplay.name = "RewardedImage";
 
             // Use duration from server if available, otherwise default
-            float duration = AdData.duration_sec.HasValue ? AdData.duration_sec.Value : ImageDurationSeconds;
+            float duration = AdData.duration_sec > 0 ? AdData.duration_sec : ImageDurationSeconds;
 
             // Start timer on close button (same style as interstitial)
             _closeButton.StartTimer(duration, OnImageComplete);
