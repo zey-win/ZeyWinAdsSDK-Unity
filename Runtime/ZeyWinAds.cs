@@ -32,6 +32,7 @@ namespace ZeyWinAds
 
         // Active ad instances
         private static BaseAd _activeAd;
+        private static BannerAd _activeBanner;
 
         // Events
         public static event Action<AdType> OnAdLoaded;
@@ -296,7 +297,7 @@ namespace ZeyWinAds
             {
                 _currentBannerPosition = position;
                 _isBannerVisible = true;
-                _activeAd = bannerAd;
+                _activeBanner = bannerAd;
 
                 bannerAd.SetPosition(position);
                 bannerAd.Show();
@@ -335,10 +336,10 @@ namespace ZeyWinAds
             _isBannerVisible = false;
 
             // Hide the banner ad instance if active
-            if (_activeAd is BannerAd bannerAd)
+            if (_activeBanner != null)
             {
-                bannerAd.Hide();
-                _activeAd = null;
+                _activeBanner.Hide();
+                _activeBanner = null;
             }
 
             OnAdClosed?.Invoke(AdType.Banner);
@@ -367,9 +368,9 @@ namespace ZeyWinAds
         /// </summary>
         public static AdResponse GetCurrentBanner()
         {
-            if (_activeAd is BannerAd bannerAd && bannerAd.IsReady)
+            if (_activeBanner != null && _activeBanner.IsReady)
             {
-                return bannerAd.AdData;
+                return _activeBanner.AdData;
             }
             return _isBannerVisible ? _cachedBanner : null;
         }
@@ -601,6 +602,7 @@ namespace ZeyWinAds
             _onRewardedReward = null;
             _onRewardedClose = null;
             _activeAd = null;
+            _activeBanner = null;
 
             // Clear the AdLoader cache
             AdLoader.Instance.ClearCache();

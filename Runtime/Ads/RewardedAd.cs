@@ -78,6 +78,10 @@ namespace ZeyWinAds.Ads
             // Create container for ad content
             _adContainer = _canvas.CreateFullscreenContainer("RewardedContainer");
 
+            // Add click handler to container
+            var clickHandler = _adContainer.AddComponent<UnityEngine.UI.Button>();
+            clickHandler.onClick.AddListener(OnAdClicked);
+
             // Create close button with timer (same as interstitial)
             _closeButton = _canvas.CreateCloseButton(OnCloseButtonClicked);
             _closeButton.gameObject.SetActive(true);
@@ -180,6 +184,12 @@ namespace ZeyWinAds.Ads
             // No skip allowed - show remaining video time
             int remaining = Mathf.CeilToInt(duration * (1 - progress));
             _closeButton.SetText(remaining > 0 ? $"{remaining}" : "");
+        }
+
+        private void OnAdClicked()
+        {
+            Debug.Log("[ZeyWinAds] Rewarded ad clicked");
+            OpenClickUrl();
         }
 
         private void OnCloseButtonClicked()
@@ -408,17 +418,21 @@ namespace ZeyWinAds.Ads
             Debug.Log($"[ZeyWinAds] Reward claimed: {_rewardAmount}");
 
             // Track reward via POST
+            // Capture values before Close() nullifies AdData
             if (AdData != null)
             {
-                AdClient.Instance.TrackEvent("reward", AdData.ad_id,
-                    onSuccess: () => Debug.Log($"[ZeyWinAds] Reward tracked for ad: {AdData.ad_id}"),
+                var adId = AdData.ad_id;
+                var rewardUrl = AdData.reward_url;
+
+                AdClient.Instance.TrackEvent("reward", adId,
+                    onSuccess: () => Debug.Log($"[ZeyWinAds] Reward tracked for ad: {adId}"),
                     onError: (error) => Debug.LogError($"[ZeyWinAds] Failed to track reward: {error}")
                 );
 
                 // Also try URL-based tracking if available
-                if (!string.IsNullOrEmpty(AdData.reward_url))
+                if (!string.IsNullOrEmpty(rewardUrl))
                 {
-                    AdClient.Instance.TrackEvent(AdData.reward_url);
+                    AdClient.Instance.TrackEvent(rewardUrl);
                 }
             }
 
