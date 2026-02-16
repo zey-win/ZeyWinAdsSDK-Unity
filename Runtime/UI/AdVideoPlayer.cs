@@ -101,6 +101,7 @@ namespace ZeyWinAds.UI
             // Setup audio
             _audioSource = gameObject.AddComponent<AudioSource>();
             _audioSource.playOnAwake = false;
+            _audioSource.ignoreListenerVolume = true;
             _videoPlayer.audioOutputMode = VideoAudioOutputMode.AudioSource;
             _videoPlayer.SetTargetAudioSource(0, _audioSource);
 
