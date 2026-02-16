@@ -108,18 +108,21 @@ namespace ZeyWinAds.Ads
                 return;
             }
 
-            Debug.Log($"[ZeyWinAds] Tracking impression for ad: {AdData.ad_id}");
+            var adId = AdData.ad_id;
+            var impressionUrl = AdData.impression_url;
+
+            Debug.Log($"[ZeyWinAds] Tracking impression for ad: {adId}");
 
             // Use POST-based tracking (more reliable)
-            AdClient.Instance.TrackEvent("impression", AdData.ad_id,
-                onSuccess: () => Debug.Log($"[ZeyWinAds] Impression tracked successfully for ad: {AdData.ad_id}"),
+            AdClient.Instance.TrackEvent("impression", adId,
+                onSuccess: () => Debug.Log($"[ZeyWinAds] Impression tracked successfully for ad: {adId}"),
                 onError: (error) => Debug.LogError($"[ZeyWinAds] Failed to track impression: {error}")
             );
 
             // Also try URL-based tracking if available
-            if (!string.IsNullOrEmpty(AdData.impression_url))
+            if (!string.IsNullOrEmpty(impressionUrl))
             {
-                AdClient.Instance.TrackEvent(AdData.impression_url);
+                AdClient.Instance.TrackEvent(impressionUrl);
             }
         }
 
@@ -134,18 +137,21 @@ namespace ZeyWinAds.Ads
                 return;
             }
 
-            Debug.Log($"[ZeyWinAds] Tracking click for ad: {AdData.ad_id}");
+            var adId = AdData.ad_id;
+            var clickTrackingUrl = AdData.click_tracking_url;
+
+            Debug.Log($"[ZeyWinAds] Tracking click for ad: {adId}");
 
             // Use POST-based tracking (more reliable)
-            AdClient.Instance.TrackEvent("click", AdData.ad_id,
-                onSuccess: () => Debug.Log($"[ZeyWinAds] Click tracked successfully for ad: {AdData.ad_id}"),
+            AdClient.Instance.TrackEvent("click", adId,
+                onSuccess: () => Debug.Log($"[ZeyWinAds] Click tracked successfully for ad: {adId}"),
                 onError: (error) => Debug.LogError($"[ZeyWinAds] Failed to track click: {error}")
             );
 
             // Also try URL-based tracking if available
-            if (!string.IsNullOrEmpty(AdData.click_tracking_url))
+            if (!string.IsNullOrEmpty(clickTrackingUrl))
             {
-                AdClient.Instance.TrackEvent(AdData.click_tracking_url);
+                AdClient.Instance.TrackEvent(clickTrackingUrl);
             }
         }
 
@@ -160,18 +166,21 @@ namespace ZeyWinAds.Ads
                 return;
             }
 
-            Debug.Log($"[ZeyWinAds] Tracking completion for ad: {AdData.ad_id}");
+            var adId = AdData.ad_id;
+            var completeUrl = AdData.complete_url;
+
+            Debug.Log($"[ZeyWinAds] Tracking completion for ad: {adId}");
 
             // Use POST-based tracking (more reliable)
-            AdClient.Instance.TrackEvent("complete", AdData.ad_id,
-                onSuccess: () => Debug.Log($"[ZeyWinAds] Completion tracked successfully for ad: {AdData.ad_id}"),
+            AdClient.Instance.TrackEvent("complete", adId,
+                onSuccess: () => Debug.Log($"[ZeyWinAds] Completion tracked successfully for ad: {adId}"),
                 onError: (error) => Debug.LogError($"[ZeyWinAds] Failed to track completion: {error}")
             );
 
             // Also try URL-based tracking if available
-            if (!string.IsNullOrEmpty(AdData.complete_url))
+            if (!string.IsNullOrEmpty(completeUrl))
             {
-                AdClient.Instance.TrackEvent(AdData.complete_url);
+                AdClient.Instance.TrackEvent(completeUrl);
             }
         }
 
