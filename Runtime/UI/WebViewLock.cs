@@ -363,6 +363,35 @@ namespace ZeyWinAds.UI
         }
 #endif
 
+        private void Update()
+        {
+            if (!_isLocked)
+                return;
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+            // Handle Android system back button for webview navigation
+            if (Input.GetKeyDown(KeyCode.Escape) && _webView != null)
+            {
+                AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+                AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+                activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+                {
+                    try
+                    {
+                        if (_webView != null && _webView.Call<bool>("canGoBack"))
+                        {
+                            _webView.Call("goBack");
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        Debug.LogError($"[ZeyWinAds] Failed to go back in WebView: {e.Message}");
+                    }
+                }));
+            }
+#endif
+        }
+
         private void OnApplicationPause(bool paused)
         {
             // When app resumes, ensure webview is still on top
