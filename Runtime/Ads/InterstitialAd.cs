@@ -28,6 +28,8 @@ namespace ZeyWinAds.Ads
         private bool _canClose;
         private float _showTime;
         private float _skipAfterSeconds;
+        private float _previousAudioVolume;
+        private bool _audioMuted;
 
         /// <summary>
         /// Creates a new interstitial ad instance
@@ -91,9 +93,28 @@ namespace ZeyWinAds.Ads
             rectTransform.anchoredPosition = Vector2.zero;
         }
 
+        private void MuteGameAudio()
+        {
+            _previousAudioVolume = AudioListener.volume;
+            AudioListener.volume = 0f;
+            _audioMuted = true;
+        }
+
+        private void RestoreGameAudio()
+        {
+            if (_audioMuted)
+            {
+                AudioListener.volume = _previousAudioVolume;
+                _audioMuted = false;
+            }
+        }
+
         private void ShowVideoAd()
         {
             Debug.Log($"[ZeyWinAds] Loading interstitial video: {AdData.media_url}");
+
+            // Mute game audio for video ads
+            MuteGameAudio();
 
             // Get skip time from server (0 or null = wait until video ends)
             _skipAfterSeconds = AdData.skip_after_sec;
@@ -230,6 +251,9 @@ namespace ZeyWinAds.Ads
 
             _adContainer = null;
             _closeButton = null;
+
+            // Restore game audio before calling OnClose
+            RestoreGameAudio();
 
             OnClose();
         }

@@ -36,7 +36,6 @@ namespace ZeyWinAds.Ads
         protected bool _isLoading;
         protected Action<bool> _loadCallback;
         protected Action _onCloseCallback;
-        private float _previousAudioVolume;
 
         /// <summary>
         /// Loads the ad from the server
@@ -90,10 +89,6 @@ namespace ZeyWinAds.Ads
 
             _onCloseCallback = onClose;
             IsShowing = true;
-
-            // Mute game audio while ad is showing
-            _previousAudioVolume = AudioListener.volume;
-            AudioListener.volume = 0f;
 
             // Track impression when ad is shown
             TrackImpression();
@@ -259,9 +254,6 @@ namespace ZeyWinAds.Ads
         /// </summary>
         protected virtual void OnClose()
         {
-            // Restore game audio
-            AudioListener.volume = _previousAudioVolume;
-
             IsShowing = false;
             _isLoaded = false;
             AdData = null;

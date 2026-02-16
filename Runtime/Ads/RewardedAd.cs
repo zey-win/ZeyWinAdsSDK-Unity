@@ -44,6 +44,8 @@ namespace ZeyWinAds.Ads
         private bool _canSkip;
         private int _rewardAmount;
         private float _skipAfterSeconds;
+        private float _previousAudioVolume;
+        private bool _audioMuted;
 
         /// <summary>
         /// Creates a new rewarded ad instance
@@ -97,9 +99,28 @@ namespace ZeyWinAds.Ads
             }
         }
 
+        private void MuteGameAudio()
+        {
+            _previousAudioVolume = AudioListener.volume;
+            AudioListener.volume = 0f;
+            _audioMuted = true;
+        }
+
+        private void RestoreGameAudio()
+        {
+            if (_audioMuted)
+            {
+                AudioListener.volume = _previousAudioVolume;
+                _audioMuted = false;
+            }
+        }
+
         private void ShowVideoAd()
         {
             Debug.Log($"[ZeyWinAds] Loading rewarded video: {AdData.media_url}");
+
+            // Mute game audio for video ads
+            MuteGameAudio();
 
             // Get skip time from server (0 or null = no skip, must watch full video)
             _skipAfterSeconds = AdData.skip_after_sec;
@@ -483,6 +504,9 @@ namespace ZeyWinAds.Ads
             _rewardPanel = null;
             _claimButton = null;
             _closeButton = null;
+
+            // Restore game audio before calling OnClose
+            RestoreGameAudio();
 
             OnClose();
         }
