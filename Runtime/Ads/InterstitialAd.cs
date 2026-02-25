@@ -23,6 +23,7 @@ namespace ZeyWinAds.Ads
         private GameObject _adContainer;
         private CloseButton _closeButton;
         private AdVideoPlayer _videoPlayer;
+        private HtmlAdView _htmlAdView;
 
         // State
         private bool _canClose;
@@ -45,7 +46,14 @@ namespace ZeyWinAds.Ads
             _canClose = false;
             _showTime = Time.realtimeSinceStartup;
 
-            // Create ad canvas
+            // HTML ads use native WebView — no Unity canvas needed
+            if (AdData.GetMediaType() == MediaType.Html)
+            {
+                ShowHtmlAd();
+                return;
+            }
+
+            // Create ad canvas for image/video
             _canvas = AdCanvas.Create("InterstitialAdCanvas");
             _canvas.SetSortingOrder(1000);
 
@@ -145,6 +153,47 @@ namespace ZeyWinAds.Ads
             _videoPlayer.Play(AdData.media_url);
         }
 
+        private void ShowHtmlAd()
+        {
+            Debug.Log($"[ZeyWinAds] Loading interstitial HTML: {AdData.media_url}");
+
+            _htmlAdView = HtmlAdView.Create();
+            _htmlAdView.OnClose += OnHtmlClose;
+            _htmlAdView.OnComplete += OnHtmlComplete;
+            _htmlAdView.OnError += OnHtmlError;
+            _htmlAdView.Show(AdData.media_url);
+        }
+
+        private void OnHtmlClose()
+        {
+            TrackComplete();
+            Close();
+        }
+
+        private void OnHtmlComplete()
+        {
+            TrackComplete();
+            Close();
+        }
+
+        private void OnHtmlError(string error)
+        {
+            Debug.LogWarning($"[ZeyWinAds] Interstitial HTML error: {error}");
+            Close();
+        }
+
+        private void CleanupHtmlView()
+        {
+            if (_htmlAdView != null)
+            {
+                _htmlAdView.OnClose -= OnHtmlClose;
+                _htmlAdView.OnComplete -= OnHtmlComplete;
+                _htmlAdView.OnError -= OnHtmlError;
+                _htmlAdView.DestroyView();
+                _htmlAdView = null;
+            }
+        }
+
         private void OnDownloadProgress(float progress)
         {
             if (_closeButton != null)
@@ -229,6 +278,9 @@ namespace ZeyWinAds.Ads
                 return;
 
             Debug.Log("[ZeyWinAds] Closing interstitial ad");
+
+            // Cleanup HTML view
+            CleanupHtmlView();
 
             // Cleanup video player
             if (_videoPlayer != null)

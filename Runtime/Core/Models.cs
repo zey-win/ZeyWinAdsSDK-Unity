@@ -27,7 +27,8 @@ namespace ZeyWinAds.Core
     public enum MediaType
     {
         Image,
-        Video
+        Video,
+        Html
     }
 
     /// <summary>
@@ -108,6 +109,7 @@ namespace ZeyWinAds.Core
             {
                 "image" => MediaType.Image,
                 "video" => MediaType.Video,
+                "html" => MediaType.Html,
                 _ => MediaType.Image
             };
         }

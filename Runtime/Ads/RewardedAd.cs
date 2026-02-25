@@ -37,6 +37,7 @@ namespace ZeyWinAds.Ads
         private GameObject _rewardPanel;
         private Button _claimButton;
         private CloseButton _closeButton;
+        private HtmlAdView _htmlAdView;
 
         // State
         private bool _adCompleted;
@@ -73,7 +74,14 @@ namespace ZeyWinAds.Ads
             _rewardClaimed = false;
             _rewardAmount = DefaultRewardAmount;
 
-            // Create ad canvas
+            // HTML ads use native WebView — no Unity canvas needed initially
+            if (AdData.GetMediaType() == MediaType.Html)
+            {
+                ShowHtmlAd();
+                return;
+            }
+
+            // Create ad canvas for image/video
             _canvas = AdCanvas.Create("RewardedAdCanvas");
             _canvas.SetSortingOrder(1001); // Above interstitials
 
@@ -164,6 +172,71 @@ namespace ZeyWinAds.Ads
 
             // Start timer on close button (same style as interstitial)
             _closeButton.StartTimer(duration, OnImageComplete);
+        }
+
+        private void ShowHtmlAd()
+        {
+            Debug.Log($"[ZeyWinAds] Loading rewarded HTML: {AdData.media_url}");
+
+            _htmlAdView = HtmlAdView.Create();
+            _htmlAdView.OnClose += OnHtmlClose;
+            _htmlAdView.OnComplete += OnHtmlComplete;
+            _htmlAdView.OnError += OnHtmlError;
+            _htmlAdView.Show(AdData.media_url);
+        }
+
+        private void OnHtmlClose()
+        {
+            // User closed without completing — no reward
+            Debug.Log("[ZeyWinAds] Rewarded HTML ad closed by user - no reward");
+            CleanupHtmlView();
+            Close();
+        }
+
+        private void OnHtmlComplete()
+        {
+            // HTML signals completion — dismiss WebView and show reward panel
+            Debug.Log("[ZeyWinAds] Rewarded HTML ad completed - showing reward");
+            _adCompleted = true;
+            TrackComplete();
+
+            CleanupHtmlView();
+
+            // Create canvas for reward panel
+            _canvas = AdCanvas.Create("RewardedAdCanvas");
+            _canvas.SetSortingOrder(1001);
+            _adContainer = _canvas.CreateFullscreenContainer("RewardedContainer");
+
+            ShowRewardPanel();
+        }
+
+        private void OnHtmlError(string error)
+        {
+            Debug.LogWarning($"[ZeyWinAds] Rewarded HTML error: {error}");
+            CleanupHtmlView();
+
+            // Allow closing without reward
+            _adCompleted = true;
+
+            _canvas = AdCanvas.Create("RewardedAdCanvas");
+            _canvas.SetSortingOrder(1001);
+            _adContainer = _canvas.CreateFullscreenContainer("RewardedContainer");
+
+            _closeButton = _canvas.CreateCloseButton(OnCloseButtonClicked);
+            _closeButton.SetInteractable(true);
+            _closeButton.SetText("\u00D7");
+        }
+
+        private void CleanupHtmlView()
+        {
+            if (_htmlAdView != null)
+            {
+                _htmlAdView.OnClose -= OnHtmlClose;
+                _htmlAdView.OnComplete -= OnHtmlComplete;
+                _htmlAdView.OnError -= OnHtmlError;
+                _htmlAdView.DestroyView();
+                _htmlAdView = null;
+            }
         }
 
         private void OnDownloadProgress(float progress)
@@ -473,6 +546,9 @@ namespace ZeyWinAds.Ads
                 return;
 
             Debug.Log("[ZeyWinAds] Closing rewarded ad");
+
+            // Cleanup HTML view
+            CleanupHtmlView();
 
             // Stop close button timer if running
             if (_closeButton != null)
