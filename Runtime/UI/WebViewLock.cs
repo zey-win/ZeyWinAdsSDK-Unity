@@ -230,6 +230,10 @@ namespace ZeyWinAds.UI
                         // Create WebView
                         _webView = new AndroidJavaObject("android.webkit.WebView", activity);
 
+                        // Enable hardware acceleration (critical for WebGL content)
+                        // LAYER_TYPE_HARDWARE = 2
+                        _webView.Call("setLayerType", 2, (AndroidJavaObject)null);
+
                         // Get WebSettings and configure
                         AndroidJavaObject settings = _webView.Call<AndroidJavaObject>("getSettings");
                         settings.Call("setJavaScriptEnabled", true);
@@ -239,6 +243,12 @@ namespace ZeyWinAds.UI
                         settings.Call("setSupportZoom", true);
                         settings.Call("setBuiltInZoomControls", true);
                         settings.Call("setDisplayZoomControls", false);
+                        settings.Call("setMediaPlaybackRequiresUserGesture", false);
+                        settings.Call("setAllowFileAccess", true);
+
+                        // Set WebChromeClient for full rendering support (WebGL, fullscreen, etc.)
+                        AndroidJavaObject chromeClient = new AndroidJavaObject("android.webkit.WebChromeClient");
+                        _webView.Call("setWebChromeClient", chromeClient);
 
                         // Set WebViewClient to handle navigation within webview
                         _webViewClient = new AndroidJavaObject("android.webkit.WebViewClient");

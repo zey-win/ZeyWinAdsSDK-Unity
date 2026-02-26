@@ -26,6 +26,7 @@ extern "C" void UnitySendMessage(const char* obj, const char* method, const char
     WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
     config.userContentController = contentController;
     config.allowsInlineMediaPlayback = YES;
+    config.mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeNone;
 
     // Inject JS bridge at document start
     NSString *bridgeJS = @"window.ZeyWinAds = {"
@@ -147,7 +148,23 @@ void _ZeyWinAds_ShowHtmlAd(const char* url, const char* gameObjectName) {
         _htmlAdVC.gameObjectName = goName;
         _htmlAdVC.modalPresentationStyle = UIModalPresentationFullScreen;
 
-        UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+        UIWindowScene *windowScene = nil;
+        for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+            if (scene.activationState == UISceneActivationStateForegroundActive &&
+                [scene isKindOfClass:[UIWindowScene class]]) {
+                windowScene = (UIWindowScene *)scene;
+                break;
+            }
+        }
+        UIWindow *keyWindow = windowScene.windows.firstObject;
+        if (!keyWindow) {
+            // Fallback for iOS < 13
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+            keyWindow = [UIApplication sharedApplication].keyWindow;
+#pragma clang diagnostic pop
+        }
+        UIViewController *rootVC = keyWindow.rootViewController;
         while (rootVC.presentedViewController) {
             rootVC = rootVC.presentedViewController;
         }

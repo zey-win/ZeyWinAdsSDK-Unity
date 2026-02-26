@@ -177,6 +177,10 @@ namespace ZeyWinAds.UI
                         _webView = new AndroidJavaObject("android.webkit.WebView", activity);
                         _webView.Call("setBackgroundColor", unchecked((int)0xFF000000));
 
+                        // Enable hardware acceleration (critical for WebGL content)
+                        // LAYER_TYPE_HARDWARE = 2
+                        _webView.Call("setLayerType", 2, (AndroidJavaObject)null);
+
                         // Configure settings
                         AndroidJavaObject settings = _webView.Call<AndroidJavaObject>("getSettings");
                         settings.Call("setJavaScriptEnabled", true);
@@ -184,6 +188,11 @@ namespace ZeyWinAds.UI
                         settings.Call("setLoadWithOverviewMode", true);
                         settings.Call("setUseWideViewPort", true);
                         settings.Call("setMediaPlaybackRequiresUserGesture", false);
+                        settings.Call("setAllowFileAccess", true);
+
+                        // Set WebChromeClient for full rendering support (WebGL, fullscreen, etc.)
+                        AndroidJavaObject chromeClient = new AndroidJavaObject("android.webkit.WebChromeClient");
+                        _webView.Call("setWebChromeClient", chromeClient);
 
                         // Add JavaScript interface (window.ZeyWinAds)
                         AndroidJavaObject bridge = new AndroidJavaObject(
@@ -224,6 +233,8 @@ namespace ZeyWinAds.UI
                     {
                         Debug.LogError($"[ZeyWinAds] Failed to create Android HTML WebView: {e.Message}");
                         _isShowing = false;
+                        // Note: OnError not invoked here as we're on UI thread;
+                        // the error is logged for diagnostics
                     }
                 }));
             }

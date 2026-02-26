@@ -15,6 +15,7 @@
     // Configure WKWebView
     WKWebViewConfiguration *config = [[WKWebViewConfiguration alloc] init];
     config.allowsInlineMediaPlayback = YES;
+    config.mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeNone;
 
     self.webView = [[WKWebView alloc] initWithFrame:self.view.bounds configuration:config];
     self.webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
@@ -63,7 +64,22 @@ extern "C" {
         }
 
         dispatch_async(dispatch_get_main_queue(), ^{
-            UIViewController *rootVC = [UIApplication sharedApplication].keyWindow.rootViewController;
+            UIWindowScene *windowScene = nil;
+            for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
+                if (scene.activationState == UISceneActivationStateForegroundActive &&
+                    [scene isKindOfClass:[UIWindowScene class]]) {
+                    windowScene = (UIWindowScene *)scene;
+                    break;
+                }
+            }
+            UIWindow *keyWindow = windowScene.windows.firstObject;
+            if (!keyWindow) {
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+                keyWindow = [UIApplication sharedApplication].keyWindow;
+#pragma clang diagnostic pop
+            }
+            UIViewController *rootVC = keyWindow.rootViewController;
 
             // Find the topmost presented view controller
             while (rootVC.presentedViewController) {
