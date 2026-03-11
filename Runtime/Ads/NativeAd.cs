@@ -1,0 +1,400 @@
+using System;
+using UnityEngine;
+using UnityEngine.UI;
+using ZeyWinAds.Core;
+using ZeyWinAds.UI;
+
+namespace ZeyWinAds.Ads
+{
+    /// <summary>
+    /// Native text ad displayed as a compact strip at the top or bottom of the screen.
+    /// </summary>
+    public class NativeAd : BaseAd
+    {
+        public override AdType AdType => AdType.Native;
+
+        public const float DefaultHeight = 64f;
+        public const float DefaultTabletHeight = 80f;
+
+        private static float? _customHeight = null;
+        private static float? _customTabletHeight = null;
+
+        public static float Height => _customHeight ?? DefaultHeight;
+        public static float TabletHeight => _customTabletHeight ?? DefaultTabletHeight;
+
+        public static void SetHeight(float? height) => _customHeight = height;
+        public static void SetTabletHeight(float? height) => _customTabletHeight = height;
+
+        public static float GetCurrentHeight()
+        {
+            return DeviceInfo.GetDeviceType() == "tablet" ? TabletHeight : Height;
+        }
+
+        public BannerPosition Position { get; private set; } = BannerPosition.Bottom;
+        public bool IsVisible { get; private set; }
+
+        private AdCanvas _canvas;
+        private GameObject _container;
+
+        public NativeAd()
+        {
+        }
+
+        public void Show(BannerPosition position, Action onClose = null)
+        {
+            Position = position;
+            base.Show(onClose);
+        }
+
+        public override void Show(Action onClose = null)
+        {
+            Show(BannerPosition.Bottom, onClose);
+        }
+
+        protected override void OnShow()
+        {
+            Debug.Log($"[ZeyWinAds] Showing native ad at {Position}: {AdData.ad_id}");
+
+            IsVisible = true;
+
+            _canvas = AdCanvas.Create("NativeAdCanvas");
+            _canvas.SetSortingOrder(998);
+
+            CreateLayout();
+        }
+
+        private void CreateLayout()
+        {
+            float height = GetCurrentHeight();
+            float padding = 10f;
+            float iconSize = height - padding * 2;
+
+            // Container
+            _container = new GameObject("NativeAdContainer");
+            _container.transform.SetParent(_canvas.transform, false);
+
+            var containerRect = _container.AddComponent<RectTransform>();
+
+            Rect safeArea = Screen.safeArea;
+            float topInset = Screen.height - (safeArea.y + safeArea.height);
+            float bottomInset = safeArea.y;
+            float scaleFactor = _canvas.GetScaleFactor();
+
+            if (Position == BannerPosition.Top)
+            {
+                containerRect.anchorMin = new Vector2(0, 1);
+                containerRect.anchorMax = new Vector2(1, 1);
+                containerRect.pivot = new Vector2(0.5f, 1);
+                containerRect.anchoredPosition = new Vector2(0, -topInset / scaleFactor);
+            }
+            else
+            {
+                containerRect.anchorMin = new Vector2(0, 0);
+                containerRect.anchorMax = new Vector2(1, 0);
+                containerRect.pivot = new Vector2(0.5f, 0);
+                containerRect.anchoredPosition = new Vector2(0, bottomInset / scaleFactor);
+            }
+
+            containerRect.sizeDelta = new Vector2(0, height);
+
+            // Background - dark with subtle gradient feel
+            var bg = _container.AddComponent<Image>();
+            bg.color = new Color(0.12f, 0.12f, 0.14f, 1f);
+
+            // Click area
+            var clickButton = _container.AddComponent<Button>();
+            clickButton.targetGraphic = bg;
+            var colors = clickButton.colors;
+            colors.highlightedColor = new Color(0.18f, 0.18f, 0.20f, 1f);
+            colors.pressedColor = new Color(0.22f, 0.22f, 0.24f, 1f);
+            clickButton.colors = colors;
+            clickButton.onClick.AddListener(OnClicked);
+
+            // Top accent line
+            var accentObj = new GameObject("AccentLine");
+            accentObj.transform.SetParent(_container.transform, false);
+            var accentRect = accentObj.AddComponent<RectTransform>();
+            if (Position == BannerPosition.Top)
+            {
+                accentRect.anchorMin = new Vector2(0, 0);
+                accentRect.anchorMax = new Vector2(1, 0);
+                accentRect.pivot = new Vector2(0.5f, 0);
+                accentRect.anchoredPosition = Vector2.zero;
+            }
+            else
+            {
+                accentRect.anchorMin = new Vector2(0, 1);
+                accentRect.anchorMax = new Vector2(1, 1);
+                accentRect.pivot = new Vector2(0.5f, 1);
+                accentRect.anchoredPosition = Vector2.zero;
+            }
+            accentRect.sizeDelta = new Vector2(0, 2f);
+            var accentImage = accentObj.AddComponent<Image>();
+            accentImage.color = new Color(0.30f, 0.56f, 1f, 0.8f); // blue accent
+
+            // "Ad" badge - small rounded label
+            float badgeWidth = 22f;
+            float badgeHeight = 14f;
+
+            var badgeObj = new GameObject("AdBadge");
+            badgeObj.transform.SetParent(_container.transform, false);
+            var badgeRect = badgeObj.AddComponent<RectTransform>();
+            badgeRect.anchorMin = new Vector2(0, 1);
+            badgeRect.anchorMax = new Vector2(0, 1);
+            badgeRect.pivot = new Vector2(0, 1);
+            badgeRect.anchoredPosition = new Vector2(padding, -4f);
+            badgeRect.sizeDelta = new Vector2(badgeWidth, badgeHeight);
+
+            var badgeBg = badgeObj.AddComponent<Image>();
+            badgeBg.color = new Color(1f, 1f, 1f, 0.15f);
+
+            var badgeTextObj = new GameObject("BadgeText");
+            badgeTextObj.transform.SetParent(badgeObj.transform, false);
+            var badgeTextRect = badgeTextObj.AddComponent<RectTransform>();
+            badgeTextRect.anchorMin = Vector2.zero;
+            badgeTextRect.anchorMax = Vector2.one;
+            badgeTextRect.sizeDelta = Vector2.zero;
+
+            var badgeText = badgeTextObj.AddComponent<Text>();
+            badgeText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            badgeText.text = "Ad";
+            badgeText.fontSize = 9;
+            badgeText.color = new Color(1f, 1f, 1f, 0.5f);
+            badgeText.alignment = TextAnchor.MiddleCenter;
+
+            // Icon (square with rounded appearance)
+            float iconX = padding;
+            float iconY = 0f;
+
+            var iconObj = new GameObject("AdIcon");
+            iconObj.transform.SetParent(_container.transform, false);
+            var iconRect = iconObj.AddComponent<RectTransform>();
+            iconRect.anchorMin = new Vector2(0, 0.5f);
+            iconRect.anchorMax = new Vector2(0, 0.5f);
+            iconRect.pivot = new Vector2(0, 0.5f);
+            iconRect.anchoredPosition = new Vector2(iconX, iconY);
+            iconRect.sizeDelta = new Vector2(iconSize, iconSize);
+
+            var iconImage = iconObj.AddComponent<RawImage>();
+            iconImage.color = new Color(0.2f, 0.2f, 0.22f, 1f);
+
+            if (!string.IsNullOrEmpty(AdData.icon_url))
+            {
+                _canvas.LoadImage(AdData.icon_url, (texture) =>
+                {
+                    if (texture != null && iconImage != null)
+                    {
+                        iconImage.texture = texture;
+                        iconImage.color = Color.white;
+                    }
+                });
+            }
+
+            // Text content area
+            float textX = iconX + iconSize + padding;
+            float ctaWidth = 0f;
+            bool hasCta = !string.IsNullOrEmpty(AdData.cta_text);
+
+            if (hasCta)
+                ctaWidth = 80f;
+
+            float textRight = ctaWidth + padding * 2;
+
+            // Headline
+            var headlineObj = new GameObject("Headline");
+            headlineObj.transform.SetParent(_container.transform, false);
+            var headlineRect = headlineObj.AddComponent<RectTransform>();
+            headlineRect.anchorMin = new Vector2(0, 0.5f);
+            headlineRect.anchorMax = new Vector2(1, 1f);
+            headlineRect.offsetMin = new Vector2(textX, 0);
+            headlineRect.offsetMax = new Vector2(-textRight, -2f);
+
+            var headlineText = headlineObj.AddComponent<Text>();
+            headlineText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            headlineText.text = AdData.ad_text ?? "";
+            headlineText.fontSize = 14;
+            headlineText.color = new Color(1f, 1f, 1f, 0.95f);
+            headlineText.fontStyle = FontStyle.Bold;
+            headlineText.alignment = TextAnchor.LowerLeft;
+            headlineText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            headlineText.verticalOverflow = VerticalWrapMode.Truncate;
+
+            // Body text (subtitle)
+            if (!string.IsNullOrEmpty(AdData.ad_body))
+            {
+                var bodyObj = new GameObject("BodyText");
+                bodyObj.transform.SetParent(_container.transform, false);
+                var bodyRect = bodyObj.AddComponent<RectTransform>();
+                bodyRect.anchorMin = new Vector2(0, 0);
+                bodyRect.anchorMax = new Vector2(1, 0.5f);
+                bodyRect.offsetMin = new Vector2(textX, 2f);
+                bodyRect.offsetMax = new Vector2(-textRight, 0);
+
+                var bodyText = bodyObj.AddComponent<Text>();
+                bodyText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                bodyText.text = AdData.ad_body;
+                bodyText.fontSize = 11;
+                bodyText.color = new Color(1f, 1f, 1f, 0.5f);
+                bodyText.alignment = TextAnchor.UpperLeft;
+                bodyText.horizontalOverflow = HorizontalWrapMode.Overflow;
+                bodyText.verticalOverflow = VerticalWrapMode.Truncate;
+            }
+            else
+            {
+                // No body - center headline vertically
+                headlineRect.anchorMin = new Vector2(0, 0);
+                headlineRect.anchorMax = new Vector2(1, 1);
+                headlineRect.offsetMin = new Vector2(textX, 0);
+                headlineRect.offsetMax = new Vector2(-textRight, 0);
+                headlineText.alignment = TextAnchor.MiddleLeft;
+            }
+
+            // CTA button (if provided)
+            if (hasCta)
+            {
+                var ctaObj = new GameObject("CTAButton");
+                ctaObj.transform.SetParent(_container.transform, false);
+                var ctaRect = ctaObj.AddComponent<RectTransform>();
+                ctaRect.anchorMin = new Vector2(1, 0.5f);
+                ctaRect.anchorMax = new Vector2(1, 0.5f);
+                ctaRect.pivot = new Vector2(1, 0.5f);
+                ctaRect.anchoredPosition = new Vector2(-padding, 0);
+                ctaRect.sizeDelta = new Vector2(ctaWidth, 30f);
+
+                var ctaBg = ctaObj.AddComponent<Image>();
+                ctaBg.color = new Color(0.30f, 0.56f, 1f, 1f); // blue
+
+                var ctaButton = ctaObj.AddComponent<Button>();
+                ctaButton.targetGraphic = ctaBg;
+                ctaButton.onClick.AddListener(OnClicked);
+
+                var ctaTextObj = new GameObject("CTAText");
+                ctaTextObj.transform.SetParent(ctaObj.transform, false);
+                var ctaTextRect = ctaTextObj.AddComponent<RectTransform>();
+                ctaTextRect.anchorMin = Vector2.zero;
+                ctaTextRect.anchorMax = Vector2.one;
+                ctaTextRect.sizeDelta = Vector2.zero;
+
+                var ctaText = ctaTextObj.AddComponent<Text>();
+                ctaText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                ctaText.text = AdData.cta_text;
+                ctaText.fontSize = 12;
+                ctaText.color = Color.white;
+                ctaText.fontStyle = FontStyle.Bold;
+                ctaText.alignment = TextAnchor.MiddleCenter;
+            }
+            else
+            {
+                // Arrow indicator instead of CTA
+                var arrowObj = new GameObject("Arrow");
+                arrowObj.transform.SetParent(_container.transform, false);
+                var arrowRect = arrowObj.AddComponent<RectTransform>();
+                arrowRect.anchorMin = new Vector2(1, 0.5f);
+                arrowRect.anchorMax = new Vector2(1, 0.5f);
+                arrowRect.pivot = new Vector2(1, 0.5f);
+                arrowRect.anchoredPosition = new Vector2(-padding, 0);
+                arrowRect.sizeDelta = new Vector2(20f, 20f);
+
+                var arrowText = arrowObj.AddComponent<Text>();
+                arrowText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                arrowText.text = "\u203A";
+                arrowText.fontSize = 22;
+                arrowText.color = new Color(1f, 1f, 1f, 0.3f);
+                arrowText.alignment = TextAnchor.MiddleCenter;
+            }
+
+            Debug.Log("[ZeyWinAds] Native ad layout created");
+        }
+
+        private void OnClicked()
+        {
+            Debug.Log("[ZeyWinAds] Native ad clicked");
+            OpenClickUrl();
+        }
+
+        public void Hide()
+        {
+            if (!IsVisible)
+                return;
+
+            Debug.Log("[ZeyWinAds] Hiding native ad");
+            IsVisible = false;
+
+            if (_container != null)
+                _container.SetActive(false);
+        }
+
+        public void ShowAgain()
+        {
+            if (!IsShowing || IsVisible)
+                return;
+
+            if (_container != null)
+            {
+                _container.SetActive(true);
+                IsVisible = true;
+                TrackImpression();
+            }
+        }
+
+        public void SetPosition(BannerPosition newPosition)
+        {
+            if (Position == newPosition)
+                return;
+
+            Position = newPosition;
+
+            if (_container != null && _canvas != null)
+            {
+                var rectTransform = _container.GetComponent<RectTransform>();
+                float height = GetCurrentHeight();
+
+                Rect safeArea = Screen.safeArea;
+                float topInset = Screen.height - (safeArea.y + safeArea.height);
+                float bottomInset = safeArea.y;
+                float scaleFactor = _canvas.GetScaleFactor();
+
+                if (Position == BannerPosition.Top)
+                {
+                    rectTransform.anchorMin = new Vector2(0, 1);
+                    rectTransform.anchorMax = new Vector2(1, 1);
+                    rectTransform.pivot = new Vector2(0.5f, 1);
+                    rectTransform.anchoredPosition = new Vector2(0, -topInset / scaleFactor);
+                }
+                else
+                {
+                    rectTransform.anchorMin = new Vector2(0, 0);
+                    rectTransform.anchorMax = new Vector2(1, 0);
+                    rectTransform.pivot = new Vector2(0.5f, 0);
+                    rectTransform.anchoredPosition = new Vector2(0, bottomInset / scaleFactor);
+                }
+
+                rectTransform.sizeDelta = new Vector2(0, height);
+            }
+        }
+
+        public override void Destroy()
+        {
+            if (_canvas != null)
+            {
+                _canvas.Destroy();
+                _canvas = null;
+            }
+
+            _container = null;
+            IsVisible = false;
+
+            base.Destroy();
+        }
+
+        protected override void OnDestroy()
+        {
+        }
+
+        protected override void OnClose()
+        {
+            IsVisible = false;
+            base.OnClose();
+        }
+    }
+}

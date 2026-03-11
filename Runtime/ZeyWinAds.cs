@@ -17,6 +17,7 @@ namespace ZeyWinAds
         private static AdResponse _cachedInterstitial;
         private static AdResponse _cachedRewarded;
         private static AdResponse _cachedBanner;
+        private static AdResponse _cachedNative;
 
         // Callbacks for ad display
         private static Action _onInterstitialClose;
@@ -30,9 +31,14 @@ namespace ZeyWinAds
         private static bool _isBannerVisible;
         private static BannerPosition _currentBannerPosition;
 
+        // Native ad state
+        private static bool _isNativeVisible;
+        private static BannerPosition _currentNativePosition;
+
         // Active ad instances
         private static BaseAd _activeAd;
         private static BannerAd _activeBanner;
+        private static NativeAd _activeNative;
 
         // Events
         public static event Action<AdType> OnAdLoaded;
@@ -425,6 +431,96 @@ namespace ZeyWinAds
 
         #endregion
 
+        #region Native Ads
+
+        /// <summary>
+        /// Loads a native text ad. Listen to OnAdLoaded event for completion.
+        /// </summary>
+        public static void LoadNative()
+        {
+            if (AdLoader.Instance.IsAdReady(AdType.Native))
+            {
+                Core.Logger.Debug("Native already preloaded");
+                OnAdLoaded?.Invoke(AdType.Native);
+                return;
+            }
+
+            AdLoader.Instance.PreloadAd(AdType.Native);
+        }
+
+        /// <summary>
+        /// Checks if a native ad is ready to show.
+        /// </summary>
+        public static bool IsNativeReady()
+        {
+            return AdLoader.Instance.IsAdReady(AdType.Native) || _cachedNative != null;
+        }
+
+        /// <summary>
+        /// Shows the loaded native ad at the specified position.
+        /// </summary>
+        public static void ShowNative(BannerPosition position)
+        {
+            BaseAd preloadedAd = AdLoader.Instance.GetPreloadedAd(AdType.Native);
+
+            if (preloadedAd is NativeAd nativeAd && nativeAd.IsReady)
+            {
+                _currentNativePosition = position;
+                _isNativeVisible = true;
+                _activeNative = nativeAd;
+
+                nativeAd.SetPosition(position);
+                nativeAd.Show();
+
+                OnAdOpened?.Invoke(AdType.Native);
+                Core.Logger.Log("Native ad shown at {0}", position);
+                return;
+            }
+
+            if (_cachedNative == null)
+            {
+                Core.Logger.Warn("No native ad loaded. Call LoadNative() first.");
+                return;
+            }
+
+            _currentNativePosition = position;
+            _isNativeVisible = true;
+
+            TrackImpression(_cachedNative);
+            OnAdOpened?.Invoke(AdType.Native);
+            Core.Logger.Log("Native ad shown at {0}", position);
+        }
+
+        /// <summary>
+        /// Hides the currently displayed native ad.
+        /// </summary>
+        public static void HideNative()
+        {
+            if (!_isNativeVisible)
+                return;
+
+            _isNativeVisible = false;
+
+            if (_activeNative != null)
+            {
+                _activeNative.Hide();
+                _activeNative = null;
+            }
+
+            OnAdClosed?.Invoke(AdType.Native);
+            Core.Logger.Log("Native ad hidden");
+        }
+
+        /// <summary>
+        /// Checks if native ad is currently visible.
+        /// </summary>
+        public static bool IsNativeVisible()
+        {
+            return _isNativeVisible;
+        }
+
+        #endregion
+
         #region Internal Methods
 
         private static void OnAdPreloaded(AdType adType)
@@ -486,6 +582,9 @@ namespace ZeyWinAds
                     break;
                 case AdType.Banner:
                     _cachedBanner = response;
+                    break;
+                case AdType.Native:
+                    _cachedNative = response;
                     break;
             }
         }
@@ -596,13 +695,16 @@ namespace ZeyWinAds
             _cachedInterstitial = null;
             _cachedRewarded = null;
             _cachedBanner = null;
+            _cachedNative = null;
             _loadingAds.Clear();
             _isBannerVisible = false;
+            _isNativeVisible = false;
             _onInterstitialClose = null;
             _onRewardedReward = null;
             _onRewardedClose = null;
             _activeAd = null;
             _activeBanner = null;
+            _activeNative = null;
 
             // Clear the AdLoader cache
             AdLoader.Instance.ClearCache();

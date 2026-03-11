@@ -9,7 +9,8 @@ namespace ZeyWinAds.Core
     {
         Interstitial,
         Rewarded,
-        Banner
+        Banner,
+        Native
     }
 
     /// <summary>
@@ -69,6 +70,7 @@ namespace ZeyWinAds.Core
                 AdType.Interstitial => "interstitial",
                 AdType.Rewarded => "rewarded",
                 AdType.Banner => "banner",
+                AdType.Native => "native",
                 _ => "interstitial"
             };
         }
@@ -104,6 +106,7 @@ namespace ZeyWinAds.Core
                 "interstitial" => AdType.Interstitial,
                 "rewarded" => AdType.Rewarded,
                 "banner" => AdType.Banner,
+                "native" => AdType.Native,
                 _ => AdType.Interstitial
             };
         }
