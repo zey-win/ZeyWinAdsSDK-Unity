@@ -161,30 +161,34 @@ namespace ZeyWinAds.Ads
             badgeText.color = new Color(1f, 1f, 1f, 0.5f);
             badgeText.alignment = TextAnchor.MiddleCenter;
 
-            // === Centered layout: Icon | Text+CTA ===
-
-            // Calculate content width for centering
+            // === Centered block: [Icon] [Texts] [CTA] ===
             bool hasCta = !string.IsNullOrEmpty(AdData.cta_text);
-            float ctaWidth = hasCta ? 100f : 0f;
-            float ctaGap = hasCta ? padding : 0f;
+            bool hasBody = !string.IsNullOrEmpty(AdData.ad_body);
+            float ctaWidth = hasCta ? 100f : 24f;
+            float textWidth = 250f;
+            float gap = 12f;
 
-            // Inner content wrapper (centered horizontally)
+            // Total content width
+            float totalWidth = iconSize + gap + textWidth + gap + ctaWidth;
+
+            // Centered content wrapper — fixed width, anchored to center
             var contentObj = new GameObject("Content");
             contentObj.transform.SetParent(_container.transform, false);
             var contentRect = contentObj.AddComponent<RectTransform>();
-            contentRect.anchorMin = new Vector2(0, 0);
-            contentRect.anchorMax = new Vector2(1, 1);
-            contentRect.offsetMin = new Vector2(padding, padding);
-            contentRect.offsetMax = new Vector2(-padding, -padding);
+            contentRect.anchorMin = new Vector2(0.5f, 0);
+            contentRect.anchorMax = new Vector2(0.5f, 1);
+            contentRect.pivot = new Vector2(0.5f, 0.5f);
+            contentRect.anchoredPosition = Vector2.zero;
+            contentRect.sizeDelta = new Vector2(totalWidth, 0);
 
-            // Icon - centered vertically on the left
+            // Icon — left side, vertically centered
             var iconObj = new GameObject("AdIcon");
             iconObj.transform.SetParent(contentObj.transform, false);
             var iconRect = iconObj.AddComponent<RectTransform>();
             iconRect.anchorMin = new Vector2(0, 0.5f);
             iconRect.anchorMax = new Vector2(0, 0.5f);
             iconRect.pivot = new Vector2(0, 0.5f);
-            iconRect.anchoredPosition = new Vector2(0, 0);
+            iconRect.anchoredPosition = Vector2.zero;
             iconRect.sizeDelta = new Vector2(iconSize, iconSize);
 
             var iconImage = iconObj.AddComponent<RawImage>();
@@ -202,13 +206,21 @@ namespace ZeyWinAds.Ads
                 });
             }
 
-            // Text area - centered vertically
-            float textLeft = iconSize + padding;
-            float textRight = ctaWidth + ctaGap;
+            // Text block — middle, vertically centered
+            float textX = iconSize + gap;
+
+            var textGroupObj = new GameObject("TextGroup");
+            textGroupObj.transform.SetParent(contentObj.transform, false);
+            var textGroupRect = textGroupObj.AddComponent<RectTransform>();
+            textGroupRect.anchorMin = new Vector2(0, 0);
+            textGroupRect.anchorMax = new Vector2(0, 1);
+            textGroupRect.pivot = new Vector2(0, 0.5f);
+            textGroupRect.anchoredPosition = new Vector2(textX, 0);
+            textGroupRect.sizeDelta = new Vector2(textWidth, 0);
 
             // Headline
             var headlineObj = new GameObject("Headline");
-            headlineObj.transform.SetParent(contentObj.transform, false);
+            headlineObj.transform.SetParent(textGroupObj.transform, false);
             var headlineRect = headlineObj.AddComponent<RectTransform>();
 
             var headlineText = headlineObj.AddComponent<Text>();
@@ -220,22 +232,21 @@ namespace ZeyWinAds.Ads
             headlineText.horizontalOverflow = HorizontalWrapMode.Overflow;
             headlineText.verticalOverflow = VerticalWrapMode.Truncate;
 
-            if (!string.IsNullOrEmpty(AdData.ad_body))
+            if (hasBody)
             {
-                // Headline top half, body bottom half - both centered
                 headlineRect.anchorMin = new Vector2(0, 0.5f);
                 headlineRect.anchorMax = new Vector2(1, 1f);
-                headlineRect.offsetMin = new Vector2(textLeft, 0);
-                headlineRect.offsetMax = new Vector2(-textRight, 0);
+                headlineRect.offsetMin = Vector2.zero;
+                headlineRect.offsetMax = Vector2.zero;
                 headlineText.alignment = TextAnchor.LowerLeft;
 
                 var bodyObj = new GameObject("BodyText");
-                bodyObj.transform.SetParent(contentObj.transform, false);
+                bodyObj.transform.SetParent(textGroupObj.transform, false);
                 var bodyRect = bodyObj.AddComponent<RectTransform>();
                 bodyRect.anchorMin = new Vector2(0, 0);
                 bodyRect.anchorMax = new Vector2(1, 0.5f);
-                bodyRect.offsetMin = new Vector2(textLeft, 0);
-                bodyRect.offsetMax = new Vector2(-textRight, 0);
+                bodyRect.offsetMin = Vector2.zero;
+                bodyRect.offsetMax = Vector2.zero;
 
                 var bodyText = bodyObj.AddComponent<Text>();
                 bodyText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -248,24 +259,25 @@ namespace ZeyWinAds.Ads
             }
             else
             {
-                // No body - headline fills full height, centered
-                headlineRect.anchorMin = new Vector2(0, 0);
-                headlineRect.anchorMax = new Vector2(1, 1);
-                headlineRect.offsetMin = new Vector2(textLeft, 0);
-                headlineRect.offsetMax = new Vector2(-textRight, 0);
+                headlineRect.anchorMin = Vector2.zero;
+                headlineRect.anchorMax = Vector2.one;
+                headlineRect.offsetMin = Vector2.zero;
+                headlineRect.offsetMax = Vector2.zero;
                 headlineText.alignment = TextAnchor.MiddleLeft;
             }
 
-            // CTA button - centered vertically on the right
+            // CTA / Arrow — right side, vertically centered
+            float ctaX = textX + textWidth + gap;
+
             if (hasCta)
             {
                 var ctaObj = new GameObject("CTAButton");
                 ctaObj.transform.SetParent(contentObj.transform, false);
                 var ctaRect = ctaObj.AddComponent<RectTransform>();
-                ctaRect.anchorMin = new Vector2(1, 0.5f);
-                ctaRect.anchorMax = new Vector2(1, 0.5f);
-                ctaRect.pivot = new Vector2(1, 0.5f);
-                ctaRect.anchoredPosition = Vector2.zero;
+                ctaRect.anchorMin = new Vector2(0, 0.5f);
+                ctaRect.anchorMax = new Vector2(0, 0.5f);
+                ctaRect.pivot = new Vector2(0, 0.5f);
+                ctaRect.anchoredPosition = new Vector2(ctaX, 0);
                 ctaRect.sizeDelta = new Vector2(ctaWidth, 40f);
 
                 var ctaBg = ctaObj.AddComponent<Image>();
@@ -292,14 +304,13 @@ namespace ZeyWinAds.Ads
             }
             else
             {
-                // Arrow indicator
                 var arrowObj = new GameObject("Arrow");
                 arrowObj.transform.SetParent(contentObj.transform, false);
                 var arrowRect = arrowObj.AddComponent<RectTransform>();
-                arrowRect.anchorMin = new Vector2(1, 0.5f);
-                arrowRect.anchorMax = new Vector2(1, 0.5f);
-                arrowRect.pivot = new Vector2(1, 0.5f);
-                arrowRect.anchoredPosition = Vector2.zero;
+                arrowRect.anchorMin = new Vector2(0, 0.5f);
+                arrowRect.anchorMax = new Vector2(0, 0.5f);
+                arrowRect.pivot = new Vector2(0, 0.5f);
+                arrowRect.anchoredPosition = new Vector2(ctaX, 0);
                 arrowRect.sizeDelta = new Vector2(24f, 24f);
 
                 var arrowText = arrowObj.AddComponent<Text>();
