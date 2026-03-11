@@ -162,6 +162,46 @@ namespace ZeyWinAds.Core
     }
 
     /// <summary>
+    /// Native ad info for custom rendering.
+    /// Contains all data needed to build your own native ad UI.
+    /// </summary>
+    public class NativeAdInfo
+    {
+        /// <summary>Ad identifier</summary>
+        public string AdId { get; set; }
+
+        /// <summary>App icon URL</summary>
+        public string IconUrl { get; set; }
+
+        /// <summary>Headline text</summary>
+        public string Headline { get; set; }
+
+        /// <summary>Body/description text (may be null)</summary>
+        public string Body { get; set; }
+
+        /// <summary>Call-to-action button text, e.g. "Install" (may be null)</summary>
+        public string CtaText { get; set; }
+
+        /// <summary>Media image URL for large format (may be null)</summary>
+        public string MediaUrl { get; set; }
+
+        /// <summary>Click-through URL</summary>
+        public string ClickUrl { get; set; }
+
+        /// <summary>
+        /// Call this when the ad becomes visible to the user.
+        /// Tracks an impression event.
+        /// </summary>
+        public Action TrackImpression { get; set; }
+
+        /// <summary>
+        /// Call this when the user clicks/taps the ad.
+        /// Tracks a click event and opens the click URL.
+        /// </summary>
+        public Action RegisterClick { get; set; }
+    }
+
+    /// <summary>
     /// SDK configuration constants
     /// </summary>
     public static class ZeyWinAdsConfig

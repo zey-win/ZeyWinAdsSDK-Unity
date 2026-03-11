@@ -519,6 +519,91 @@ namespace ZeyWinAds
             return _isNativeVisible;
         }
 
+        /// <summary>
+        /// Gets the native ad info for custom rendering.
+        /// Returns all data (icon, texts, URLs, tracking callbacks) so you can
+        /// build your own UI. Call TrackImpression() when you display it and
+        /// RegisterClick() when the user taps it.
+        /// Returns null if no native ad is loaded.
+        /// </summary>
+        public static NativeAdInfo GetNativeAdInfo()
+        {
+            // Try preloaded first
+            BaseAd preloaded = AdLoader.Instance.IsAdReady(AdType.Native)
+                ? AdLoader.Instance.GetPreloadedAd(AdType.Native)
+                : null;
+
+            AdResponse data = null;
+            BaseAd adInstance = null;
+
+            if (preloaded is NativeAd nativeAd && nativeAd.IsReady)
+            {
+                data = nativeAd.AdData;
+                adInstance = nativeAd;
+            }
+            else if (_cachedNative != null)
+            {
+                data = _cachedNative;
+            }
+
+            if (data == null)
+            {
+                Core.Logger.Warn("No native ad available. Call LoadNative() first.");
+                return null;
+            }
+
+            // Capture references for closures
+            var capturedData = data;
+            var capturedAd = adInstance;
+
+            var info = new NativeAdInfo
+            {
+                AdId = capturedData.ad_id,
+                IconUrl = capturedData.icon_url,
+                Headline = capturedData.ad_text,
+                Body = capturedData.ad_body,
+                CtaText = capturedData.cta_text,
+                MediaUrl = capturedData.media_url,
+                ClickUrl = capturedData.click_url,
+                TrackImpression = () =>
+                {
+                    if (capturedAd != null)
+                    {
+                        capturedAd.TrackImpression();
+                    }
+                    else
+                    {
+                        TrackImpression(capturedData);
+                    }
+                },
+                RegisterClick = () =>
+                {
+                    if (capturedAd != null)
+                    {
+                        capturedAd.OpenClickUrl();
+                    }
+                    else
+                    {
+                        HandleAdClick(capturedData, AdType.Native);
+                    }
+                }
+            };
+
+            // Trigger reload
+            if (capturedAd != null)
+            {
+                AdLoader.Instance.OnAdShown(AdType.Native);
+            }
+            else
+            {
+                _cachedNative = null;
+                AdLoader.Instance.OnAdShown(AdType.Native);
+            }
+
+            Core.Logger.Log("Native ad info provided for custom rendering: {0}", info.AdId);
+            return info;
+        }
+
         #endregion
 
         #region Internal Methods
