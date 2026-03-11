@@ -132,8 +132,8 @@ namespace ZeyWinAds.Ads
             accentImage.color = new Color(0.30f, 0.56f, 1f, 0.8f);
 
             // "Ad" badge - top-right corner
-            float badgeWidth = 26f;
-            float badgeHeight = 16f;
+            float badgeWidth = 36f;
+            float badgeHeight = 22f;
 
             var badgeObj = new GameObject("AdBadge");
             badgeObj.transform.SetParent(_container.transform, false);
@@ -157,7 +157,7 @@ namespace ZeyWinAds.Ads
             var badgeText = badgeTextObj.AddComponent<Text>();
             badgeText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             badgeText.text = "Ad";
-            badgeText.fontSize = 10;
+            badgeText.fontSize = 14;
             badgeText.color = new Color(1f, 1f, 1f, 0.5f);
             badgeText.alignment = TextAnchor.MiddleCenter;
 
