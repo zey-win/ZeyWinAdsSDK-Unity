@@ -145,8 +145,16 @@ namespace ZeyWinAds.Ads
             // Create banner container
             CreateBannerContainer();
 
-            // Load and display banner image
-            LoadBannerImage();
+            // Display based on media type
+            if (AdData.GetMediaType() == MediaType.Native)
+            {
+                CreateNativeBannerLayout();
+            }
+            else
+            {
+                // Load and display banner image
+                LoadBannerImage();
+            }
         }
 
         private void CreateBannerContainer()
@@ -238,6 +246,120 @@ namespace ZeyWinAds.Ads
                     Debug.Log("[ZeyWinAds] Banner image loaded");
                 }
             });
+        }
+
+        /// <summary>
+        /// Creates a native ad banner layout (Google AdMob small template style):
+        /// [Ad badge] [Icon] [Headline text] [> arrow]
+        /// </summary>
+        private void CreateNativeBannerLayout()
+        {
+            float bannerHeight = DeviceInfo.GetDeviceType() == "tablet" ? TabletBannerHeight : BannerHeight;
+            float padding = 6f;
+            float iconSize = bannerHeight - padding * 2;
+            float badgeWidth = 24f;
+            float badgeHeight = 16f;
+            float arrowSize = 20f;
+
+            // "Ad" badge - green label (Google AdMob style: #3A6728)
+            var badgeObj = new GameObject("AdBadge");
+            badgeObj.transform.SetParent(_bannerContainer.transform, false);
+
+            var badgeRect = badgeObj.AddComponent<RectTransform>();
+            badgeRect.anchorMin = new Vector2(0, 0.5f);
+            badgeRect.anchorMax = new Vector2(0, 0.5f);
+            badgeRect.pivot = new Vector2(0, 0.5f);
+            badgeRect.anchoredPosition = new Vector2(padding, 0);
+            badgeRect.sizeDelta = new Vector2(badgeWidth, badgeHeight);
+
+            var badgeBg = badgeObj.AddComponent<Image>();
+            badgeBg.color = new Color(0.227f, 0.404f, 0.157f, 1f); // #3A6728
+
+            var badgeTextObj = new GameObject("BadgeText");
+            badgeTextObj.transform.SetParent(badgeObj.transform, false);
+            var badgeTextRect = badgeTextObj.AddComponent<RectTransform>();
+            badgeTextRect.anchorMin = Vector2.zero;
+            badgeTextRect.anchorMax = Vector2.one;
+            badgeTextRect.sizeDelta = Vector2.zero;
+
+            var badgeText = badgeTextObj.AddComponent<Text>();
+            badgeText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            badgeText.text = "Ad";
+            badgeText.fontSize = 10;
+            badgeText.color = Color.white;
+            badgeText.fontStyle = FontStyle.Bold;
+            badgeText.alignment = TextAnchor.MiddleCenter;
+
+            // Icon (square, loaded from icon_url)
+            float iconX = padding + badgeWidth + padding;
+
+            var iconObj = new GameObject("AdIcon");
+            iconObj.transform.SetParent(_bannerContainer.transform, false);
+
+            var iconRect = iconObj.AddComponent<RectTransform>();
+            iconRect.anchorMin = new Vector2(0, 0.5f);
+            iconRect.anchorMax = new Vector2(0, 0.5f);
+            iconRect.pivot = new Vector2(0, 0.5f);
+            iconRect.anchoredPosition = new Vector2(iconX, 0);
+            iconRect.sizeDelta = new Vector2(iconSize, iconSize);
+
+            var iconImage = iconObj.AddComponent<RawImage>();
+            iconImage.color = new Color(0.3f, 0.3f, 0.3f, 1f); // placeholder color
+
+            if (!string.IsNullOrEmpty(AdData.icon_url))
+            {
+                _canvas.LoadImage(AdData.icon_url, (texture) =>
+                {
+                    if (texture != null && iconImage != null)
+                    {
+                        iconImage.texture = texture;
+                        iconImage.color = Color.white;
+                    }
+                });
+            }
+
+            // Arrow ">" on the right
+            var arrowObj = new GameObject("Arrow");
+            arrowObj.transform.SetParent(_bannerContainer.transform, false);
+
+            var arrowRect = arrowObj.AddComponent<RectTransform>();
+            arrowRect.anchorMin = new Vector2(1, 0.5f);
+            arrowRect.anchorMax = new Vector2(1, 0.5f);
+            arrowRect.pivot = new Vector2(1, 0.5f);
+            arrowRect.anchoredPosition = new Vector2(-padding, 0);
+            arrowRect.sizeDelta = new Vector2(arrowSize, arrowSize);
+
+            var arrowText = arrowObj.AddComponent<Text>();
+            arrowText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            arrowText.text = ">";
+            arrowText.fontSize = 16;
+            arrowText.color = new Color(0.6f, 0.6f, 0.6f, 1f);
+            arrowText.alignment = TextAnchor.MiddleCenter;
+
+            // Headline text (fills remaining space)
+            float textX = iconX + iconSize + padding;
+            float textRight = arrowSize + padding * 2;
+
+            var textObj = new GameObject("HeadlineText");
+            textObj.transform.SetParent(_bannerContainer.transform, false);
+
+            var textRect = textObj.AddComponent<RectTransform>();
+            textRect.anchorMin = new Vector2(0, 0);
+            textRect.anchorMax = new Vector2(1, 1);
+            textRect.offsetMin = new Vector2(textX, 0);
+            textRect.offsetMax = new Vector2(-textRight, 0);
+
+            var headlineText = textObj.AddComponent<Text>();
+            headlineText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            headlineText.text = AdData.ad_text ?? "";
+            headlineText.fontSize = 13;
+            headlineText.color = Color.white;
+            headlineText.fontStyle = FontStyle.Bold;
+            headlineText.alignment = TextAnchor.MiddleLeft;
+            headlineText.horizontalOverflow = HorizontalWrapMode.Overflow;
+            headlineText.verticalOverflow = VerticalWrapMode.Truncate;
+
+            Debug.Log("[ZeyWinAds] Native banner layout created");
         }
 
         private void ApplyBannerAspectFill(RectTransform imageRect, RectTransform containerRect, float imageWidth, float imageHeight)

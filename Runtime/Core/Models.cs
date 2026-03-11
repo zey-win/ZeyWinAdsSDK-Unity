@@ -28,7 +28,8 @@ namespace ZeyWinAds.Core
     {
         Image,
         Video,
-        Html
+        Html,
+        Native
     }
 
     /// <summary>
@@ -87,6 +88,10 @@ namespace ZeyWinAds.Core
         public int duration_sec;
         public int skip_after_sec;
         public bool lock_webview;
+        public string icon_url;
+        public string ad_text;
+        public string ad_body;
+        public string cta_text;
         public string impression_url;
         public string click_tracking_url;
         public string complete_url;
@@ -110,6 +115,7 @@ namespace ZeyWinAds.Core
                 "image" => MediaType.Image,
                 "video" => MediaType.Video,
                 "html" => MediaType.Html,
+                "native" => MediaType.Native,
                 _ => MediaType.Image
             };
         }

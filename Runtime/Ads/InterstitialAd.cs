@@ -73,6 +73,15 @@ namespace ZeyWinAds.Ads
             {
                 ShowVideoAd();
             }
+            else if (AdData.GetMediaType() == MediaType.Native)
+            {
+                ShowNativeAd();
+                _closeButton.gameObject.SetActive(true);
+                _closeButton.StartTimer(ImageCloseDelay, () =>
+                {
+                    _canClose = true;
+                });
+            }
             else
             {
                 ShowImageAd();
@@ -99,6 +108,209 @@ namespace ZeyWinAds.Ads
             rectTransform.anchorMax = Vector2.one;
             rectTransform.sizeDelta = Vector2.zero;
             rectTransform.anchoredPosition = Vector2.zero;
+        }
+
+        /// <summary>
+        /// Shows a fullscreen native ad (Google AdMob medium/full template style):
+        /// [Media image (optional, top half)]
+        /// [Icon + Headline + "Ad" badge]
+        /// [Body text]
+        /// [CTA button (blue #4285f4)]
+        /// </summary>
+        private void ShowNativeAd()
+        {
+            Debug.Log($"[ZeyWinAds] Loading native interstitial: {AdData.ad_id}");
+
+            // Main layout container (centered card)
+            var cardObj = new GameObject("NativeCard");
+            cardObj.transform.SetParent(_adContainer.transform, false);
+
+            var cardRect = cardObj.AddComponent<RectTransform>();
+            cardRect.anchorMin = new Vector2(0.05f, 0.1f);
+            cardRect.anchorMax = new Vector2(0.95f, 0.9f);
+            cardRect.sizeDelta = Vector2.zero;
+            cardRect.anchoredPosition = Vector2.zero;
+
+            var cardBg = cardObj.AddComponent<Image>();
+            cardBg.color = new Color(1f, 1f, 1f, 1f); // white card
+
+            // Vertical layout using manual positioning
+            // --- Media Image (top portion, if media_url exists) ---
+            float contentTop = 0f;
+
+            if (!string.IsNullOrEmpty(AdData.media_url))
+            {
+                var mediaObj = _canvas.CreateImageDisplay(cardObj.transform, AdData.media_url);
+                var mediaRect = mediaObj.GetComponent<RectTransform>();
+                mediaRect.anchorMin = new Vector2(0, 0.45f);
+                mediaRect.anchorMax = new Vector2(1, 1f);
+                mediaRect.sizeDelta = Vector2.zero;
+                mediaRect.anchoredPosition = Vector2.zero;
+                contentTop = 0.45f;
+            }
+            else
+            {
+                contentTop = 0.7f; // more space for text when no image
+            }
+
+            // --- Info section (icon + headline + Ad badge) ---
+            float infoBottom = contentTop > 0.5f ? 0.3f : 0.25f;
+
+            var infoObj = new GameObject("InfoSection");
+            infoObj.transform.SetParent(cardObj.transform, false);
+
+            var infoRect = infoObj.AddComponent<RectTransform>();
+            infoRect.anchorMin = new Vector2(0, infoBottom);
+            infoRect.anchorMax = new Vector2(1, contentTop > 0.5f ? contentTop : 0.45f);
+            infoRect.sizeDelta = Vector2.zero;
+            infoRect.anchoredPosition = Vector2.zero;
+
+            float iconSize = 48f;
+            float pad = 16f;
+
+            // Icon
+            var iconObj = new GameObject("Icon");
+            iconObj.transform.SetParent(infoObj.transform, false);
+
+            var iconRect = iconObj.AddComponent<RectTransform>();
+            iconRect.anchorMin = new Vector2(0, 0.5f);
+            iconRect.anchorMax = new Vector2(0, 0.5f);
+            iconRect.pivot = new Vector2(0, 0.5f);
+            iconRect.anchoredPosition = new Vector2(pad, 0);
+            iconRect.sizeDelta = new Vector2(iconSize, iconSize);
+
+            var iconImage = iconObj.AddComponent<RawImage>();
+            iconImage.color = new Color(0.85f, 0.85f, 0.85f, 1f);
+
+            if (!string.IsNullOrEmpty(AdData.icon_url))
+            {
+                _canvas.LoadImage(AdData.icon_url, (texture) =>
+                {
+                    if (texture != null && iconImage != null)
+                    {
+                        iconImage.texture = texture;
+                        iconImage.color = Color.white;
+                    }
+                });
+            }
+
+            // Headline text
+            float textLeft = pad + iconSize + pad;
+
+            var headlineObj = new GameObject("Headline");
+            headlineObj.transform.SetParent(infoObj.transform, false);
+
+            var headlineRect = headlineObj.AddComponent<RectTransform>();
+            headlineRect.anchorMin = new Vector2(0, 0.5f);
+            headlineRect.anchorMax = new Vector2(1, 1f);
+            headlineRect.offsetMin = new Vector2(textLeft, 0);
+            headlineRect.offsetMax = new Vector2(-pad, 0);
+
+            var headlineText = headlineObj.AddComponent<Text>();
+            headlineText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            headlineText.text = AdData.ad_text ?? "";
+            headlineText.fontSize = 20;
+            headlineText.color = new Color(0.13f, 0.13f, 0.13f, 1f); // dark gray
+            headlineText.fontStyle = FontStyle.Bold;
+            headlineText.alignment = TextAnchor.LowerLeft;
+
+            // "Ad" badge + advertiser line
+            var adLineObj = new GameObject("AdLine");
+            adLineObj.transform.SetParent(infoObj.transform, false);
+
+            var adLineRect = adLineObj.AddComponent<RectTransform>();
+            adLineRect.anchorMin = new Vector2(0, 0f);
+            adLineRect.anchorMax = new Vector2(1, 0.5f);
+            adLineRect.offsetMin = new Vector2(textLeft, 0);
+            adLineRect.offsetMax = new Vector2(-pad, 0);
+
+            // Ad badge
+            var badgeObj = new GameObject("AdBadge");
+            badgeObj.transform.SetParent(adLineObj.transform, false);
+
+            var badgeRect = badgeObj.AddComponent<RectTransform>();
+            badgeRect.anchorMin = new Vector2(0, 0.5f);
+            badgeRect.anchorMax = new Vector2(0, 0.5f);
+            badgeRect.pivot = new Vector2(0, 0.5f);
+            badgeRect.anchoredPosition = new Vector2(0, 0);
+            badgeRect.sizeDelta = new Vector2(24f, 16f);
+
+            var badgeBg = badgeObj.AddComponent<Image>();
+            badgeBg.color = new Color(0.227f, 0.404f, 0.157f, 1f); // #3A6728
+
+            var badgeTextObj = new GameObject("BadgeText");
+            badgeTextObj.transform.SetParent(badgeObj.transform, false);
+            var badgeTextRect = badgeTextObj.AddComponent<RectTransform>();
+            badgeTextRect.anchorMin = Vector2.zero;
+            badgeTextRect.anchorMax = Vector2.one;
+            badgeTextRect.sizeDelta = Vector2.zero;
+
+            var badgeText = badgeTextObj.AddComponent<Text>();
+            badgeText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            badgeText.text = "Ad";
+            badgeText.fontSize = 10;
+            badgeText.color = Color.white;
+            badgeText.fontStyle = FontStyle.Bold;
+            badgeText.alignment = TextAnchor.MiddleCenter;
+
+            // --- Body text (below info section) ---
+            if (!string.IsNullOrEmpty(AdData.ad_body))
+            {
+                var bodyObj = new GameObject("BodyText");
+                bodyObj.transform.SetParent(cardObj.transform, false);
+
+                var bodyRect = bodyObj.AddComponent<RectTransform>();
+                bodyRect.anchorMin = new Vector2(0, 0.15f);
+                bodyRect.anchorMax = new Vector2(1, infoBottom);
+                bodyRect.offsetMin = new Vector2(pad, 0);
+                bodyRect.offsetMax = new Vector2(-pad, -4);
+
+                var bodyText = bodyObj.AddComponent<Text>();
+                bodyText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                bodyText.text = AdData.ad_body;
+                bodyText.fontSize = 14;
+                bodyText.color = new Color(0.5f, 0.5f, 0.5f, 1f); // #808080
+                bodyText.alignment = TextAnchor.UpperLeft;
+                bodyText.horizontalOverflow = HorizontalWrapMode.Wrap;
+                bodyText.verticalOverflow = VerticalWrapMode.Truncate;
+            }
+
+            // --- CTA Button (bottom, Google blue #4285f4) ---
+            string ctaLabel = AdData.cta_text ?? "Learn More";
+
+            var ctaObj = new GameObject("CTAButton");
+            ctaObj.transform.SetParent(cardObj.transform, false);
+
+            var ctaRect = ctaObj.AddComponent<RectTransform>();
+            ctaRect.anchorMin = new Vector2(0.1f, 0.02f);
+            ctaRect.anchorMax = new Vector2(0.9f, 0.13f);
+            ctaRect.sizeDelta = Vector2.zero;
+            ctaRect.anchoredPosition = Vector2.zero;
+
+            var ctaBg = ctaObj.AddComponent<Image>();
+            ctaBg.color = new Color(0.259f, 0.522f, 0.957f, 1f); // #4285f4
+
+            var ctaButton = ctaObj.AddComponent<UnityEngine.UI.Button>();
+            ctaButton.targetGraphic = ctaBg;
+            ctaButton.onClick.AddListener(OnAdClicked);
+
+            var ctaTextObj = new GameObject("CTAText");
+            ctaTextObj.transform.SetParent(ctaObj.transform, false);
+
+            var ctaTextRect = ctaTextObj.AddComponent<RectTransform>();
+            ctaTextRect.anchorMin = Vector2.zero;
+            ctaTextRect.anchorMax = Vector2.one;
+            ctaTextRect.sizeDelta = Vector2.zero;
+
+            var ctaText = ctaTextObj.AddComponent<Text>();
+            ctaText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            ctaText.text = ctaLabel;
+            ctaText.fontSize = 18;
+            ctaText.color = Color.white;
+            ctaText.fontStyle = FontStyle.Bold;
+            ctaText.alignment = TextAnchor.MiddleCenter;
+
+            Debug.Log("[ZeyWinAds] Native interstitial layout created");
         }
 
         private void MuteGameAudio()
