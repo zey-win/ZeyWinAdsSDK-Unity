@@ -165,14 +165,18 @@ namespace ZeyWinAds.Ads
             _card.transform.SetParent(_canvas.transform, false);
 
             var cardRect = _card.AddComponent<RectTransform>();
-            cardRect.anchorMin = new Vector2(0.5f, 0);
-            cardRect.anchorMax = new Vector2(0.5f, 0);
+            // Stretch horizontally, anchored to bottom
+            cardRect.anchorMin = new Vector2(0, 0);
+            cardRect.anchorMax = new Vector2(1, 0);
             cardRect.pivot = new Vector2(0.5f, 0);
 
             // Account for safe area + bottom margin
             float bottomInset = Screen.safeArea.y / _canvas.GetScaleFactor();
             cardRect.anchoredPosition = new Vector2(0, bottomInset + cardMarginB);
-            cardRect.sizeDelta = new Vector2(cardWidth, totalHeight);
+            // offsetMin.x = left margin, offsetMax.x = -right margin
+            cardRect.offsetMin = new Vector2(cardMarginH, cardRect.offsetMin.y);
+            cardRect.offsetMax = new Vector2(-cardMarginH, cardRect.offsetMax.y);
+            cardRect.sizeDelta = new Vector2(cardRect.sizeDelta.x, totalHeight);
 
             // Card background with rounded corners
             var cardBg = _card.AddComponent<Image>();
@@ -421,20 +425,33 @@ namespace ZeyWinAds.Ads
             if (_card == null) return;
 
             var cardRect = _card.GetComponent<RectTransform>();
-            float targetY = cardRect.anchoredPosition.y;
+            float targetBottom = cardRect.offsetMin.y;  // final bottom offset
+            float cardH = cardRect.sizeDelta.y;
+            float offScreenBottom = -cardH;             // start below screen
 
-            // Start off-screen
-            cardRect.anchoredPosition = new Vector2(0, -cardRect.sizeDelta.y);
+            // Start off-screen — shift both offsets equally
+            float shift = offScreenBottom - targetBottom;
+            cardRect.offsetMin = new Vector2(cardRect.offsetMin.x, offScreenBottom);
+            cardRect.offsetMax = new Vector2(cardRect.offsetMax.x, cardRect.offsetMax.y + shift);
 
             // Fade overlay from transparent
             var overlayImg = _overlay?.GetComponent<Image>();
             if (overlayImg != null) overlayImg.color = new Color(0, 0, 0, 0);
 
+            float startOffMin = cardRect.offsetMin.y;
+            float startOffMax = cardRect.offsetMax.y;
+            float targetTop = startOffMax - shift; // restore original top
+
             _animCoroutine = _canvas.StartCoroutine(AnimateCoroutine(0.3f, (t) =>
             {
                 float ease = 1f - Mathf.Pow(1f - t, 3f); // ease out cubic
                 if (cardRect != null)
-                    cardRect.anchoredPosition = new Vector2(0, Mathf.Lerp(-cardRect.sizeDelta.y, targetY, ease));
+                {
+                    float curBottom = Mathf.Lerp(startOffMin, targetBottom, ease);
+                    float curTop = Mathf.Lerp(startOffMax, targetTop, ease);
+                    cardRect.offsetMin = new Vector2(cardRect.offsetMin.x, curBottom);
+                    cardRect.offsetMax = new Vector2(cardRect.offsetMax.x, curTop);
+                }
                 if (overlayImg != null)
                     overlayImg.color = new Color(0, 0, 0, 0.4f * ease);
             }));
@@ -449,8 +466,12 @@ namespace ZeyWinAds.Ads
             }
 
             var cardRect = _card.GetComponent<RectTransform>();
-            float startY = cardRect.anchoredPosition.y;
-            float endY = -cardRect.sizeDelta.y;
+            float startBottom = cardRect.offsetMin.y;
+            float startTop = cardRect.offsetMax.y;
+            float cardH = cardRect.sizeDelta.y;
+            float endBottom = -cardH;
+            float shift = endBottom - startBottom;
+            float endTop = startTop + shift;
 
             var overlayImg = _overlay?.GetComponent<Image>();
 
@@ -458,7 +479,12 @@ namespace ZeyWinAds.Ads
             {
                 float ease = t * t; // ease in quad
                 if (cardRect != null)
-                    cardRect.anchoredPosition = new Vector2(0, Mathf.Lerp(startY, endY, ease));
+                {
+                    float curBottom = Mathf.Lerp(startBottom, endBottom, ease);
+                    float curTop = Mathf.Lerp(startTop, endTop, ease);
+                    cardRect.offsetMin = new Vector2(cardRect.offsetMin.x, curBottom);
+                    cardRect.offsetMax = new Vector2(cardRect.offsetMax.x, curTop);
+                }
                 if (overlayImg != null)
                     overlayImg.color = new Color(0, 0, 0, 0.4f * (1f - ease));
             }, onComplete));
