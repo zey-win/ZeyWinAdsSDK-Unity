@@ -315,22 +315,20 @@ namespace ZeyWinAds.Ads
             yOffset -= gapAfterText;
 
             // === Buttons row ===
-            float buttonsWidth = cardWidth - padding * 2;
-
             if (hasBtn2)
             {
-                float singleBtnWidth = (buttonsWidth - btnGap) / 2f;
-
-                // Button 1 (left — light gray-blue)
-                CreateButton(_card.transform,
-                    padding, yOffset, singleBtnWidth, btnHeight,
+                // Button 1 (left — light gray-blue): left half
+                CreateButtonStretch(_card.transform,
+                    padding, btnGap / 2f, yOffset, btnHeight,
+                    0f, 0.5f,
                     AdData.cta_text ?? "Button 1", 30,
                     Btn1Bg, Btn1Text,
                     OnButton1Clicked);
 
-                // Button 2 (right — green)
-                CreateButton(_card.transform,
-                    padding + singleBtnWidth + btnGap, yOffset, singleBtnWidth, btnHeight,
+                // Button 2 (right — green): right half
+                CreateButtonStretch(_card.transform,
+                    btnGap / 2f, padding, yOffset, btnHeight,
+                    0.5f, 1f,
                     AdData.cta_text_2, 30,
                     Btn2Bg, Color.white,
                     OnButton2Clicked);
@@ -338,8 +336,9 @@ namespace ZeyWinAds.Ads
             else
             {
                 // Single button full width
-                CreateButton(_card.transform,
-                    padding, yOffset, buttonsWidth, btnHeight,
+                CreateButtonStretch(_card.transform,
+                    padding, padding, yOffset, btnHeight,
+                    0f, 1f,
                     AdData.cta_text ?? "OK", 30,
                     Btn2Bg, Color.white,
                     OnButton1Clicked);
@@ -348,18 +347,23 @@ namespace ZeyWinAds.Ads
             Debug.Log("[ZeyWinAds] Popup card layout created");
         }
 
-        private void CreateButton(Transform parent, float x, float y, float w, float h,
+        private void CreateButtonStretch(Transform parent,
+            float leftInset, float rightInset, float y, float h,
+            float anchorXMin, float anchorXMax,
             string label, int fontSize, Color bgColor, Color textColor, Action onClick)
         {
             var btnObj = new GameObject("Btn_" + label);
             btnObj.transform.SetParent(parent, false);
 
             var btnRect = btnObj.AddComponent<RectTransform>();
-            btnRect.anchorMin = new Vector2(0, 1);
-            btnRect.anchorMax = new Vector2(0, 1);
-            btnRect.pivot = new Vector2(0, 1);
-            btnRect.anchoredPosition = new Vector2(x, y);
-            btnRect.sizeDelta = new Vector2(w, h);
+            // Stretch horizontally between anchorXMin..anchorXMax, pinned to top of parent
+            btnRect.anchorMin = new Vector2(anchorXMin, 1);
+            btnRect.anchorMax = new Vector2(anchorXMax, 1);
+            // offsetMin = lower-left relative to lower-left anchor
+            // offsetMax = upper-right relative to upper-right anchor
+            // y is negative (offset from parent top), h is positive
+            btnRect.offsetMin = new Vector2(leftInset, y - h);
+            btnRect.offsetMax = new Vector2(-rightInset, y);
 
             var btnImg = btnObj.AddComponent<Image>();
             btnImg.color = bgColor;
