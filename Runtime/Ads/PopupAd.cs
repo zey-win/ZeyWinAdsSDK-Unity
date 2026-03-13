@@ -109,7 +109,7 @@ namespace ZeyWinAds.Ads
             _isVisible = true;
 
             _canvas = AdCanvas.Create("PopupAdCanvas");
-            _canvas.SetSortingOrder(999);
+            _canvas.SetSortingOrder(1002);
 
             CreateOverlay();
             CreateCard();
