@@ -18,6 +18,7 @@ namespace ZeyWinAds
         private static AdResponse _cachedRewarded;
         private static AdResponse _cachedBanner;
         private static AdResponse _cachedNative;
+        private static AdResponse _cachedPopup;
 
         // Callbacks for ad display
         private static Action _onInterstitialClose;
@@ -606,6 +607,120 @@ namespace ZeyWinAds
 
         #endregion
 
+        #region Popup Ads
+
+        /// <summary>
+        /// Loads a popup ad. Listen to OnAdLoaded event for completion.
+        /// </summary>
+        public static void LoadPopup()
+        {
+            if (AdLoader.Instance.IsAdReady(AdType.Popup))
+            {
+                Core.Logger.Debug("Popup already preloaded");
+                OnAdLoaded?.Invoke(AdType.Popup);
+                return;
+            }
+
+            AdLoader.Instance.PreloadAd(AdType.Popup);
+        }
+
+        /// <summary>
+        /// Checks if a popup ad is ready.
+        /// </summary>
+        public static bool IsPopupReady()
+        {
+            return AdLoader.Instance.IsAdReady(AdType.Popup) || _cachedPopup != null;
+        }
+
+        /// <summary>
+        /// Gets the popup ad info for custom rendering.
+        /// Returns all data (title, subtitle, buttons, URL, delay, image, tracking callbacks)
+        /// so you can build your own popup UI.
+        /// Call TrackImpression() when you display the popup and
+        /// RegisterClick() when the user taps the primary button.
+        /// Returns null if no popup ad is loaded.
+        /// </summary>
+        public static PopupAdInfo GetPopupAdInfo()
+        {
+            // Try preloaded first
+            BaseAd preloaded = AdLoader.Instance.IsAdReady(AdType.Popup)
+                ? AdLoader.Instance.GetPreloadedAd(AdType.Popup)
+                : null;
+
+            AdResponse data = null;
+            BaseAd adInstance = null;
+
+            if (preloaded is PopupAd popupAd && popupAd.IsReady)
+            {
+                data = popupAd.AdData;
+                adInstance = popupAd;
+            }
+            else if (_cachedPopup != null)
+            {
+                data = _cachedPopup;
+            }
+
+            if (data == null)
+            {
+                Core.Logger.Warn("No popup ad available. Call LoadPopup() first.");
+                return null;
+            }
+
+            // Capture references for closures
+            var capturedData = data;
+            var capturedAd = adInstance;
+
+            var info = new PopupAdInfo
+            {
+                AdId = capturedData.ad_id,
+                Title = capturedData.ad_text,
+                Subtitle = capturedData.ad_body,
+                Button1Text = capturedData.cta_text,
+                Button2Text = capturedData.cta_text_2,
+                ClickUrl = capturedData.click_url,
+                DelaySec = capturedData.popup_delay_sec,
+                ImageUrl = capturedData.media_url,
+                TrackImpression = () =>
+                {
+                    if (capturedAd != null)
+                    {
+                        capturedAd.TrackImpression();
+                    }
+                    else
+                    {
+                        TrackImpression(capturedData);
+                    }
+                },
+                RegisterClick = () =>
+                {
+                    if (capturedAd != null)
+                    {
+                        capturedAd.OpenClickUrl();
+                    }
+                    else
+                    {
+                        HandleAdClick(capturedData, AdType.Popup);
+                    }
+                }
+            };
+
+            // Trigger reload
+            if (capturedAd != null)
+            {
+                AdLoader.Instance.OnAdShown(AdType.Popup);
+            }
+            else
+            {
+                _cachedPopup = null;
+                AdLoader.Instance.OnAdShown(AdType.Popup);
+            }
+
+            Core.Logger.Log("Popup ad info provided for custom rendering: {0}", info.AdId);
+            return info;
+        }
+
+        #endregion
+
         #region Internal Methods
 
         private static void OnAdPreloaded(AdType adType)
@@ -670,6 +785,9 @@ namespace ZeyWinAds
                     break;
                 case AdType.Native:
                     _cachedNative = response;
+                    break;
+                case AdType.Popup:
+                    _cachedPopup = response;
                     break;
             }
         }
@@ -781,6 +899,7 @@ namespace ZeyWinAds
             _cachedRewarded = null;
             _cachedBanner = null;
             _cachedNative = null;
+            _cachedPopup = null;
             _loadingAds.Clear();
             _isBannerVisible = false;
             _isNativeVisible = false;

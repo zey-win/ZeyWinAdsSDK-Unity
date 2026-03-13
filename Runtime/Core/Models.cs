@@ -10,7 +10,8 @@ namespace ZeyWinAds.Core
         Interstitial,
         Rewarded,
         Banner,
-        Native
+        Native,
+        Popup
     }
 
     /// <summary>
@@ -71,6 +72,7 @@ namespace ZeyWinAds.Core
                 AdType.Rewarded => "rewarded",
                 AdType.Banner => "banner",
                 AdType.Native => "native",
+                AdType.Popup => "popup",
                 _ => "interstitial"
             };
         }
@@ -94,6 +96,8 @@ namespace ZeyWinAds.Core
         public string ad_text;
         public string ad_body;
         public string cta_text;
+        public string cta_text_2;
+        public int popup_delay_sec;
         public string impression_url;
         public string click_tracking_url;
         public string complete_url;
@@ -107,6 +111,7 @@ namespace ZeyWinAds.Core
                 "rewarded" => AdType.Rewarded,
                 "banner" => AdType.Banner,
                 "native" => AdType.Native,
+                "popup" => AdType.Popup,
                 _ => AdType.Interstitial
             };
         }
@@ -196,6 +201,49 @@ namespace ZeyWinAds.Core
 
         /// <summary>
         /// Call this when the user clicks/taps the ad.
+        /// Tracks a click event and opens the click URL.
+        /// </summary>
+        public Action RegisterClick { get; set; }
+    }
+
+    /// <summary>
+    /// Popup ad info for custom rendering.
+    /// Contains all data needed to build your own popup UI.
+    /// </summary>
+    public class PopupAdInfo
+    {
+        /// <summary>Ad identifier</summary>
+        public string AdId { get; set; }
+
+        /// <summary>Popup title text</summary>
+        public string Title { get; set; }
+
+        /// <summary>Popup subtitle text (may be null)</summary>
+        public string Subtitle { get; set; }
+
+        /// <summary>Primary button text (e.g. "Accept")</summary>
+        public string Button1Text { get; set; }
+
+        /// <summary>Secondary button text (e.g. "Cancel", may be null)</summary>
+        public string Button2Text { get; set; }
+
+        /// <summary>Click-through URL</summary>
+        public string ClickUrl { get; set; }
+
+        /// <summary>Delay in seconds before showing the popup</summary>
+        public int DelaySec { get; set; }
+
+        /// <summary>Optional image URL (may be null or empty)</summary>
+        public string ImageUrl { get; set; }
+
+        /// <summary>
+        /// Call this when the popup becomes visible to the user.
+        /// Tracks an impression event.
+        /// </summary>
+        public Action TrackImpression { get; set; }
+
+        /// <summary>
+        /// Call this when the user clicks the primary button / taps the ad.
         /// Tracks a click event and opens the click URL.
         /// </summary>
         public Action RegisterClick { get; set; }

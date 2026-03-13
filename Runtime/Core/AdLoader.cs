@@ -43,6 +43,11 @@ namespace ZeyWinAds.Core
         public bool preloadNative = true;
 
         /// <summary>
+        /// Whether to preload popup ads.
+        /// </summary>
+        public bool preloadPopup = true;
+
+        /// <summary>
         /// Delay in seconds before starting preload after initialization.
         /// </summary>
         public float preloadDelaySeconds = 0.5f;
@@ -195,6 +200,11 @@ namespace ZeyWinAds.Core
             if (Settings.preloadNative)
             {
                 PreloadAd(AdType.Native);
+            }
+
+            if (Settings.preloadPopup)
+            {
+                PreloadAd(AdType.Popup);
             }
         }
 
@@ -399,6 +409,7 @@ namespace ZeyWinAds.Core
                 AdType.Rewarded => new RewardedAd(),
                 AdType.Banner => new BannerAd(),
                 AdType.Native => new NativeAd(),
+                AdType.Popup => new PopupAd(),
                 _ => null
             };
         }
