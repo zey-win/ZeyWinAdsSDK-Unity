@@ -30,6 +30,68 @@ namespace ZeyWinAds.Ads
         private static readonly Color Btn2Bg = new Color(0.47f, 0.72f, 0.10f, 1f);        // green
         private static readonly Color CloseColor = new Color(0.50f, 0.55f, 0.60f, 1f);    // gray X
 
+        // Rounded-rect sprite cache
+        private static Sprite _roundedCardSprite;
+        private static Sprite _roundedBtnSprite;
+
+        private static Sprite GetRoundedSprite(int width, int height, int radius)
+        {
+            var tex = new Texture2D(width, height, TextureFormat.ARGB32, false);
+            var pixels = new Color32[width * height];
+            var clear = new Color32(0, 0, 0, 0);
+            var white = new Color32(255, 255, 255, 255);
+
+            for (int y = 0; y < height; y++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    // determine closest corner center
+                    int cx = x < radius ? radius : (x >= width - radius ? width - radius - 1 : x);
+                    int cy = y < radius ? radius : (y >= height - radius ? height - radius - 1 : y);
+
+                    if (cx != x || cy != y)
+                    {
+                        float dist = Mathf.Sqrt((x - cx) * (x - cx) + (y - cy) * (y - cy));
+                        pixels[y * width + x] = dist <= radius + 0.5f ? white : clear;
+                    }
+                    else
+                    {
+                        pixels[y * width + x] = white;
+                    }
+                }
+            }
+
+            tex.SetPixels32(pixels);
+            tex.Apply(false, true);
+
+            int border = radius;
+            return Sprite.Create(tex,
+                new Rect(0, 0, width, height),
+                new Vector2(0.5f, 0.5f), 100f, 0,
+                SpriteMeshType.FullRect,
+                new Vector4(border, border, border, border));
+        }
+
+        private static Sprite CardSprite
+        {
+            get
+            {
+                if (_roundedCardSprite == null)
+                    _roundedCardSprite = GetRoundedSprite(64, 64, 20);
+                return _roundedCardSprite;
+            }
+        }
+
+        private static Sprite BtnSprite
+        {
+            get
+            {
+                if (_roundedBtnSprite == null)
+                    _roundedBtnSprite = GetRoundedSprite(64, 64, 14);
+                return _roundedBtnSprite;
+            }
+        }
+
         public void ShowPopup(Action onClose = null, Action<string> onButton1 = null, Action<string> onButton2 = null)
         {
             _onCloseCallback = onClose;
@@ -78,11 +140,12 @@ namespace ZeyWinAds.Ads
 
         private void CreateCard()
         {
-            float cardWidth = 960f;
+            float cardMarginH = 36f;   // horizontal margin from screen edges
+            float cardMarginB = 30f;   // bottom margin — makes the card "float"
+            float cardWidth = 1080f - cardMarginH * 2; // full width minus margins
             float padding = 40f;
             float btnHeight = 100f;
             float btnGap = 20f;
-            float cornerRadius = 28f; // visual only — no actual rounding in legacy UI
 
             bool hasImage = !string.IsNullOrEmpty(AdData.media_url);
             bool hasSubtitle = !string.IsNullOrEmpty(AdData.ad_body);
@@ -106,14 +169,17 @@ namespace ZeyWinAds.Ads
             cardRect.anchorMax = new Vector2(0.5f, 0);
             cardRect.pivot = new Vector2(0.5f, 0);
 
-            // Account for safe area
+            // Account for safe area + bottom margin
             float bottomInset = Screen.safeArea.y / _canvas.GetScaleFactor();
-            cardRect.anchoredPosition = new Vector2(0, bottomInset);
+            cardRect.anchoredPosition = new Vector2(0, bottomInset + cardMarginB);
             cardRect.sizeDelta = new Vector2(cardWidth, totalHeight);
 
-            // Card background
+            // Card background with rounded corners
             var cardBg = _card.AddComponent<Image>();
             cardBg.color = CardBg;
+            cardBg.sprite = CardSprite;
+            cardBg.type = Image.Type.Sliced;
+            cardBg.pixelsPerUnitMultiplier = 1f;
 
             float yOffset = -padding;
 
@@ -293,6 +359,9 @@ namespace ZeyWinAds.Ads
 
             var btnImg = btnObj.AddComponent<Image>();
             btnImg.color = bgColor;
+            btnImg.sprite = BtnSprite;
+            btnImg.type = Image.Type.Sliced;
+            btnImg.pixelsPerUnitMultiplier = 1f;
 
             var button = btnObj.AddComponent<Button>();
             button.targetGraphic = btnImg;
