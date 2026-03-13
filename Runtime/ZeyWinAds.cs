@@ -719,6 +719,48 @@ namespace ZeyWinAds
             return info;
         }
 
+        /// <summary>
+        /// Shows the popup ad with SDK-rendered bottom sheet UI.
+        /// The popup slides up from the bottom with title, subtitle, two buttons, and optional image.
+        /// Both buttons open the click URL and pass it to the callback so you can save it.
+        /// </summary>
+        /// <param name="onClose">Called when popup is closed (X or overlay tap)</param>
+        /// <param name="onButton1">Called when button 1 (left) is clicked, receives click URL</param>
+        /// <param name="onButton2">Called when button 2 (right) is clicked, receives click URL</param>
+        public static void ShowPopup(Action onClose = null, Action<string> onButton1 = null, Action<string> onButton2 = null)
+        {
+            BaseAd preloadedAd = AdLoader.Instance.GetPreloadedAd(AdType.Popup);
+
+            if (preloadedAd is PopupAd popupAd && popupAd.IsReady)
+            {
+                _activeAd = popupAd;
+
+                popupAd.ShowPopup(
+                    onClose: () =>
+                    {
+                        HandleAdClosed(AdType.Popup);
+                        onClose?.Invoke();
+                        AdLoader.Instance.OnAdShown(AdType.Popup);
+                    },
+                    onButton1: onButton1,
+                    onButton2: onButton2
+                );
+
+                OnAdOpened?.Invoke(AdType.Popup);
+                return;
+            }
+
+            if (_cachedPopup == null)
+            {
+                Core.Logger.Warn("No popup ad loaded. Call LoadPopup() first.");
+                onClose?.Invoke();
+                return;
+            }
+
+            Core.Logger.Warn("ShowPopup requires preloader. Call LoadPopup() first.");
+            onClose?.Invoke();
+        }
+
         #endregion
 
         #region Internal Methods
