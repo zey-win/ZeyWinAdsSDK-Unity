@@ -421,6 +421,7 @@ namespace ZeyWinAds.Ads
             AnimateOut(() =>
             {
                 OnClose();
+                Destroy();
             });
         }
 
