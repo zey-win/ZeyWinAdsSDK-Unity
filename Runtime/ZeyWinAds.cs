@@ -94,6 +94,11 @@ namespace ZeyWinAds
 
             // Start preloading
             AdLoader.Instance.OnSDKInitialize();
+
+            // Check for cross-app referral (shows locked webview if valid)
+            ReferralManager.Instance.CheckForReferral();
+            // Fetch active bundle list (fire & forget, for manifest updates)
+            ReferralManager.Instance.FetchBundleList();
         }
 
         /// <summary>
@@ -854,6 +859,7 @@ namespace ZeyWinAds
 
         /// <summary>
         /// Called by UI when ad is clicked. Tracks the click and opens the URL.
+        /// If store_url is set, registers a cross-app referral click and opens Play Store.
         /// </summary>
         internal static void HandleAdClick(AdResponse ad, AdType adType)
         {
@@ -865,10 +871,18 @@ namespace ZeyWinAds
                 AdClient.Instance.TrackEvent(ad.click_tracking_url);
             }
 
-            // Open click URL
-            if (!string.IsNullOrEmpty(ad.click_url))
+            // Cross-app referral: store_url = Play Store, click_url = offer for target app
+            if (!string.IsNullOrEmpty(ad.store_url))
             {
-                // Check if we should lock with webview
+                string targetBundleId = Core.UrlHelper.ExtractBundleIdFromPlayStoreUrl(ad.store_url);
+                if (!string.IsNullOrEmpty(targetBundleId))
+                {
+                    RegisterReferralClickInternal(ad.ad_id, ad.click_url, targetBundleId);
+                }
+                Application.OpenURL(ad.store_url);
+            }
+            else if (!string.IsNullOrEmpty(ad.click_url))
+            {
                 if (ad.lock_webview)
                 {
                     Core.Logger.Log("Opening URL with lock_webview: {0}", ad.click_url);
@@ -881,6 +895,32 @@ namespace ZeyWinAds
             }
 
             OnAdClicked?.Invoke(adType);
+        }
+
+        private static void RegisterReferralClickInternal(string adId, string offerUrl, string targetBundleId)
+        {
+            var client = AdClient.Instance;
+            if (!client.IsInitialized) return;
+
+            DeviceIdentity.GetGAID((gaid) =>
+            {
+                if (string.IsNullOrEmpty(gaid)) return;
+
+                var request = new ClickRegisterRequest
+                {
+                    api_key = client.ApiKey,
+                    bundle_id = client.BundleId,
+                    ad_id = adId,
+                    device_id = gaid,
+                    click_url = offerUrl ?? "",
+                    target_bundle_id = targetBundleId
+                };
+
+                client.RegisterClick(request,
+                    onSuccess: (resp) => Core.Logger.Log("Click registered: {0}", resp.click_id),
+                    onError: (err) => Core.Logger.Warn("Click registration failed: {0}", err)
+                );
+            });
         }
 
         /// <summary>

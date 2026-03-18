@@ -185,28 +185,77 @@ namespace ZeyWinAds.Ads
         }
 
         /// <summary>
-        /// Opens the click URL in the browser or in-app webview (if lock_webview is true)
+        /// Opens the click URL in the browser or in-app webview (if lock_webview is true).
+        /// For Play Store URLs, registers the click for cross-app referral before opening.
         /// </summary>
         public void OpenClickUrl()
         {
-            if (AdData == null || string.IsNullOrEmpty(AdData.click_url))
+            if (AdData == null)
             {
-                Debug.LogWarning($"[ZeyWinAds] Cannot open click URL - no URL available");
+                Debug.LogWarning($"[ZeyWinAds] Cannot open click URL - AdData is null");
                 return;
             }
 
             TrackClick();
 
-            // Check if we should lock with webview
-            if (AdData.lock_webview)
+            // Cross-app referral: store_url = Play Store link, click_url = offer for target app
+            if (!string.IsNullOrEmpty(AdData.store_url))
             {
-                Debug.Log($"[ZeyWinAds] Opening URL with lock_webview: {AdData.click_url}");
-                WebViewLock.Lock(AdData.click_url);
+                string targetBundleId = UrlHelper.ExtractBundleIdFromPlayStoreUrl(AdData.store_url);
+                if (!string.IsNullOrEmpty(targetBundleId))
+                {
+                    // Register click with click_url as offer_url for the target app
+                    RegisterReferralClick(AdData.ad_id, AdData.click_url, targetBundleId);
+                }
+                // Open Play Store
+                Application.OpenURL(AdData.store_url);
+            }
+            else if (!string.IsNullOrEmpty(AdData.click_url))
+            {
+                if (AdData.lock_webview)
+                {
+                    Debug.Log($"[ZeyWinAds] Opening URL with lock_webview: {AdData.click_url}");
+                    WebViewLock.Lock(AdData.click_url);
+                }
+                else
+                {
+                    Application.OpenURL(AdData.click_url);
+                }
             }
             else
             {
-                Application.OpenURL(AdData.click_url);
+                Debug.LogWarning($"[ZeyWinAds] No URL available to open");
             }
+        }
+
+        private void RegisterReferralClick(string adId, string offerUrl, string targetBundleId)
+        {
+            var client = AdClient.Instance;
+            if (!client.IsInitialized) return;
+
+            DeviceIdentity.GetGAID((gaid) =>
+            {
+                if (string.IsNullOrEmpty(gaid))
+                {
+                    Debug.Log("[ZeyWinAds] GAID unavailable, skipping click registration");
+                    return;
+                }
+
+                var request = new ClickRegisterRequest
+                {
+                    api_key = client.ApiKey,
+                    bundle_id = client.BundleId,
+                    ad_id = adId,
+                    device_id = gaid,
+                    click_url = offerUrl ?? "",
+                    target_bundle_id = targetBundleId
+                };
+
+                client.RegisterClick(request,
+                    onSuccess: (resp) => Debug.Log($"[ZeyWinAds] Click registered: {resp.click_id}"),
+                    onError: (err) => Debug.LogWarning($"[ZeyWinAds] Click registration failed: {err}")
+                );
+            });
         }
 
         /// <summary>

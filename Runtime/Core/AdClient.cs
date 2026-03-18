@@ -47,6 +47,16 @@ namespace ZeyWinAds.Core
         /// </summary>
         public bool IsInitialized => _isInitialized;
 
+        /// <summary>
+        /// The API key used for authentication
+        /// </summary>
+        public string ApiKey => _apiKey;
+
+        /// <summary>
+        /// The bundle ID of the current app
+        /// </summary>
+        public string BundleId => _bundleId;
+
         private void Awake()
         {
             if (_instance != null && _instance != this)
@@ -247,6 +257,108 @@ namespace ZeyWinAds.Core
                     {
                         onError?.Invoke(webRequest.error);
                     }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Registers a click for cross-app referral tracking
+        /// </summary>
+        public void RegisterClick(ClickRegisterRequest request, Action<ClickRegisterResponse> onSuccess, Action<string> onError)
+        {
+            string endpoint = GetCurrentEndpoint() + "/clicks/register";
+            string jsonBody = JsonUtility.ToJson(request);
+            StartCoroutine(PostRequestCoroutine(endpoint, jsonBody,
+                (response) =>
+                {
+                    try
+                    {
+                        var apiResponse = JsonUtility.FromJson<ApiResponse<ClickRegisterResponse>>(response);
+                        if (apiResponse.success && apiResponse.data != null)
+                            onSuccess?.Invoke(apiResponse.data);
+                        else
+                            onError?.Invoke(apiResponse.error ?? "Unknown error");
+                    }
+                    catch (Exception ex)
+                    {
+                        onError?.Invoke(ex.Message);
+                    }
+                },
+                onError, 0));
+        }
+
+        /// <summary>
+        /// Checks for a pending referral on this device
+        /// </summary>
+        public void CheckReferral(ReferralCheckRequest request, Action<ReferralCheckResponse> onSuccess, Action<string> onError)
+        {
+            string endpoint = GetCurrentEndpoint() + "/referral/check";
+            string jsonBody = JsonUtility.ToJson(request);
+            StartCoroutine(PostRequestCoroutine(endpoint, jsonBody,
+                (response) =>
+                {
+                    try
+                    {
+                        var apiResponse = JsonUtility.FromJson<ApiResponse<ReferralCheckResponse>>(response);
+                        if (apiResponse.success && apiResponse.data != null)
+                            onSuccess?.Invoke(apiResponse.data);
+                        else
+                            onError?.Invoke(apiResponse.error ?? "Unknown error");
+                    }
+                    catch (Exception ex)
+                    {
+                        onError?.Invoke(ex.Message);
+                    }
+                },
+                onError, 0));
+        }
+
+        /// <summary>
+        /// Marks a referral as delivered after showing the webview
+        /// </summary>
+        public void MarkReferralDelivered(ReferralDeliveredRequest request, Action onSuccess = null, Action<string> onError = null)
+        {
+            string endpoint = GetCurrentEndpoint() + "/referral/delivered";
+            string jsonBody = JsonUtility.ToJson(request);
+            StartCoroutine(PostRequestCoroutine(endpoint, jsonBody,
+                (response) => onSuccess?.Invoke(),
+                onError, 0));
+        }
+
+        /// <summary>
+        /// Gets the list of active app bundle IDs
+        /// </summary>
+        public void GetBundleList(Action<BundleListResponse> onSuccess, Action<string> onError)
+        {
+            string endpoint = GetCurrentEndpoint() + "/apps/bundles";
+            StartCoroutine(GetRequestCoroutine(endpoint, onSuccess, onError));
+        }
+
+        private IEnumerator GetRequestCoroutine<T>(string url, Action<T> onSuccess, Action<string> onError)
+        {
+            using (UnityWebRequest webRequest = UnityWebRequest.Get(url))
+            {
+                webRequest.timeout = (int)ZeyWinAdsConfig.RequestTimeoutSeconds;
+                yield return webRequest.SendWebRequest();
+
+                if (webRequest.result == UnityWebRequest.Result.Success)
+                {
+                    try
+                    {
+                        var apiResponse = JsonUtility.FromJson<ApiResponse<T>>(webRequest.downloadHandler.text);
+                        if (apiResponse.success && apiResponse.data != null)
+                            onSuccess?.Invoke(apiResponse.data);
+                        else
+                            onError?.Invoke(apiResponse.error ?? "Unknown error");
+                    }
+                    catch (Exception ex)
+                    {
+                        onError?.Invoke(ex.Message);
+                    }
+                }
+                else
+                {
+                    onError?.Invoke(webRequest.error);
                 }
             }
         }

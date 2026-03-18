@@ -1,0 +1,16 @@
+<dependencies>
+  <!--
+    ZeyWinAds SDK Android dependencies.
+
+    If you have Google's External Dependency Manager (EDM4U) installed,
+    these dependencies will be resolved automatically.
+
+    If you don't use EDM4U, add the following to your mainTemplate.gradle
+    or settingsTemplate.gradle manually:
+
+      implementation 'com.google.android.gms:play-services-ads-identifier:18.0.1'
+  -->
+  <androidPackages>
+    <androidPackage spec="com.google.android.gms:play-services-ads-identifier:18.0.1" />
+  </androidPackages>
+</dependencies>

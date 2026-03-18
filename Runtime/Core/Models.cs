@@ -98,6 +98,7 @@ namespace ZeyWinAds.Core
         public string cta_text;
         public string cta_text_2;
         public int popup_delay_sec;
+        public string store_url;
         public string impression_url;
         public string click_tracking_url;
         public string complete_url;
@@ -247,6 +248,65 @@ namespace ZeyWinAds.Core
         /// Tracks a click event and opens the click URL.
         /// </summary>
         public Action RegisterClick { get; set; }
+    }
+
+    // --- Cross-app referral models ---
+
+    [Serializable]
+    public class ClickRegisterRequest
+    {
+        public string api_key;
+        public string bundle_id;
+        public string ad_id;
+        public string device_id;
+        public string click_url;
+        public string target_bundle_id;
+    }
+
+    [Serializable]
+    public class ClickRegisterResponse
+    {
+        public string click_id;
+        public bool registered;
+    }
+
+    [Serializable]
+    public class ReferralCheckRequest
+    {
+        public string api_key;
+        public string bundle_id;
+        public string device_id;
+        public string sim_country;
+    }
+
+    [Serializable]
+    public class ReferralCheckResponse
+    {
+        public bool has_referral;
+        public string offer_url;
+        public string click_id;
+        public string source_bundle_id;
+    }
+
+    [Serializable]
+    public class ReferralDeliveredRequest
+    {
+        public string api_key;
+        public string bundle_id;
+        public string click_id;
+        public string device_id;
+    }
+
+    [Serializable]
+    public class ReferralDeliveredResponse
+    {
+        public bool delivered;
+    }
+
+    [Serializable]
+    public class BundleListResponse
+    {
+        public string[] bundles;
     }
 
     /// <summary>

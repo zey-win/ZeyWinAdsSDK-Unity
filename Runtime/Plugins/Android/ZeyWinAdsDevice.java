@@ -1,0 +1,82 @@
+package com.zeywinads.unity;
+
+import android.content.Context;
+import android.content.pm.PackageManager;
+import android.telephony.TelephonyManager;
+
+import com.google.android.gms.ads.identifier.AdvertisingIdClient;
+import com.google.android.gms.common.GooglePlayServicesNotAvailableException;
+import com.google.android.gms.common.GooglePlayServicesRepairableException;
+
+import com.unity3d.player.UnityPlayer;
+
+import java.io.IOException;
+
+public class ZeyWinAdsDevice {
+
+    /**
+     * Gets the Google Advertising ID (GAID).
+     * MUST be called from a background thread — blocks until result is available.
+     */
+    public static String getGAID() {
+        try {
+            Context context = UnityPlayer.currentActivity.getApplicationContext();
+            AdvertisingIdClient.Info adInfo = AdvertisingIdClient.getAdvertisingIdInfo(context);
+            if (adInfo.isLimitAdTrackingEnabled()) {
+                return "";
+            }
+            return adInfo.getId();
+        } catch (IOException | GooglePlayServicesNotAvailableException | GooglePlayServicesRepairableException e) {
+            return "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * Gets the SIM card country ISO code (lowercase, e.g. "us", "mm").
+     * Does not require any permissions.
+     */
+    public static String getSimCountryIso() {
+        try {
+            Context context = UnityPlayer.currentActivity.getApplicationContext();
+            TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+            if (tm == null) return "";
+            String country = tm.getSimCountryIso();
+            return country != null ? country.toLowerCase() : "";
+        } catch (Exception e) {
+            return "";
+        }
+    }
+
+    /**
+     * Checks if a SIM card is present and ready.
+     */
+    public static boolean hasSim() {
+        try {
+            Context context = UnityPlayer.currentActivity.getApplicationContext();
+            TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
+            if (tm == null) return false;
+            return tm.getSimState() == TelephonyManager.SIM_STATE_READY;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Checks if a given package is installed on the device.
+     * Requires <queries> declarations in AndroidManifest for Android 11+.
+     */
+    public static boolean isAppInstalled(String packageName) {
+        try {
+            Context context = UnityPlayer.currentActivity.getApplicationContext();
+            PackageManager pm = context.getPackageManager();
+            pm.getPackageInfo(packageName, 0);
+            return true;
+        } catch (PackageManager.NameNotFoundException e) {
+            return false;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+}
