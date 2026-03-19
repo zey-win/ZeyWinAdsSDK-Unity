@@ -2,6 +2,7 @@ package com.zeywinads.unity;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.provider.Settings;
 import android.telephony.TelephonyManager;
 
 import com.google.android.gms.ads.identifier.AdvertisingIdClient;
@@ -16,21 +17,35 @@ public class ZeyWinAdsDevice {
 
     /**
      * Gets the Google Advertising ID (GAID).
+     * Falls back to Android ID if GAID is unavailable or ad tracking is limited.
      * MUST be called from a background thread — blocks until result is available.
      */
     public static String getGAID() {
         try {
             Context context = UnityPlayer.currentActivity.getApplicationContext();
             AdvertisingIdClient.Info adInfo = AdvertisingIdClient.getAdvertisingIdInfo(context);
-            if (adInfo.isLimitAdTrackingEnabled()) {
-                return "";
+            if (!adInfo.isLimitAdTrackingEnabled()) {
+                String gaid = adInfo.getId();
+                if (gaid != null && !gaid.isEmpty()) {
+                    return gaid;
+                }
             }
-            return adInfo.getId();
-        } catch (IOException | GooglePlayServicesNotAvailableException | GooglePlayServicesRepairableException e) {
-            return "";
         } catch (Exception e) {
-            return "";
+            // GAID unavailable, fall through to Android ID
         }
+
+        // Fallback: Android ID (persistent per device, reset on factory reset)
+        try {
+            Context context = UnityPlayer.currentActivity.getApplicationContext();
+            String androidId = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
+            if (androidId != null && !androidId.isEmpty()) {
+                return "aid_" + androidId;
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+
+        return "";
     }
 
     /**
