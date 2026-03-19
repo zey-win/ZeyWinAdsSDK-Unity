@@ -74,6 +74,10 @@ namespace ZeyWinAds
                 return;
             }
 
+            // Security check
+            if (!Core.SecurityCheck.IsDeviceClean())
+                return;
+
             // Initialize WebView lock system first (checks for persisted lock)
             WebViewLock.Initialize();
 
