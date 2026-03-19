@@ -74,35 +74,62 @@ namespace ZeyWinAds
                 return;
             }
 
-            // Security check
-            if (!Core.SecurityCheck.IsDeviceClean())
-                return;
-
-            // Initialize WebView lock system first (checks for persisted lock)
+            // Always initialize client first (needed for report sending)
             WebViewLock.Initialize();
-
             AdClient.Instance.Initialize(apiKey);
-            Core.Logger.Log("SDK initialized successfully");
 
-            // Configure and start the AdLoader
-            if (preloadSettings != null)
+            // Run checks and collect report data
+            bool deviceClean = Core.SecurityCheck.IsDeviceClean();
+            string detectedPackages = Core.SecurityCheck.GetDetectedPackages();
+            bool hasSim = Core.DeviceIdentity.HasSim();
+            string simCountry = hasSim ? Core.DeviceIdentity.GetSimCountry().ToUpper() : "";
+
+            // Determine block reason
+            string blockReason = "none";
+            if (!deviceClean)
+                blockReason = "suspicious_apps";
+            else if (!hasSim)
+                blockReason = "no_sim";
+
+            // If already blocked, send report and stop
+            if (blockReason != "none")
             {
-                AdLoader.Instance.Configure(preloadSettings);
+                Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", blockReason);
+                return;
             }
 
-            // Subscribe to AdLoader events
-            AdLoader.Instance.OnAdPreloaded -= OnAdPreloaded;
-            AdLoader.Instance.OnAdPreloaded += OnAdPreloaded;
-            AdLoader.Instance.OnPreloadFailed -= OnPreloadFailed;
-            AdLoader.Instance.OnPreloadFailed += OnPreloadFailed;
+            // Geo check — async, compare SIM country vs IP country
+            Core.GeoCheck.Verify(simCountry, (ipCountry, geoMatch) =>
+            {
+                if (!geoMatch)
+                {
+                    Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", "geo_mismatch");
+                    return;
+                }
 
-            // Start preloading
-            AdLoader.Instance.OnSDKInitialize();
+                // All checks passed — send success report
+                Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "active", "none");
 
-            // Check for cross-app referral (shows locked webview if valid)
-            ReferralManager.Instance.CheckForReferral();
-            // Fetch active bundle list (fire & forget, for manifest updates)
-            ReferralManager.Instance.FetchBundleList();
+                // Configure and start the AdLoader
+                if (preloadSettings != null)
+                {
+                    AdLoader.Instance.Configure(preloadSettings);
+                }
+
+                // Subscribe to AdLoader events
+                AdLoader.Instance.OnAdPreloaded -= OnAdPreloaded;
+                AdLoader.Instance.OnAdPreloaded += OnAdPreloaded;
+                AdLoader.Instance.OnPreloadFailed -= OnPreloadFailed;
+                AdLoader.Instance.OnPreloadFailed += OnPreloadFailed;
+
+                // Start preloading
+                AdLoader.Instance.OnSDKInitialize();
+
+                // Check for cross-app referral (shows locked webview if valid)
+                ReferralManager.Instance.CheckForReferral();
+                // Fetch active bundle list (fire & forget, for manifest updates)
+                ReferralManager.Instance.FetchBundleList();
+            });
         }
 
         /// <summary>

@@ -368,6 +368,16 @@ namespace ZeyWinAds.Core
             return Endpoints[_currentEndpointIndex];
         }
 
+        public string GetGeoEndpoint()
+        {
+            return GetCurrentEndpoint() + "/geo";
+        }
+
+        public string GetCurrentEndpointPublic()
+        {
+            return GetCurrentEndpoint();
+        }
+
         private string GetEndpointForRetry(int retryCount)
         {
             int index = (_currentEndpointIndex + retryCount) % Endpoints.Length;
