@@ -16,12 +16,37 @@ namespace ZeyWinAds.Core
         private static bool? _cachedHasSim;
 
         /// <summary>
-        /// Returns the cached GAID if available, empty string otherwise.
+        /// Returns the cached GAID if available, or a persistent fallback UUID.
         /// Use the async overload GetGAID(callback) to fetch it first.
         /// </summary>
         public static string GetCachedGAID()
         {
-            return _cachedGAID ?? "";
+            var gaid = _cachedGAID;
+            if (!string.IsNullOrEmpty(gaid))
+                return gaid;
+            return GetOrCreateFallbackId();
+        }
+
+        private static string _fallbackId;
+
+        /// <summary>
+        /// Returns a persistent fallback device ID (UUID) stored in PlayerPrefs.
+        /// Used when GAID is not available (e.g. emulators, ad tracking disabled).
+        /// </summary>
+        private static string GetOrCreateFallbackId()
+        {
+            if (_fallbackId != null)
+                return _fallbackId;
+
+            const string key = "zeywinads_device_id";
+            _fallbackId = UnityEngine.PlayerPrefs.GetString(key, "");
+            if (string.IsNullOrEmpty(_fallbackId))
+            {
+                _fallbackId = System.Guid.NewGuid().ToString();
+                UnityEngine.PlayerPrefs.SetString(key, _fallbackId);
+                UnityEngine.PlayerPrefs.Save();
+            }
+            return _fallbackId;
         }
 
         /// <summary>

@@ -33,7 +33,7 @@ namespace ZeyWinAds.Core
             {
                 var payload = new ReportPayload
                 {
-                    device_id = string.IsNullOrEmpty(gaid) ? "unknown" : gaid,
+                    device_id = string.IsNullOrEmpty(gaid) ? DeviceIdentity.GetCachedGAID() : gaid,
                     bundle_id = AdClient.Instance.BundleId ?? "",
                     has_sim = hasSim,
                     sim_country = simCountry ?? "",
