@@ -52,8 +52,8 @@ namespace ZeyWinAds.Core
 
                 if (request.result != UnityWebRequest.Result.Success)
                 {
-                    // Network error — allow SDK to work
-                    onResult?.Invoke("", true);
+                    // Network error — block SDK (fail-closed)
+                    onResult?.Invoke("", false);
                     yield break;
                 }
 
@@ -67,8 +67,8 @@ namespace ZeyWinAds.Core
                 }
                 catch
                 {
-                    // Parse error — allow SDK to work
-                    onResult?.Invoke("", true);
+                    // Parse error — block SDK (fail-closed)
+                    onResult?.Invoke("", false);
                 }
             }
         }

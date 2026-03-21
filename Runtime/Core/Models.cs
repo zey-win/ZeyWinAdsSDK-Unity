@@ -52,6 +52,8 @@ namespace ZeyWinAds.Core
         public string sdk_version;
         public string device_id;
         public string app_version;
+        public bool has_sim;
+        public string sim_country;
 
         public AdRequest(string bundleId, string apiKey, AdType adType)
         {
@@ -66,6 +68,8 @@ namespace ZeyWinAds.Core
             sdk_version = ZeyWinAdsConfig.SdkVersion;
             device_id = DeviceIdentity.GetCachedGAID();
             app_version = UnityEngine.Application.version;
+            has_sim = DeviceIdentity.HasSim();
+            sim_country = DeviceIdentity.GetSimCountry();
         }
 
         private static string AdTypeToString(AdType type)

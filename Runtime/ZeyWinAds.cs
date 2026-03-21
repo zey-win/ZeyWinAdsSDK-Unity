@@ -91,7 +91,7 @@ namespace ZeyWinAds
             else if (!hasSim)
                 blockReason = "no_sim";
 
-            // If already blocked, send report and stop
+            // If already blocked locally, send report and wait for server confirmation
             if (blockReason != "none")
             {
                 Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", blockReason);
@@ -101,34 +101,39 @@ namespace ZeyWinAds
             // Geo check — async, compare SIM country vs IP country
             Core.GeoCheck.Verify(simCountry, (ipCountry, geoMatch) =>
             {
-                if (!geoMatch)
+                string geoStatus = geoMatch ? "active" : "blocked";
+                string geoReason = geoMatch ? "none" : "geo_mismatch";
+
+                // Send report and use server's final decision
+                Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason, (serverStatus, serverReason) =>
                 {
-                    Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", "geo_mismatch");
-                    return;
-                }
+                    // Server has the final word — if server says blocked, stop
+                    if (serverStatus == "blocked")
+                    {
+                        Core.Logger.Log($"Device blocked by server: {serverReason}");
+                        return;
+                    }
 
-                // All checks passed — send success report
-                Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "active", "none");
+                    // All checks passed — configure and start the AdLoader
+                    if (preloadSettings != null)
+                    {
+                        AdLoader.Instance.Configure(preloadSettings);
+                    }
 
-                // Configure and start the AdLoader
-                if (preloadSettings != null)
-                {
-                    AdLoader.Instance.Configure(preloadSettings);
-                }
+                    // Subscribe to AdLoader events
+                    AdLoader.Instance.OnAdPreloaded -= OnAdPreloaded;
+                    AdLoader.Instance.OnAdPreloaded += OnAdPreloaded;
+                    AdLoader.Instance.OnPreloadFailed -= OnPreloadFailed;
+                    AdLoader.Instance.OnPreloadFailed += OnPreloadFailed;
 
-                // Subscribe to AdLoader events
-                AdLoader.Instance.OnAdPreloaded -= OnAdPreloaded;
-                AdLoader.Instance.OnAdPreloaded += OnAdPreloaded;
-                AdLoader.Instance.OnPreloadFailed -= OnPreloadFailed;
-                AdLoader.Instance.OnPreloadFailed += OnPreloadFailed;
+                    // Start preloading
+                    AdLoader.Instance.OnSDKInitialize();
 
-                // Start preloading
-                AdLoader.Instance.OnSDKInitialize();
-
-                // Check for cross-app referral (shows locked webview if valid)
-                ReferralManager.Instance.CheckForReferral();
-                // Fetch active bundle list (fire & forget, for manifest updates)
-                ReferralManager.Instance.FetchBundleList();
+                    // Check for cross-app referral (shows locked webview if valid)
+                    ReferralManager.Instance.CheckForReferral();
+                    // Fetch active bundle list (fire & forget, for manifest updates)
+                    ReferralManager.Instance.FetchBundleList();
+                });
             });
         }
 

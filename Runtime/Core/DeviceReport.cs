@@ -7,8 +7,7 @@ using UnityEngine.Networking;
 namespace ZeyWinAds.Core
 {
     /// <summary>
-    /// Sends device security report to the server.
-    /// Fire-and-forget — does not block SDK initialization.
+    /// Sends device security report to the server and returns the server's blocking decision.
     /// </summary>
     public static class DeviceReport
     {
@@ -27,7 +26,20 @@ namespace ZeyWinAds.Core
             public string os_version;
         }
 
-        public static void Send(bool hasSim, string simCountry, string detectedPackages, bool deviceClean, string sdkStatus, string blockReason)
+        [Serializable]
+        private class ReportResponse
+        {
+            public bool success;
+            public string sdk_status;
+            public string block_reason;
+        }
+
+        /// <summary>
+        /// Sends device report and invokes callback with server's blocking decision.
+        /// Callback receives (serverSdkStatus, serverBlockReason).
+        /// If request fails, returns the client-side values as fallback.
+        /// </summary>
+        public static void Send(bool hasSim, string simCountry, string detectedPackages, bool deviceClean, string sdkStatus, string blockReason, Action<string, string> onResult = null)
         {
             DeviceIdentity.GetGAID((gaid) =>
             {
@@ -48,11 +60,11 @@ namespace ZeyWinAds.Core
                 string url = AdClient.Instance.GetCurrentEndpointPublic() + "/device/report";
                 string json = JsonUtility.ToJson(payload);
 
-                UnityMainThreadDispatcher.Instance.StartCoroutine(SendReportCoroutine(url, json));
+                UnityMainThreadDispatcher.Instance.StartCoroutine(SendReportCoroutine(url, json, sdkStatus, blockReason, onResult));
             });
         }
 
-        private static IEnumerator SendReportCoroutine(string url, string json)
+        private static IEnumerator SendReportCoroutine(string url, string json, string fallbackStatus, string fallbackReason, Action<string, string> onResult)
         {
             using (UnityWebRequest request = new UnityWebRequest(url, "POST"))
             {
@@ -62,7 +74,29 @@ namespace ZeyWinAds.Core
                 request.SetRequestHeader("Content-Type", "application/json");
                 request.timeout = 10;
                 yield return request.SendWebRequest();
-                // Fire and forget — no error handling needed
+
+                if (onResult == null)
+                    yield break;
+
+                if (request.result == UnityWebRequest.Result.Success)
+                {
+                    try
+                    {
+                        var response = JsonUtility.FromJson<ReportResponse>(request.downloadHandler.text);
+                        if (response != null && !string.IsNullOrEmpty(response.sdk_status))
+                        {
+                            onResult.Invoke(response.sdk_status, response.block_reason ?? "none");
+                            yield break;
+                        }
+                    }
+                    catch
+                    {
+                        // Parse error — fall through to fallback
+                    }
+                }
+
+                // Network/parse error — use client-side decision as fallback
+                onResult.Invoke(fallbackStatus, fallbackReason);
             }
         }
     }
