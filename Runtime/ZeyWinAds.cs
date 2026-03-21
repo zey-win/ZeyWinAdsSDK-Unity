@@ -91,9 +91,10 @@ namespace ZeyWinAds
             else if (!hasSim)
                 blockReason = "no_sim";
 
-            // If already blocked locally, send report and wait for server confirmation
+            // If already blocked locally, block ad requests and send report
             if (blockReason != "none")
             {
+                AdClient.Instance.SetBlocked(true);
                 Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", blockReason);
                 return;
             }
@@ -110,6 +111,7 @@ namespace ZeyWinAds
                     // Server has the final word — if server says blocked, stop
                     if (serverStatus == "blocked")
                     {
+                        AdClient.Instance.SetBlocked(true);
                         Core.Logger.Log($"Device blocked by server: {serverReason}");
                         return;
                     }

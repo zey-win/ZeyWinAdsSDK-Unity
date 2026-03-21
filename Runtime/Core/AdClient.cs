@@ -24,6 +24,7 @@ namespace ZeyWinAds.Core
         private string _apiKey;
         private string _bundleId;
         private bool _isInitialized;
+        private bool _isBlocked;
 
         /// <summary>
         /// Gets the singleton instance, creating it if necessary
@@ -46,6 +47,21 @@ namespace ZeyWinAds.Core
         /// Whether the client has been initialized
         /// </summary>
         public bool IsInitialized => _isInitialized;
+
+        /// <summary>
+        /// Whether the device is blocked from showing ads
+        /// </summary>
+        public bool IsBlocked => _isBlocked;
+
+        /// <summary>
+        /// Sets the blocked state. When blocked, all ad requests are rejected.
+        /// </summary>
+        public void SetBlocked(bool blocked)
+        {
+            _isBlocked = blocked;
+            if (blocked)
+                Debug.Log("[ZeyWinAds] Device blocked — ad requests will be rejected");
+        }
 
         /// <summary>
         /// The API key used for authentication
@@ -92,6 +108,12 @@ namespace ZeyWinAds.Core
             if (!_isInitialized)
             {
                 onError?.Invoke("ZeyWinAds not initialized. Call ZeyWinAds.Initialize() first.");
+                return;
+            }
+
+            if (_isBlocked)
+            {
+                onError?.Invoke("Device is blocked from showing ads.");
                 return;
             }
 
