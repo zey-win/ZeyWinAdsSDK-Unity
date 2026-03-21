@@ -50,6 +50,7 @@ namespace ZeyWinAds.Core
         public string device_model;
         public string os_version;
         public string sdk_version;
+        public string device_id;
 
         public AdRequest(string bundleId, string apiKey, AdType adType)
         {
@@ -62,6 +63,7 @@ namespace ZeyWinAds.Core
             device_model = DeviceInfo.GetDeviceModel();
             os_version = DeviceInfo.GetOSVersion();
             sdk_version = ZeyWinAdsConfig.SdkVersion;
+            device_id = DeviceIdentity.GetCachedGAID();
         }
 
         private static string AdTypeToString(AdType type)

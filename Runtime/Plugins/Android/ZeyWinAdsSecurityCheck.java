@@ -1,7 +1,9 @@
 package com.zeywinads.unity;
 
 import android.content.Context;
+import android.content.Intent;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import com.unity3d.player.UnityPlayer;
 import java.io.File;
 import java.util.ArrayList;
@@ -120,7 +122,18 @@ public class ZeyWinAdsSecurityCheck {
                 // Ignore
             }
 
-            // Method 2: Check /data/data/<pkg> directory existence (works without queries)
+            // Method 2: Try to resolve launch intent (works with <queries> on Android 11+)
+            try {
+                Intent launchIntent = pm.getLaunchIntentForPackage(pkg);
+                if (launchIntent != null) {
+                    found.add(pkg);
+                    continue;
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+
+            // Method 3: Check /data/data/<pkg> directory existence (may work on older Android)
             try {
                 File dataDir = new File("/data/data/" + pkg);
                 if (dataDir.exists()) {

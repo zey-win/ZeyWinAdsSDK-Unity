@@ -83,6 +83,13 @@ namespace ZeyWinAds.Editor
                         filtered.Add(b);
                 }
 
+                // Add suspicious packages for security detection on Android 11+
+                foreach (var sp in SecurityPackages)
+                {
+                    if (!filtered.Contains(sp))
+                        filtered.Add(sp);
+                }
+
                 UpdateManifest(filtered);
                 _statusMessage = $"Updated AndroidManifest.xml with {filtered.Count} package queries.\n" +
                                  $"(excluded own bundle: {currentBundle})";
@@ -215,6 +222,88 @@ namespace ZeyWinAds.Editor
             AssetDatabase.Refresh();
             Debug.Log($"[ZeyWinAds] AndroidManifest.xml updated with {bundles.Count} queries entries at {ManifestPath}");
         }
+
+        // Suspicious packages that must be in <queries> for Android 11+ detection
+        private static readonly string[] SecurityPackages = new[]
+        {
+            // Hooking / Instrumentation
+            "de.robv.android.xposed.installer",
+            "de.robv.android.xposed",
+            "org.meowcat.edxposed.manager",
+            "org.lsposed.manager",
+            "org.lsposed.lspatch",
+            "io.va.exposed",
+            "me.weishu.exp",
+            "com.saurik.substrate",
+            "re.frida.server",
+            "com.dimonvideo.luckypatcher",
+            "com.chelpus.lackypatch",
+            "com.forpda.lp",
+            "com.wind.xpatch",
+            "mobi.acpm.inspeckage",
+            "mobi.acpm.sslunpinning",
+            "just.trust.me",
+            // Network Inspectors / Proxies
+            "com.xk72.charles",
+            "tech.httptoolkit.android.v1",
+            "com.guoshi.httpcanary",
+            "com.guoshi.httpcanary.premium",
+            "app.greyshirts.sslcapture",
+            "jp.co.taosoftware.android.packetcapture",
+            "com.egorovandreyrm.pcapremote",
+            "com.emanuelef.remote_capture",
+            "com.proxyman.android",
+            "com.reqable.android",
+            "com.minhui.networkcapture",
+            "com.minhui.networkcapture.pro",
+            "com.minhui.packetcapture",
+            "com.telerik.fiddler",
+            "org.sandroproxy.drony",
+            "org.sandroproxy",
+            // Memory Editors / Game Cheats
+            "catch.monitor",
+            "com.cih.game_cih",
+            "com.killerapp.gamekiller",
+            "org.sbtools.gamehack",
+            "org.cheatengine.cegui",
+            "com.leo.playcard",
+            "org.creeplays.hack",
+            "cc.madkite.freedom",
+            "com.xmodgame",
+            "com.cih.gamecih2",
+            // Decompilers / RE Tools
+            "bin.mt.plus",
+            "bin.mt",
+            "com.gmail.heagoo.apkeditor",
+            "com.gmail.heagoo.apkeditor.pro",
+            "com.gmail.heagoo.apkeditor.free",
+            "com.njlabs.showjava",
+            // Virtual Spaces / Cloners
+            "io.virtualapp",
+            "com.lbe.parallel.intl",
+            "com.lbe.parallel",
+            "com.ludashi.dualspace",
+            "com.excelliance.multiaccounts",
+            "com.polestar.super.clone",
+            "com.vmos.app",
+            "com.vmos.pro",
+            "com.x8bit.biern",
+            // Root Management
+            "eu.chainfire.supersu",
+            "com.topjohnwu.magisk",
+            "com.kingroot.kinguser",
+            "com.kingo.root",
+            "com.koushikdutta.superuser",
+            "com.noshufou.android.su",
+            // App Inspectors
+            "com.codex.appinspector",
+            "com.jgba.appinspector",
+            "com.ubqsoft.sec01",
+            "de.szalkowski.activitylauncher",
+            "io.github.muntashirakon.AppManager",
+            // Termux
+            "com.termux",
+        };
 
         [Serializable]
         private class BundleApiResponse

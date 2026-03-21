@@ -16,6 +16,15 @@ namespace ZeyWinAds.Core
         private static bool? _cachedHasSim;
 
         /// <summary>
+        /// Returns the cached GAID if available, empty string otherwise.
+        /// Use the async overload GetGAID(callback) to fetch it first.
+        /// </summary>
+        public static string GetCachedGAID()
+        {
+            return _cachedGAID ?? "";
+        }
+
+        /// <summary>
         /// Gets the Google Advertising ID asynchronously.
         /// Calls back on the main thread.
         /// </summary>
