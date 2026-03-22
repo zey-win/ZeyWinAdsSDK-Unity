@@ -288,6 +288,15 @@ namespace ZeyWinAds.Core
     }
 
     [Serializable]
+    public class ReferralCheckByClickRequest
+    {
+        public string api_key;
+        public string bundle_id;
+        public string click_id;
+        public string sim_country;
+    }
+
+    [Serializable]
     public class ReferralCheckResponse
     {
         public bool has_referral;

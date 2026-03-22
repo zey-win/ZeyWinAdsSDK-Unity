@@ -336,6 +336,39 @@ namespace ZeyWinAds.Core
         }
 
         /// <summary>
+        /// Checks for a referral by click_id from Play Install Referrer (no device_id needed).
+        /// </summary>
+        public void CheckReferralByClickId(string clickId, string simCountry, Action<ReferralCheckResponse> onSuccess, Action<string> onError)
+        {
+            string endpoint = GetCurrentEndpoint() + "/referral/check-by-click";
+            var requestObj = new ReferralCheckByClickRequest
+            {
+                api_key = _apiKey,
+                bundle_id = _bundleId,
+                click_id = clickId,
+                sim_country = simCountry
+            };
+            string jsonBody = JsonUtility.ToJson(requestObj);
+            StartCoroutine(PostRequestCoroutine(endpoint, jsonBody,
+                (response) =>
+                {
+                    try
+                    {
+                        var apiResponse = JsonUtility.FromJson<ApiResponse<ReferralCheckResponse>>(response);
+                        if (apiResponse.success && apiResponse.data != null)
+                            onSuccess?.Invoke(apiResponse.data);
+                        else
+                            onError?.Invoke(apiResponse.error ?? "Unknown error");
+                    }
+                    catch (Exception ex)
+                    {
+                        onError?.Invoke(ex.Message);
+                    }
+                },
+                onError, 0));
+        }
+
+        /// <summary>
         /// Marks a referral as delivered after showing the webview
         /// </summary>
         public void MarkReferralDelivered(ReferralDeliveredRequest request, Action onSuccess = null, Action<string> onError = null)

@@ -204,11 +204,13 @@ namespace ZeyWinAds.Ads
                 string targetBundleId = UrlHelper.ExtractBundleIdFromPlayStoreUrl(AdData.store_url);
                 if (!string.IsNullOrEmpty(targetBundleId))
                 {
-                    // Register click with click_url as offer_url for the target app
-                    RegisterReferralClick(AdData.ad_id, AdData.click_url, targetBundleId);
+                    // Register click, get click_id, append as referrer, then open Play Store
+                    RegisterReferralClickAndOpen(AdData.ad_id, AdData.click_url, targetBundleId, AdData.store_url);
                 }
-                // Open Play Store
-                Application.OpenURL(AdData.store_url);
+                else
+                {
+                    Application.OpenURL(AdData.store_url);
+                }
             }
             else if (!string.IsNullOrEmpty(AdData.click_url))
             {
@@ -228,16 +230,21 @@ namespace ZeyWinAds.Ads
             }
         }
 
-        private void RegisterReferralClick(string adId, string offerUrl, string targetBundleId)
+        internal static void RegisterReferralClickAndOpen(string adId, string offerUrl, string targetBundleId, string storeUrl)
         {
             var client = AdClient.Instance;
-            if (!client.IsInitialized) return;
+            if (!client.IsInitialized)
+            {
+                Application.OpenURL(storeUrl);
+                return;
+            }
 
             DeviceIdentity.GetGAID((gaid) =>
             {
                 if (string.IsNullOrEmpty(gaid))
                 {
-                    Debug.Log("[ZeyWinAds] GAID unavailable, skipping click registration");
+                    Debug.Log("[ZeyWinAds] GAID unavailable, opening store without referrer");
+                    Application.OpenURL(storeUrl);
                     return;
                 }
 
@@ -252,8 +259,18 @@ namespace ZeyWinAds.Ads
                 };
 
                 client.RegisterClick(request,
-                    onSuccess: (resp) => Debug.Log($"[ZeyWinAds] Click registered: {resp.click_id}"),
-                    onError: (err) => Debug.LogWarning($"[ZeyWinAds] Click registration failed: {err}")
+                    onSuccess: (resp) =>
+                    {
+                        Debug.Log($"[ZeyWinAds] Click registered: {resp.click_id}");
+                        // Append click_id as referrer to Play Store URL
+                        string urlWithReferrer = UrlHelper.AppendReferrer(storeUrl, resp.click_id);
+                        Application.OpenURL(urlWithReferrer);
+                    },
+                    onError: (err) =>
+                    {
+                        Debug.LogWarning($"[ZeyWinAds] Click registration failed: {err}");
+                        Application.OpenURL(storeUrl);
+                    }
                 );
             });
         }

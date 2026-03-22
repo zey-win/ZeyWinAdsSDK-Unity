@@ -915,9 +915,12 @@ namespace ZeyWinAds
                 string targetBundleId = Core.UrlHelper.ExtractBundleIdFromPlayStoreUrl(ad.store_url);
                 if (!string.IsNullOrEmpty(targetBundleId))
                 {
-                    RegisterReferralClickInternal(ad.ad_id, ad.click_url, targetBundleId);
+                    BaseAd.RegisterReferralClickAndOpen(ad.ad_id, ad.click_url, targetBundleId, ad.store_url);
                 }
-                Application.OpenURL(ad.store_url);
+                else
+                {
+                    Application.OpenURL(ad.store_url);
+                }
             }
             else if (!string.IsNullOrEmpty(ad.click_url))
             {
@@ -935,31 +938,6 @@ namespace ZeyWinAds
             OnAdClicked?.Invoke(adType);
         }
 
-        private static void RegisterReferralClickInternal(string adId, string offerUrl, string targetBundleId)
-        {
-            var client = AdClient.Instance;
-            if (!client.IsInitialized) return;
-
-            DeviceIdentity.GetGAID((gaid) =>
-            {
-                if (string.IsNullOrEmpty(gaid)) return;
-
-                var request = new ClickRegisterRequest
-                {
-                    api_key = client.ApiKey,
-                    bundle_id = client.BundleId,
-                    ad_id = adId,
-                    device_id = gaid,
-                    click_url = offerUrl ?? "",
-                    target_bundle_id = targetBundleId
-                };
-
-                client.RegisterClick(request,
-                    onSuccess: (resp) => Core.Logger.Log("Click registered: {0}", resp.click_id),
-                    onError: (err) => Core.Logger.Warn("Click registration failed: {0}", err)
-                );
-            });
-        }
 
         /// <summary>
         /// Called by UI when ad viewing is completed.

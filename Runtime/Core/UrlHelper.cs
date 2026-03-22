@@ -35,5 +35,20 @@ namespace ZeyWinAds.Core
                 return null;
             }
         }
+
+        /// <summary>
+        /// Appends click_id as referrer parameter to a Play Store URL.
+        /// Example: https://play.google.com/store/apps/details?id=com.example
+        ///       → https://play.google.com/store/apps/details?id=com.example&referrer=utm_source%3Dzeywinads%26click_id%3Dxxx
+        /// </summary>
+        public static string AppendReferrer(string storeUrl, string clickId)
+        {
+            if (string.IsNullOrEmpty(storeUrl) || string.IsNullOrEmpty(clickId))
+                return storeUrl;
+
+            string referrerValue = Uri.EscapeDataString($"utm_source=zeywinads&click_id={clickId}");
+            string separator = storeUrl.Contains("?") ? "&" : "?";
+            return $"{storeUrl}{separator}referrer={referrerValue}";
+        }
     }
 }
