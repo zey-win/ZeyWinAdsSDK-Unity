@@ -241,19 +241,16 @@ namespace ZeyWinAds.Ads
 
             DeviceIdentity.GetGAID((gaid) =>
             {
-                if (string.IsNullOrEmpty(gaid))
-                {
-                    Debug.Log("[ZeyWinAds] GAID unavailable, opening store without referrer");
-                    Application.OpenURL(storeUrl);
-                    return;
-                }
+                // Use GAID if available, otherwise fallback to persistent device ID
+                // (same logic as DeviceReport to keep device_id consistent)
+                string deviceId = string.IsNullOrEmpty(gaid) ? DeviceIdentity.GetCachedGAID() : gaid;
 
                 var request = new ClickRegisterRequest
                 {
                     api_key = client.ApiKey,
                     bundle_id = client.BundleId,
                     ad_id = adId,
-                    device_id = gaid,
+                    device_id = deviceId,
                     click_url = offerUrl ?? "",
                     target_bundle_id = targetBundleId
                 };

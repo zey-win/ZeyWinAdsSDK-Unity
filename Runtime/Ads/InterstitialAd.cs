@@ -85,13 +85,8 @@ namespace ZeyWinAds.Ads
             }
             else
             {
+                // ShowImageAd handles visibility and close timer after image loads
                 ShowImageAd();
-                // For images, show close button with timer
-                _closeButton.gameObject.SetActive(true);
-                _closeButton.StartTimer(ImageCloseDelay, () =>
-                {
-                    _canClose = true;
-                });
             }
         }
 
@@ -99,8 +94,23 @@ namespace ZeyWinAds.Ads
         {
             Debug.Log($"[ZeyWinAds] Loading interstitial image: {AdData.media_url}");
 
-            // Create image display
-            var imageDisplay = _canvas.CreateImageDisplay(_adContainer.transform, AdData.media_url);
+            // Hide ad until image is loaded
+            _adContainer.SetActive(false);
+            _closeButton.gameObject.SetActive(false);
+
+            // Create image display with callback to show UI once ready
+            var imageDisplay = _canvas.CreateImageDisplay(_adContainer.transform, AdData.media_url, onLoaded: () =>
+            {
+                if (_adContainer != null)
+                    _adContainer.SetActive(true);
+
+                // Show close button with timer after image is visible
+                if (_closeButton != null)
+                {
+                    _closeButton.gameObject.SetActive(true);
+                    _closeButton.StartTimer(ImageCloseDelay, () => { _canClose = true; });
+                }
+            });
             imageDisplay.name = "AdImage";
 
             // Set to fill screen

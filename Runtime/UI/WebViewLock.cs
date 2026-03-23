@@ -106,6 +106,9 @@ namespace ZeyWinAds.UI
             _lockedUrl = url;
             _isLocked = true;
 
+            // Mute all Unity audio while webview is active
+            AudioListener.pause = true;
+
             if (persist)
             {
                 PlayerPrefs.SetString(LOCK_URL_KEY, url);
@@ -136,6 +139,10 @@ namespace ZeyWinAds.UI
         {
             _isLocked = false;
             _lockedUrl = null;
+
+            // Restore Unity audio
+            AudioListener.pause = false;
+
             DestroyWebView();
             Debug.Log("[ZeyWinAds] WebView lock removed");
         }

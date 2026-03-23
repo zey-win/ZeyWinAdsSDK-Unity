@@ -190,22 +190,20 @@ namespace ZeyWinAds.Core
 
             DeviceIdentity.GetGAID((gaid) =>
             {
-                if (string.IsNullOrEmpty(gaid))
-                {
-                    Debug.Log("[ZeyWinAds] Referral check skipped: GAID unavailable");
-                    return;
-                }
+                // Use GAID if available, otherwise fallback to persistent device ID
+                // (same logic as DeviceReport and click registration)
+                string deviceId = string.IsNullOrEmpty(gaid) ? DeviceIdentity.GetCachedGAID() : gaid;
 
                 var request = new ReferralCheckRequest
                 {
                     api_key = client.ApiKey,
                     bundle_id = client.BundleId,
-                    device_id = gaid,
+                    device_id = deviceId,
                     sim_country = simCountry
                 };
 
                 client.CheckReferral(request,
-                    onSuccess: (response) => OnReferralCheckResult(response, gaid),
+                    onSuccess: (response) => OnReferralCheckResult(response, deviceId),
                     onError: (error) => Debug.LogWarning($"[ZeyWinAds] Referral check failed: {error}")
                 );
             });

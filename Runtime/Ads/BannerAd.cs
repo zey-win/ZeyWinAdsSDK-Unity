@@ -142,10 +142,11 @@ namespace ZeyWinAds.Ads
             _canvas = AdCanvas.Create("BannerAdCanvas");
             _canvas.SetSortingOrder(999); // Below fullscreen ads
 
-            // Create banner container
+            // Create banner container (hidden until image loads)
             CreateBannerContainer();
+            _bannerContainer.SetActive(false);
 
-            // Load and display banner image
+            // Load image, then show banner
             LoadBannerImage();
         }
 
@@ -228,13 +229,18 @@ namespace ZeyWinAds.Ads
             _bannerImage = imageObj.AddComponent<RawImage>();
             _bannerImage.color = Color.white;
 
-            // Load image asynchronously with aspect fill
+            // Load image asynchronously, show banner only after loaded
             _canvas.LoadImage(AdData.media_url, (texture) =>
             {
                 if (texture != null && _bannerImage != null && maskRect != null)
                 {
                     _bannerImage.texture = texture;
                     ApplyBannerAspectFill(imageRect, maskRect, texture.width, texture.height);
+
+                    // Show banner now that image is ready
+                    if (_bannerContainer != null)
+                        _bannerContainer.SetActive(true);
+
                     Debug.Log("[ZeyWinAds] Banner image loaded");
                 }
             });

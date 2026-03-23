@@ -167,15 +167,25 @@ namespace ZeyWinAds.Ads
         {
             Debug.Log($"[ZeyWinAds] Loading rewarded image: {AdData.media_url}");
 
-            // Create image display
-            var imageDisplay = _canvas.CreateImageDisplay(_adContainer.transform, AdData.media_url);
-            imageDisplay.name = "RewardedImage";
+            // Hide ad until image is loaded
+            _adContainer.SetActive(false);
+            _closeButton.gameObject.SetActive(false);
 
             // Use duration from server if available, otherwise default
             float duration = AdData.duration_sec > 0 ? AdData.duration_sec : ImageDurationSeconds;
 
-            // Start timer on close button (same style as interstitial)
-            _closeButton.StartTimer(duration, OnImageComplete);
+            // Create image display, show UI and start timer only after loaded
+            var imageDisplay = _canvas.CreateImageDisplay(_adContainer.transform, AdData.media_url, onLoaded: () =>
+            {
+                if (_adContainer != null)
+                    _adContainer.SetActive(true);
+                if (_closeButton != null)
+                {
+                    _closeButton.gameObject.SetActive(true);
+                    _closeButton.StartTimer(duration, OnImageComplete);
+                }
+            });
+            imageDisplay.name = "RewardedImage";
         }
 
         private void ShowNativeAd()
