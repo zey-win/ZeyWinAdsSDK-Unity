@@ -1,6 +1,8 @@
 package com.zeywinads.unity;
 
 import android.content.Context;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.RemoteException;
 import android.util.Log;
 
@@ -14,10 +16,14 @@ import java.net.URLDecoder;
 /**
  * Reads the Play Store install referrer to extract click_id for cross-app referral tracking.
  * Uses the Play Install Referrer API which works across different signing keys and developer accounts.
+ * Retries up to 3 times with delays for slow devices where Play Services aren't ready immediately.
  */
 public class ZeyWinAdsInstallReferrer {
 
     private static final String TAG = "ZeyWinAds";
+    private static final int MAX_RETRIES = 3;
+    private static final long[] RETRY_DELAYS_MS = {2000, 4000, 8000};
+
     private static String cachedClickId = null;
     private static boolean checked = false;
 
@@ -33,6 +39,10 @@ public class ZeyWinAdsInstallReferrer {
             return;
         }
 
+        attemptGetClickId(gameObjectName, callbackMethod, 0);
+    }
+
+    private static void attemptGetClickId(final String gameObjectName, final String callbackMethod, final int attempt) {
         try {
             Context context = UnityPlayer.currentActivity.getApplicationContext();
             final InstallReferrerClient referrerClient = InstallReferrerClient.newBuilder(context).build();
@@ -40,12 +50,10 @@ public class ZeyWinAdsInstallReferrer {
             referrerClient.startConnection(new InstallReferrerStateListener() {
                 @Override
                 public void onInstallReferrerSetupFinished(int responseCode) {
-                    checked = true;
-
                     if (responseCode != InstallReferrerClient.InstallReferrerResponse.OK) {
-                        Log.w(TAG, "Install referrer not available, response code: " + responseCode);
+                        Log.w(TAG, "Install referrer not available, response code: " + responseCode + " (attempt " + (attempt + 1) + ")");
                         referrerClient.endConnection();
-                        UnityPlayer.UnitySendMessage(gameObjectName, callbackMethod, "");
+                        retryOrFinish(gameObjectName, callbackMethod, attempt);
                         return;
                     }
 
@@ -54,26 +62,49 @@ public class ZeyWinAdsInstallReferrer {
                         String referrerUrl = details.getInstallReferrer();
                         Log.i(TAG, "Install referrer: " + referrerUrl);
 
-                        cachedClickId = extractClickId(referrerUrl);
+                        String clickId = extractClickId(referrerUrl);
                         referrerClient.endConnection();
 
-                        UnityPlayer.UnitySendMessage(gameObjectName, callbackMethod,
-                            cachedClickId != null ? cachedClickId : "");
+                        if (clickId != null) {
+                            cachedClickId = clickId;
+                            checked = true;
+                            UnityPlayer.UnitySendMessage(gameObjectName, callbackMethod, clickId);
+                        } else {
+                            // Referrer exists but no click_id — might not be ready yet
+                            retryOrFinish(gameObjectName, callbackMethod, attempt);
+                        }
                     } catch (RemoteException e) {
                         Log.e(TAG, "Failed to get install referrer: " + e.getMessage());
                         referrerClient.endConnection();
-                        UnityPlayer.UnitySendMessage(gameObjectName, callbackMethod, "");
+                        retryOrFinish(gameObjectName, callbackMethod, attempt);
                     }
                 }
 
                 @Override
                 public void onInstallReferrerServiceDisconnected() {
-                    // No retry needed — we only check once
+                    Log.w(TAG, "Install referrer service disconnected (attempt " + (attempt + 1) + ")");
+                    retryOrFinish(gameObjectName, callbackMethod, attempt);
                 }
             });
         } catch (Exception e) {
+            Log.e(TAG, "Install referrer setup failed: " + e.getMessage() + " (attempt " + (attempt + 1) + ")");
+            retryOrFinish(gameObjectName, callbackMethod, attempt);
+        }
+    }
+
+    private static void retryOrFinish(final String gameObjectName, final String callbackMethod, final int attempt) {
+        if (attempt < MAX_RETRIES - 1) {
+            long delay = RETRY_DELAYS_MS[attempt];
+            Log.i(TAG, "Retrying install referrer in " + delay + "ms...");
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    attemptGetClickId(gameObjectName, callbackMethod, attempt + 1);
+                }
+            }, delay);
+        } else {
+            Log.w(TAG, "Install referrer: no click_id found after " + MAX_RETRIES + " attempts");
             checked = true;
-            Log.e(TAG, "Install referrer setup failed: " + e.getMessage());
             UnityPlayer.UnitySendMessage(gameObjectName, callbackMethod, "");
         }
     }

@@ -146,15 +146,16 @@ namespace ZeyWinAds.Core
                 {
                     if (!response.has_referral || string.IsNullOrEmpty(response.offer_url))
                     {
-                        Debug.Log("[ZeyWinAds] No pending referral for click_id");
+                        Debug.Log("[ZeyWinAds] No pending referral for click_id, falling back to device_id");
+                        FallbackToDeviceIdCheck(simCountry);
                         return;
                     }
 
                     // Show locked webview with offer
                     Debug.Log($"[ZeyWinAds] Showing referral offer (via install referrer): {response.offer_url}");
+                    WebViewLock.Lock(response.offer_url);
                     PlayerPrefs.SetInt(ReferralShownKey, 1);
                     PlayerPrefs.Save();
-                    WebViewLock.Lock(response.offer_url);
 
                     // Mark as delivered
                     DeviceIdentity.GetGAID((gaid) =>
@@ -218,19 +219,11 @@ namespace ZeyWinAds.Core
                 return;
             }
 
-            // Check source app is installed
-            if (!string.IsNullOrEmpty(response.source_bundle_id) &&
-                !DeviceIdentity.IsAppInstalled(response.source_bundle_id))
-            {
-                Debug.Log($"[ZeyWinAds] Source app not installed: {response.source_bundle_id}");
-                return;
-            }
-
             // Show locked webview with offer
             Debug.Log($"[ZeyWinAds] Showing referral offer: {response.offer_url}");
+            WebViewLock.Lock(response.offer_url);
             PlayerPrefs.SetInt(ReferralShownKey, 1);
             PlayerPrefs.Save();
-            WebViewLock.Lock(response.offer_url);
 
             // Mark as delivered
             var client = AdClient.Instance;
