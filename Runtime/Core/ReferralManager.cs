@@ -159,12 +159,13 @@ namespace ZeyWinAds.Core
                     // Mark as delivered
                     DeviceIdentity.GetGAID((gaid) =>
                     {
+                        string deviceId = string.IsNullOrEmpty(gaid) ? DeviceIdentity.GetCachedGAID() : gaid;
                         var deliveredRequest = new ReferralDeliveredRequest
                         {
                             api_key = client.ApiKey,
                             bundle_id = client.BundleId,
                             click_id = response.click_id,
-                            device_id = gaid ?? ""
+                            device_id = deviceId
                         };
 
                         client.MarkReferralDelivered(deliveredRequest,
