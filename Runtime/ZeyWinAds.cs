@@ -41,6 +41,12 @@ namespace ZeyWinAds
         private static BannerAd _activeBanner;
         private static NativeAd _activeNative;
 
+        // Popup repeat state
+        private static Coroutine _popupRepeatCoroutine;
+        private static Action _popupRepeatOnClose;
+        private static Action<string> _popupRepeatOnButton1;
+        private static Action<string> _popupRepeatOnButton2;
+
         // Events
         public static event Action<AdType> OnAdLoaded;
         public static event Action<AdType, string> OnAdFailedToLoad;
@@ -784,10 +790,15 @@ namespace ZeyWinAds
         /// <param name="onButton2">Called when button 2 (right) is clicked, receives click URL</param>
         public static void ShowPopup(Action onClose = null, Action<string> onButton1 = null, Action<string> onButton2 = null)
         {
+            // Stop any existing repeat loop — new ShowPopup call takes over
+            StopPopupRepeat();
+
             BaseAd preloadedAd = AdLoader.Instance.GetPreloadedAd(AdType.Popup);
 
             if (preloadedAd is PopupAd popupAd && popupAd.IsReady)
             {
+                int repeatSec = popupAd.AdData?.popup_repeat_sec ?? 0;
+
                 OnAdWillShow?.Invoke(AdType.Popup);
                 _activeAd = popupAd;
 
@@ -797,6 +808,7 @@ namespace ZeyWinAds
                         HandleAdClosed(AdType.Popup);
                         onClose?.Invoke();
                         AdLoader.Instance.OnAdShown(AdType.Popup);
+                        SchedulePopupRepeat(repeatSec, onClose, onButton1, onButton2);
                     },
                     onButton1: onButton1,
                     onButton2: onButton2
@@ -815,6 +827,65 @@ namespace ZeyWinAds
 
             Core.Logger.Warn("ShowPopup requires preloader. Call LoadPopup() first.");
             onClose?.Invoke();
+        }
+
+        /// <summary>
+        /// Stops the automatic popup repeat loop.
+        /// Call this if you want to cancel scheduled popup repeats.
+        /// </summary>
+        public static void StopPopupRepeat()
+        {
+            if (_popupRepeatCoroutine != null)
+            {
+                UnityMainThreadDispatcher.Instance.StopCoroutine(_popupRepeatCoroutine);
+                _popupRepeatCoroutine = null;
+                Core.Logger.Debug("Popup repeat loop stopped");
+            }
+            _popupRepeatOnClose = null;
+            _popupRepeatOnButton1 = null;
+            _popupRepeatOnButton2 = null;
+        }
+
+        private static void SchedulePopupRepeat(int repeatSec, Action onClose, Action<string> onButton1, Action<string> onButton2)
+        {
+            if (repeatSec <= 0) return;
+
+            _popupRepeatOnClose = onClose;
+            _popupRepeatOnButton1 = onButton1;
+            _popupRepeatOnButton2 = onButton2;
+            _popupRepeatCoroutine = UnityMainThreadDispatcher.Instance.StartCoroutine(
+                PopupRepeatCoroutine(repeatSec)
+            );
+        }
+
+        private static System.Collections.IEnumerator PopupRepeatCoroutine(int intervalSec)
+        {
+            while (true)
+            {
+                yield return new WaitForSeconds(intervalSec);
+
+                Core.Logger.Debug("Popup repeat: loading next popup ad");
+                LoadPopup();
+
+                // Wait up to 15 seconds for the ad to load
+                float waited = 0f;
+                while (!IsPopupReady() && waited < 15f)
+                {
+                    yield return new WaitForSeconds(0.5f);
+                    waited += 0.5f;
+                }
+
+                if (!IsPopupReady())
+                {
+                    Core.Logger.Warn("Popup repeat: failed to load ad, will retry next interval");
+                    continue;
+                }
+
+                // Show the popup — ShowPopup will restart the repeat loop via onClose
+                Core.Logger.Log("Popup repeat: showing popup");
+                ShowPopup(_popupRepeatOnClose, _popupRepeatOnButton1, _popupRepeatOnButton2);
+                yield break; // ShowPopup will schedule next repeat after close
+            }
         }
 
         #endregion
@@ -1006,6 +1077,7 @@ namespace ZeyWinAds
         /// </summary>
         public static void Reset()
         {
+            StopPopupRepeat();
             _cachedInterstitial = null;
             _cachedRewarded = null;
             _cachedBanner = null;
