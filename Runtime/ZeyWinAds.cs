@@ -44,6 +44,7 @@ namespace ZeyWinAds
         // Events
         public static event Action<AdType> OnAdLoaded;
         public static event Action<AdType, string> OnAdFailedToLoad;
+        public static event Action<AdType> OnAdWillShow;
         public static event Action<AdType> OnAdOpened;
         public static event Action<AdType> OnAdClosed;
         public static event Action<AdType> OnAdClicked;
@@ -195,6 +196,7 @@ namespace ZeyWinAds
 
             if (preloadedAd != null && preloadedAd.IsReady)
             {
+                OnAdWillShow?.Invoke(AdType.Interstitial);
                 _onInterstitialClose = onClose;
                 _activeAd = preloadedAd;
 
@@ -217,6 +219,7 @@ namespace ZeyWinAds
                 return;
             }
 
+            OnAdWillShow?.Invoke(AdType.Interstitial);
             _onInterstitialClose = onClose;
             ShowAd(_cachedInterstitial, AdType.Interstitial);
             _cachedInterstitial = null;
@@ -266,6 +269,7 @@ namespace ZeyWinAds
 
             if (preloadedAd is RewardedAd rewardedAd && rewardedAd.IsReady)
             {
+                OnAdWillShow?.Invoke(AdType.Rewarded);
                 _onRewardedReward = onReward;
                 _onRewardedClose = onClose;
                 _activeAd = rewardedAd;
@@ -296,6 +300,7 @@ namespace ZeyWinAds
                 return;
             }
 
+            OnAdWillShow?.Invoke(AdType.Rewarded);
             _onRewardedReward = onReward;
             _onRewardedClose = onClose;
             ShowAd(_cachedRewarded, AdType.Rewarded);
@@ -345,6 +350,7 @@ namespace ZeyWinAds
 
             if (preloadedAd is BannerAd bannerAd && bannerAd.IsReady)
             {
+                OnAdWillShow?.Invoke(AdType.Banner);
                 _currentBannerPosition = position;
                 _isBannerVisible = true;
                 _activeBanner = bannerAd;
@@ -364,6 +370,7 @@ namespace ZeyWinAds
                 return;
             }
 
+            OnAdWillShow?.Invoke(AdType.Banner);
             _currentBannerPosition = position;
             _isBannerVisible = true;
 
@@ -509,6 +516,7 @@ namespace ZeyWinAds
 
             if (preloadedAd is NativeAd nativeAd && nativeAd.IsReady)
             {
+                OnAdWillShow?.Invoke(AdType.Native);
                 _currentNativePosition = position;
                 _isNativeVisible = true;
                 _activeNative = nativeAd;
@@ -527,6 +535,7 @@ namespace ZeyWinAds
                 return;
             }
 
+            OnAdWillShow?.Invoke(AdType.Native);
             _currentNativePosition = position;
             _isNativeVisible = true;
 
@@ -713,6 +722,8 @@ namespace ZeyWinAds
             var capturedData = data;
             var capturedAd = adInstance;
 
+            OnAdWillShow?.Invoke(AdType.Popup);
+
             var info = new PopupAdInfo
             {
                 AdId = capturedData.ad_id,
@@ -722,6 +733,7 @@ namespace ZeyWinAds
                 Button2Text = capturedData.cta_text_2,
                 ClickUrl = capturedData.click_url,
                 DelaySec = capturedData.popup_delay_sec,
+                RepeatSec = capturedData.popup_repeat_sec,
                 ImageUrl = capturedData.media_url,
                 TrackImpression = () =>
                 {
@@ -776,6 +788,7 @@ namespace ZeyWinAds
 
             if (preloadedAd is PopupAd popupAd && popupAd.IsReady)
             {
+                OnAdWillShow?.Invoke(AdType.Popup);
                 _activeAd = popupAd;
 
                 popupAd.ShowPopup(

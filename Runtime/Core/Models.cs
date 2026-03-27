@@ -106,6 +106,7 @@ namespace ZeyWinAds.Core
         public string cta_text;
         public string cta_text_2;
         public int popup_delay_sec;
+        public int popup_repeat_sec;
         public string store_url;
         public string impression_url;
         public string click_tracking_url;
@@ -241,6 +242,9 @@ namespace ZeyWinAds.Core
 
         /// <summary>Delay in seconds before showing the popup</summary>
         public int DelaySec { get; set; }
+
+        /// <summary>Repeat interval in seconds (0 = no repeat)</summary>
+        public int RepeatSec { get; set; }
 
         /// <summary>Optional image URL (may be null or empty)</summary>
         public string ImageUrl { get; set; }
