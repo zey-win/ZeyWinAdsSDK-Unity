@@ -41,7 +41,8 @@ namespace ZeyWinAds
         private static BannerAd _activeBanner;
         private static NativeAd _activeNative;
 
-        // Popup repeat state
+        // Popup auto-show & repeat state
+        private static Coroutine _popupAutoShowCoroutine;
         private static Coroutine _popupRepeatCoroutine;
         private static Action _popupRepeatOnClose;
         private static Action<string> _popupRepeatOnButton1;
@@ -835,6 +836,11 @@ namespace ZeyWinAds
         /// </summary>
         public static void StopPopupRepeat()
         {
+            if (_popupAutoShowCoroutine != null)
+            {
+                UnityMainThreadDispatcher.Instance.StopCoroutine(_popupAutoShowCoroutine);
+                _popupAutoShowCoroutine = null;
+            }
             if (_popupRepeatCoroutine != null)
             {
                 UnityMainThreadDispatcher.Instance.StopCoroutine(_popupRepeatCoroutine);
@@ -888,6 +894,22 @@ namespace ZeyWinAds
             }
         }
 
+        private static System.Collections.IEnumerator AutoShowPopupCoroutine(int delaySec)
+        {
+            if (delaySec > 0)
+            {
+                yield return new WaitForSeconds(delaySec);
+            }
+
+            _popupAutoShowCoroutine = null;
+
+            if (IsPopupReady())
+            {
+                Core.Logger.Log("Auto-showing popup after {0}s delay", delaySec);
+                ShowPopup();
+            }
+        }
+
         #endregion
 
         #region Internal Methods
@@ -896,6 +918,20 @@ namespace ZeyWinAds
         {
             Core.Logger.Debug("{0} ad preloaded and ready", adType);
             OnAdLoaded?.Invoke(adType);
+
+            // Auto-show popup after configured delay
+            if (adType == AdType.Popup && _popupRepeatCoroutine == null)
+            {
+                BaseAd cached = AdLoader.Instance.Cache.Get(AdType.Popup);
+                if (cached != null && cached.AdData != null)
+                {
+                    int delaySec = cached.AdData.popup_delay_sec;
+                    Core.Logger.Log("Popup auto-show scheduled in {0}s", delaySec);
+                    _popupAutoShowCoroutine = UnityMainThreadDispatcher.Instance.StartCoroutine(
+                        AutoShowPopupCoroutine(delaySec)
+                    );
+                }
+            }
         }
 
         private static void OnPreloadFailed(AdType adType, string error)
@@ -1078,6 +1114,7 @@ namespace ZeyWinAds
         public static void Reset()
         {
             StopPopupRepeat();
+            _popupAutoShowCoroutine = null;
             _cachedInterstitial = null;
             _cachedRewarded = null;
             _cachedBanner = null;
