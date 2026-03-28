@@ -385,12 +385,13 @@ namespace ZeyWinAds.Core
         /// </summary>
         public void GetBundleList(Action<BundleListResponse> onSuccess, Action<string> onError)
         {
-            string endpoint = GetCurrentEndpoint() + "/apps/bundles";
-            StartCoroutine(GetRequestCoroutine(endpoint, onSuccess, onError));
+            StartCoroutine(GetRequestWithFailover<BundleListResponse>("/apps/bundles", onSuccess, onError, 0));
         }
 
-        private IEnumerator GetRequestCoroutine<T>(string url, Action<T> onSuccess, Action<string> onError)
+        private IEnumerator GetRequestWithFailover<T>(string path, Action<T> onSuccess, Action<string> onError, int retryCount)
         {
+            string url = GetEndpointForRetry(retryCount) + path;
+
             using (UnityWebRequest webRequest = UnityWebRequest.Get(url))
             {
                 webRequest.timeout = (int)ZeyWinAdsConfig.RequestTimeoutSeconds;
@@ -402,7 +403,10 @@ namespace ZeyWinAds.Core
                     {
                         var apiResponse = JsonUtility.FromJson<ApiResponse<T>>(webRequest.downloadHandler.text);
                         if (apiResponse.success && apiResponse.data != null)
+                        {
+                            _currentEndpointIndex = retryCount % Endpoints.Length;
                             onSuccess?.Invoke(apiResponse.data);
+                        }
                         else
                             onError?.Invoke(apiResponse.error ?? "Unknown error");
                     }
@@ -411,12 +415,18 @@ namespace ZeyWinAds.Core
                         onError?.Invoke(ex.Message);
                     }
                 }
+                else if (retryCount < MaxRetries)
+                {
+                    yield return GetRequestWithFailover(path, onSuccess, onError, retryCount + 1);
+                }
                 else
                 {
                     onError?.Invoke(webRequest.error);
                 }
             }
         }
+
+        private const int MaxRetries = ZeyWinAdsConfig.MaxRetries;
 
         private string GetCurrentEndpoint()
         {
@@ -432,6 +442,19 @@ namespace ZeyWinAds.Core
         {
             return GetCurrentEndpoint();
         }
+
+        /// <summary>
+        /// Gets an endpoint by index (with wrapping). Used by GeoCheck failover.
+        /// </summary>
+        public string GetEndpointByIndex(int index)
+        {
+            return Endpoints[(_currentEndpointIndex + index) % Endpoints.Length];
+        }
+
+        /// <summary>
+        /// Number of available endpoints.
+        /// </summary>
+        public int EndpointCount => Endpoints.Length;
 
         private string GetEndpointForRetry(int retryCount)
         {

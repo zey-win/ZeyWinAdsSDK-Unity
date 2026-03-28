@@ -8,6 +8,7 @@ namespace ZeyWinAds.Core
     /// <summary>
     /// Compares SIM country with IP country via server.
     /// If they don't match, SDK does not proceed.
+    /// Tries all available endpoints with failover before giving up.
     /// </summary>
     public static class GeoCheck
     {
@@ -37,37 +38,46 @@ namespace ZeyWinAds.Core
             }
 
             UnityMainThreadDispatcher.Instance.StartCoroutine(
-                CheckGeoCoroutine(simCountry, onResult)
+                CheckGeoWithFailover(simCountry, onResult, 0)
             );
         }
 
-        private static IEnumerator CheckGeoCoroutine(string simCountry, Action<string, bool> onResult)
+        private static IEnumerator CheckGeoWithFailover(string simCountry, Action<string, bool> onResult, int retryCount)
         {
-            string url = AdClient.Instance.GetGeoEndpoint();
+            string url = AdClient.Instance.GetEndpointByIndex(retryCount) + "/geo";
 
             using (UnityWebRequest request = UnityWebRequest.Get(url))
             {
                 request.timeout = 5;
                 yield return request.SendWebRequest();
 
-                if (request.result != UnityWebRequest.Result.Success)
+                if (request.result == UnityWebRequest.Result.Success)
                 {
-                    // Network error — block SDK (fail-closed)
-                    onResult?.Invoke("", false);
-                    yield break;
+                    try
+                    {
+                        var response = JsonUtility.FromJson<GeoResponse>(request.downloadHandler.text);
+                        string ipCountry = (response?.country ?? "").ToUpper();
+                        string sim = simCountry.ToUpper();
+                        bool match = sim == ipCountry;
+                        onResult?.Invoke(ipCountry, match);
+                        yield break;
+                    }
+                    catch
+                    {
+                        // Parse error — try next endpoint
+                    }
                 }
 
-                try
+                // Try next endpoint
+                if (retryCount + 1 < AdClient.Instance.EndpointCount)
                 {
-                    var response = JsonUtility.FromJson<GeoResponse>(request.downloadHandler.text);
-                    string ipCountry = (response?.country ?? "").ToUpper();
-                    string sim = simCountry.ToUpper();
-                    bool match = sim == ipCountry;
-                    onResult?.Invoke(ipCountry, match);
+                    Logger.Warn("GeoCheck failed on endpoint {0}, trying next...", retryCount);
+                    yield return CheckGeoWithFailover(simCountry, onResult, retryCount + 1);
                 }
-                catch
+                else
                 {
-                    // Parse error — block SDK (fail-closed)
+                    // All endpoints exhausted — fail-closed
+                    Logger.Error("GeoCheck failed on all endpoints");
                     onResult?.Invoke("", false);
                 }
             }

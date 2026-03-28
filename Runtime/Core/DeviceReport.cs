@@ -8,6 +8,7 @@ namespace ZeyWinAds.Core
 {
     /// <summary>
     /// Sends device security report to the server and returns the server's blocking decision.
+    /// Tries all available endpoints with failover before falling back to client-side decision.
     /// </summary>
     public static class DeviceReport
     {
@@ -37,7 +38,7 @@ namespace ZeyWinAds.Core
         /// <summary>
         /// Sends device report and invokes callback with server's blocking decision.
         /// Callback receives (serverSdkStatus, serverBlockReason).
-        /// If request fails, returns the client-side values as fallback.
+        /// If all endpoints fail, returns the client-side values as fallback.
         /// </summary>
         public static void Send(bool hasSim, string simCountry, string detectedPackages, bool deviceClean, string sdkStatus, string blockReason, Action<string, string> onResult = null)
         {
@@ -57,15 +58,18 @@ namespace ZeyWinAds.Core
                     os_version = SystemInfo.operatingSystem ?? ""
                 };
 
-                string url = AdClient.Instance.GetCurrentEndpointPublic() + "/device/report";
                 string json = JsonUtility.ToJson(payload);
 
-                UnityMainThreadDispatcher.Instance.StartCoroutine(SendReportCoroutine(url, json, sdkStatus, blockReason, onResult));
+                UnityMainThreadDispatcher.Instance.StartCoroutine(
+                    SendWithFailover(json, sdkStatus, blockReason, onResult, 0)
+                );
             });
         }
 
-        private static IEnumerator SendReportCoroutine(string url, string json, string fallbackStatus, string fallbackReason, Action<string, string> onResult)
+        private static IEnumerator SendWithFailover(string json, string fallbackStatus, string fallbackReason, Action<string, string> onResult, int retryCount)
         {
+            string url = AdClient.Instance.GetEndpointByIndex(retryCount) + "/device/report";
+
             using (UnityWebRequest request = new UnityWebRequest(url, "POST"))
             {
                 byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
@@ -75,11 +79,11 @@ namespace ZeyWinAds.Core
                 request.timeout = 10;
                 yield return request.SendWebRequest();
 
-                if (onResult == null)
-                    yield break;
-
                 if (request.result == UnityWebRequest.Result.Success)
                 {
+                    if (onResult == null)
+                        yield break;
+
                     try
                     {
                         var response = JsonUtility.FromJson<ReportResponse>(request.downloadHandler.text);
@@ -91,12 +95,25 @@ namespace ZeyWinAds.Core
                     }
                     catch
                     {
-                        // Parse error — fall through to fallback
+                        // Parse error — try next endpoint
                     }
                 }
 
-                // Network/parse error — use client-side decision as fallback
-                onResult.Invoke(fallbackStatus, fallbackReason);
+                // Try next endpoint
+                if (retryCount + 1 < AdClient.Instance.EndpointCount)
+                {
+                    Logger.Warn("DeviceReport failed on endpoint {0}, trying next...", retryCount);
+                    yield return SendWithFailover(json, fallbackStatus, fallbackReason, onResult, retryCount + 1);
+                }
+                else
+                {
+                    // All endpoints exhausted — use client-side decision as fallback
+                    if (onResult != null)
+                    {
+                        Logger.Warn("DeviceReport failed on all endpoints, using fallback: {0}", fallbackStatus);
+                        onResult.Invoke(fallbackStatus, fallbackReason);
+                    }
+                }
             }
         }
     }
