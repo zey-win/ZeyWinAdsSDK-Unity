@@ -237,11 +237,11 @@ namespace ZeyWinAds.Ads
                     _bannerImage.texture = texture;
                     ApplyBannerAspectFill(imageRect, maskRect, texture.width, texture.height);
 
-                    // Show banner now that image is ready
-                    if (_bannerContainer != null)
+                    // Show banner only if still supposed to be visible (not hidden while loading)
+                    if (_bannerContainer != null && IsVisible)
                         _bannerContainer.SetActive(true);
 
-                    Debug.Log("[ZeyWinAds] Banner image loaded");
+                    Debug.Log($"[ZeyWinAds] Banner image loaded (visible={IsVisible})");
                 }
             });
         }
