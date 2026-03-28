@@ -2,13 +2,15 @@
   <!--
     ZeyWinAds SDK Android dependencies.
 
-    These libraries are bundled as AAR files in Runtime/Plugins/Android/.
+    All libraries are bundled as AAR files in Runtime/Plugins/Android/.
     No manual setup or EDM4U required.
 
-    If EDM4U is installed, it may resolve newer versions automatically.
+    If your project already includes these libraries via Gradle/EDM4U,
+    exclude them in your mainTemplate.gradle to avoid duplicate classes:
+      - com.android.installreferrer:installreferrer
+      - com.google.android.gms:play-services-ads-identifier
+      - com.google.android.gms:play-services-basement
   -->
   <androidPackages>
-    <androidPackage spec="com.google.android.gms:play-services-ads-identifier:18.0.1" />
-    <androidPackage spec="com.android.installreferrer:installreferrer:2.2" />
   </androidPackages>
 </dependencies>
