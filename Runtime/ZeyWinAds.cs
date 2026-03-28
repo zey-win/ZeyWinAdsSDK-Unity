@@ -30,6 +30,7 @@ namespace ZeyWinAds
 
         // Banner state
         private static bool _isBannerVisible;
+        private static bool _bannerDisabled;
         private static BannerPosition _currentBannerPosition;
 
         // Native ad state
@@ -353,6 +354,12 @@ namespace ZeyWinAds
         /// <param name="position">Where to display the banner (Top or Bottom)</param>
         public static void ShowBanner(BannerPosition position)
         {
+            if (_bannerDisabled)
+            {
+                Core.Logger.Log("Banner is disabled. Call EnableBanner() first.");
+                return;
+            }
+
             // Try to get from preloader first
             BaseAd preloadedAd = AdLoader.Instance.GetPreloadedAd(AdType.Banner);
 
@@ -410,6 +417,34 @@ namespace ZeyWinAds
             OnBannerHidden?.Invoke();
 
             Core.Logger.Log("Banner hidden");
+        }
+
+        /// <summary>
+        /// Disables banner display. ShowBanner() calls will be ignored until EnableBanner() is called.
+        /// Use this to completely stop banner rotation.
+        /// </summary>
+        public static void DisableBanner()
+        {
+            _bannerDisabled = true;
+            HideBanner();
+            Core.Logger.Log("Banner disabled");
+        }
+
+        /// <summary>
+        /// Re-enables banner display after DisableBanner() was called.
+        /// </summary>
+        public static void EnableBanner()
+        {
+            _bannerDisabled = false;
+            Core.Logger.Log("Banner enabled");
+        }
+
+        /// <summary>
+        /// Checks if banner display is currently disabled.
+        /// </summary>
+        public static bool IsBannerDisabled()
+        {
+            return _bannerDisabled;
         }
 
         /// <summary>
@@ -1123,6 +1158,7 @@ namespace ZeyWinAds
             _cachedPopup = null;
             _loadingAds.Clear();
             _isBannerVisible = false;
+            _bannerDisabled = false;
             _isNativeVisible = false;
             _onInterstitialClose = null;
             _onRewardedReward = null;
