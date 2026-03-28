@@ -395,17 +395,17 @@ namespace ZeyWinAds
         /// </summary>
         public static void HideBanner()
         {
-            if (!_isBannerVisible)
-                return;
-
             _isBannerVisible = false;
 
-            // Hide the banner ad instance if active
+            // Destroy the active banner instance completely
             if (_activeBanner != null)
             {
-                _activeBanner.Hide();
+                _activeBanner.Destroy();
                 _activeBanner = null;
             }
+
+            // Also clear any preloaded banner to prevent rotation from re-showing
+            AdLoader.Instance.Cache.Remove(AdType.Banner);
 
             OnBannerHidden?.Invoke();
 

@@ -283,9 +283,6 @@ namespace ZeyWinAds.Ads
         /// </summary>
         public void Hide()
         {
-            if (!IsVisible)
-                return;
-
             Debug.Log("[ZeyWinAds] Hiding banner");
 
             IsVisible = false;
