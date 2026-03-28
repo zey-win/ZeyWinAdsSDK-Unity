@@ -56,6 +56,7 @@ namespace ZeyWinAds
         public static event Action<AdType> OnAdClosed;
         public static event Action<AdType> OnAdClicked;
         public static event Action<int> OnRewardEarned;
+        public static event Action OnBannerHidden;
 
         /// <summary>
         /// Gets whether the SDK has been initialized.
@@ -406,7 +407,7 @@ namespace ZeyWinAds
                 _activeBanner = null;
             }
 
-            OnAdClosed?.Invoke(AdType.Banner);
+            OnBannerHidden?.Invoke();
 
             Core.Logger.Log("Banner hidden");
         }
