@@ -17,8 +17,7 @@ namespace ZeyWinAds.Editor
     {
         private static readonly string[] ApiEndpoints = new[]
         {
-            "https://zeywin-ads-api.whiteapps.workers.dev/api/v1",
-            "https://zeywin-ads.thewhiteapps.deno.net/api/v1"
+            "https://zeywin-ads-api.whiteapps.workers.dev/api/v1"
         };
 
         private const string ManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
@@ -114,7 +113,12 @@ namespace ZeyWinAds.Editor
                 try
                 {
                     string url = $"{endpoint}/apps/bundles";
-                    string json = await http.GetStringAsync(url);
+                    string proxyUrl = "https://www.proxodi.com/v1/proxy?target=" +
+                        Uri.EscapeDataString(url) + "&auth=asdjkasdkasdasd";
+                    var request = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
+                    request.Headers.Add("X-Internal-Proxy-Auth", "asdjkasdkasdasd");
+                    var resp = await http.SendAsync(request);
+                    string json = await resp.Content.ReadAsStringAsync();
 
                     // Simple JSON parsing (avoid dependency on Newtonsoft)
                     // Expected: {"success":true,"data":{"bundles":["com.a","com.b"]}}

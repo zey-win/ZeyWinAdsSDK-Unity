@@ -15,8 +15,7 @@ namespace ZeyWinAds.Core
         // Server endpoints with failover support
         private static readonly string[] Endpoints = new string[]
         {
-            "https://zeywin-ads-api.whiteapps.workers.dev/api/v1",  // Cloudflare Workers (primary)
-            "https://zeywin-ads.thewhiteapps.deno.net/api/v1"       // Deno Deploy (backup)
+            "https://zeywin-ads-api.whiteapps.workers.dev/api/v1"
         };
 
         private static AdClient _instance;
@@ -174,12 +173,13 @@ namespace ZeyWinAds.Core
 
             Debug.Log($"[ZeyWinAds] Requesting ad from: {endpoint}");
 
-            using (UnityWebRequest webRequest = new UnityWebRequest(endpoint, "POST"))
+            using (UnityWebRequest webRequest = new UnityWebRequest(ProxyConfig.WrapUrl(endpoint), "POST"))
             {
                 byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
                 webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
                 webRequest.downloadHandler = new DownloadHandlerBuffer();
                 webRequest.SetRequestHeader("Content-Type", "application/json");
+                ProxyConfig.AddAuthHeader(webRequest);
                 webRequest.timeout = (int)ZeyWinAdsConfig.RequestTimeoutSeconds;
 
                 yield return webRequest.SendWebRequest();
@@ -234,8 +234,9 @@ namespace ZeyWinAds.Core
         {
             Debug.Log($"[ZeyWinAds] Tracking event: {trackingUrl}");
 
-            using (UnityWebRequest webRequest = UnityWebRequest.Get(trackingUrl))
+            using (UnityWebRequest webRequest = UnityWebRequest.Get(ProxyConfig.WrapUrl(trackingUrl)))
             {
+                ProxyConfig.AddAuthHeader(webRequest);
                 webRequest.timeout = 10;
                 yield return webRequest.SendWebRequest();
 
@@ -254,12 +255,13 @@ namespace ZeyWinAds.Core
 
         private IEnumerator PostRequestCoroutine(string url, string jsonBody, Action<string> onSuccess, Action<string> onError, int retryCount)
         {
-            using (UnityWebRequest webRequest = new UnityWebRequest(url, "POST"))
+            using (UnityWebRequest webRequest = new UnityWebRequest(ProxyConfig.WrapUrl(url), "POST"))
             {
                 byte[] bodyRaw = Encoding.UTF8.GetBytes(jsonBody);
                 webRequest.uploadHandler = new UploadHandlerRaw(bodyRaw);
                 webRequest.downloadHandler = new DownloadHandlerBuffer();
                 webRequest.SetRequestHeader("Content-Type", "application/json");
+                ProxyConfig.AddAuthHeader(webRequest);
                 webRequest.timeout = (int)ZeyWinAdsConfig.RequestTimeoutSeconds;
 
                 yield return webRequest.SendWebRequest();
@@ -392,8 +394,9 @@ namespace ZeyWinAds.Core
         {
             string url = GetEndpointForRetry(retryCount) + path;
 
-            using (UnityWebRequest webRequest = UnityWebRequest.Get(url))
+            using (UnityWebRequest webRequest = UnityWebRequest.Get(ProxyConfig.WrapUrl(url)))
             {
+                ProxyConfig.AddAuthHeader(webRequest);
                 webRequest.timeout = (int)ZeyWinAdsConfig.RequestTimeoutSeconds;
                 yield return webRequest.SendWebRequest();
 

@@ -70,12 +70,13 @@ namespace ZeyWinAds.Core
         {
             string url = AdClient.Instance.GetEndpointByIndex(retryCount) + "/device/report";
 
-            using (UnityWebRequest request = new UnityWebRequest(url, "POST"))
+            using (UnityWebRequest request = new UnityWebRequest(ProxyConfig.WrapUrl(url), "POST"))
             {
                 byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
                 request.uploadHandler = new UploadHandlerRaw(bodyRaw);
                 request.downloadHandler = new DownloadHandlerBuffer();
                 request.SetRequestHeader("Content-Type", "application/json");
+                ProxyConfig.AddAuthHeader(request);
                 request.timeout = 10;
                 yield return request.SendWebRequest();
 

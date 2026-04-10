@@ -46,8 +46,9 @@ namespace ZeyWinAds.Core
         {
             string url = AdClient.Instance.GetEndpointByIndex(retryCount) + "/geo";
 
-            using (UnityWebRequest request = UnityWebRequest.Get(url))
+            using (UnityWebRequest request = UnityWebRequest.Get(ProxyConfig.WrapUrl(url)))
             {
+                ProxyConfig.AddAuthHeader(request);
                 request.timeout = 5;
                 yield return request.SendWebRequest();
 
