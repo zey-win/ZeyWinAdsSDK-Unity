@@ -88,7 +88,7 @@ namespace ZeyWinAds
             WebViewLock.Initialize();
             AdClient.Instance.Initialize(apiKey);
 
-            // Run checks and collect report data
+            // Run checks and collect report data (sync — runs while race is in flight)
             bool deviceClean = Core.SecurityCheck.IsDeviceClean();
             string detectedPackages = Core.SecurityCheck.GetDetectedPackages();
             bool hasSim = Core.DeviceIdentity.HasSim();
@@ -105,9 +105,17 @@ namespace ZeyWinAds
             if (blockReason != "none")
             {
                 AdClient.Instance.SetBlocked(true);
-                Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", blockReason);
+                // Still resolve route so DeviceReport can send
+                Core.ProxyConfig.Resolve(() =>
+                {
+                    Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", blockReason);
+                });
                 return;
             }
+
+            // Resolve route (race direct vs proxy), then continue with geo check
+            Core.ProxyConfig.Resolve(() =>
+            {
 
             // Geo check — async, compare SIM country vs IP country
             Core.GeoCheck.Verify(simCountry, (ipCountry, geoMatch) =>
@@ -147,6 +155,8 @@ namespace ZeyWinAds
                     ReferralManager.Instance.FetchBundleList();
                 });
             });
+
+            }); // end ProxyConfig.Resolve
         }
 
         /// <summary>
