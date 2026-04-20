@@ -15,6 +15,8 @@ namespace ZeyWinAds.UI
 
         private static WebViewLock _instance;
         public static WebViewLock Instance => _instance;
+        public static event Action<string> OnLocked;
+        public static event Action OnUnlocked;
 
         private GameObject _webViewContainer;
         private bool _isLocked;
@@ -118,6 +120,7 @@ namespace ZeyWinAds.UI
             }
 
             ShowWebView(url);
+            OnLocked?.Invoke(url);
         }
 
         /// <summary>
@@ -145,6 +148,7 @@ namespace ZeyWinAds.UI
 
             DestroyWebView();
             Debug.Log("[ZeyWinAds] WebView lock removed");
+            OnUnlocked?.Invoke();
         }
 
         private void ShowWebView(string url)

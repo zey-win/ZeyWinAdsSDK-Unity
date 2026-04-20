@@ -48,6 +48,7 @@ namespace ZeyWinAds
         private static Action _popupRepeatOnClose;
         private static Action<string> _popupRepeatOnButton1;
         private static Action<string> _popupRepeatOnButton2;
+        private static bool _webViewEventsSubscribed;
 
         // Events
         public static event Action<AdType> OnAdLoaded;
@@ -58,6 +59,8 @@ namespace ZeyWinAds
         public static event Action<AdType> OnAdClicked;
         public static event Action<int> OnRewardEarned;
         public static event Action OnBannerHidden;
+        public static event Action<string> OnWebViewLocked;
+        public static event Action OnWebViewUnlocked;
 
         /// <summary>
         /// Gets whether the SDK has been initialized.
@@ -85,6 +88,7 @@ namespace ZeyWinAds
             }
 
             // Always initialize client first (needed for report sending)
+            SubscribeToWebViewEvents();
             WebViewLock.Initialize();
             AdClient.Instance.Initialize(apiKey);
 
@@ -157,6 +161,26 @@ namespace ZeyWinAds
             });
 
             }); // end ProxyConfig.Resolve
+        }
+
+        private static void SubscribeToWebViewEvents()
+        {
+            if (_webViewEventsSubscribed)
+                return;
+
+            WebViewLock.OnLocked += HandleWebViewLocked;
+            WebViewLock.OnUnlocked += HandleWebViewUnlocked;
+            _webViewEventsSubscribed = true;
+        }
+
+        private static void HandleWebViewLocked(string url)
+        {
+            OnWebViewLocked?.Invoke(url);
+        }
+
+        private static void HandleWebViewUnlocked()
+        {
+            OnWebViewUnlocked?.Invoke();
         }
 
         /// <summary>
