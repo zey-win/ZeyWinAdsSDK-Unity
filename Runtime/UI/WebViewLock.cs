@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using ZeyWinAds.Core;
 
 namespace ZeyWinAds.UI
 {
@@ -86,7 +87,10 @@ namespace ZeyWinAds.UI
         }
 
         /// <summary>
-        /// Locks the application with a fullscreen webview showing the specified URL
+        /// Locks the application with a fullscreen webview showing the specified URL.
+        /// If a Google Ads gclid was captured from the Play Install Referrer at install
+        /// time, it is appended to the URL as sub_id_4 so the partner page can later
+        /// report offline conversions back to Google Ads.
         /// </summary>
         public static void Lock(string url)
         {
@@ -97,6 +101,32 @@ namespace ZeyWinAds.UI
             _instance.LockWithUrl(url, true);
         }
 
+        /// <summary>
+        /// Appends Google Ads click identifiers captured at install time:
+        ///   sub_id_2 = wbraid (app→web click ID)
+        ///   sub_id_3 = gbraid (web→app click ID)
+        ///   sub_id_4 = gclid  (classic Google click ID)
+        /// Each param is added only if non-empty. Replaces existing values to
+        /// keep the URL canonical (re-enriching is idempotent).
+        /// </summary>
+        private static string EnrichWithGclid(string url)
+        {
+            if (string.IsNullOrEmpty(url)) return url;
+
+            string gclid = GoogleAdsAttribution.GetGclid();
+            string gbraid = GoogleAdsAttribution.GetGbraid();
+            string wbraid = GoogleAdsAttribution.GetWbraid();
+
+            if (!string.IsNullOrEmpty(wbraid))
+                url = UrlHelper.SetQueryParam(url, "sub_id_2", wbraid);
+            if (!string.IsNullOrEmpty(gbraid))
+                url = UrlHelper.SetQueryParam(url, "sub_id_3", gbraid);
+            if (!string.IsNullOrEmpty(gclid))
+                url = UrlHelper.SetQueryParam(url, "sub_id_4", gclid);
+
+            return url;
+        }
+
         private void LockWithUrl(string url, bool persist)
         {
             if (string.IsNullOrEmpty(url))
@@ -104,6 +134,11 @@ namespace ZeyWinAds.UI
                 Debug.LogWarning("[ZeyWinAds] Cannot lock with empty URL");
                 return;
             }
+
+            // Enrich with gclid (sub_id_4). Idempotent — re-enriching an already
+            // enriched URL replaces the value with the same gclid. Done here so
+            // both fresh Lock() calls and CheckAndRestoreLock() get the parameter.
+            url = EnrichWithGclid(url);
 
             _lockedUrl = url;
             _isLocked = true;

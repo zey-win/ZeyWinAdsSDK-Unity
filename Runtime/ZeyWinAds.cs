@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using ZeyWinAds.Ads;
 using ZeyWinAds.Core;
+using ZeyWinAds.Mediation;
 using ZeyWinAds.UI;
 
 namespace ZeyWinAds
@@ -91,6 +92,16 @@ namespace ZeyWinAds
             SubscribeToWebViewEvents();
             WebViewLock.Initialize();
             AdClient.Instance.Initialize(apiKey);
+
+            // AdMob runs in parallel and is NOT gated by anti-fraud — even if our SDK
+            // blocks the device, AdMob fallback should keep monetizing.
+            AdMediator.Initialize();
+
+            // Capture Google Ads gclid from Play Install Referrer (one-shot, persists).
+            // Used to enrich WebViewLock URLs with sub_id_4 for offline conversion uploads.
+            // Independent of anti-fraud — attribution data is harmless to collect even if
+            // ad serving is blocked.
+            Core.GoogleAdsAttribution.Capture();
 
             // Run checks and collect report data (sync — runs while race is in flight)
             bool deviceClean = Core.SecurityCheck.IsDeviceClean();
@@ -208,15 +219,15 @@ namespace ZeyWinAds
         /// </summary>
         public static void LoadInterstitial()
         {
-            // Check if already preloaded
-            if (AdLoader.Instance.IsAdReady(AdType.Interstitial))
+            // Check if already preloaded (ZeyWin or AdMob)
+            if (AdLoader.Instance.IsAdReady(AdType.Interstitial) || AdMediator.IsAdMobInterstitialReady())
             {
                 Core.Logger.Debug("Interstitial already preloaded");
                 OnAdLoaded?.Invoke(AdType.Interstitial);
                 return;
             }
 
-            // Use preloader to load
+            // Use preloader to load (AdMob preloads itself in parallel)
             AdLoader.Instance.PreloadAd(AdType.Interstitial);
         }
 
@@ -225,7 +236,9 @@ namespace ZeyWinAds
         /// </summary>
         public static bool IsInterstitialReady()
         {
-            return AdLoader.Instance.IsAdReady(AdType.Interstitial) || _cachedInterstitial != null;
+            return AdLoader.Instance.IsAdReady(AdType.Interstitial)
+                || _cachedInterstitial != null
+                || AdMediator.IsInterstitialReady();
         }
 
         /// <summary>
@@ -255,20 +268,31 @@ namespace ZeyWinAds
             }
 
             // Fallback to cached response
-            if (_cachedInterstitial == null)
+            if (_cachedInterstitial != null)
             {
-                Core.Logger.Warn("No interstitial ad loaded. Call LoadInterstitial() first.");
-                onClose?.Invoke();
+                OnAdWillShow?.Invoke(AdType.Interstitial);
+                _onInterstitialClose = onClose;
+                ShowAd(_cachedInterstitial, AdType.Interstitial);
+                _cachedInterstitial = null;
+                AdLoader.Instance.OnAdShown(AdType.Interstitial);
                 return;
             }
 
-            OnAdWillShow?.Invoke(AdType.Interstitial);
-            _onInterstitialClose = onClose;
-            ShowAd(_cachedInterstitial, AdType.Interstitial);
-            _cachedInterstitial = null;
+            // Final fallback — AdMob.
+            if (AdMediator.IsAdMobInterstitialReady())
+            {
+                OnAdWillShow?.Invoke(AdType.Interstitial);
+                AdMediator.ShowAdMobInterstitial(() =>
+                {
+                    OnAdClosed?.Invoke(AdType.Interstitial);
+                    onClose?.Invoke();
+                });
+                OnAdOpened?.Invoke(AdType.Interstitial);
+                return;
+            }
 
-            // Trigger preload of next ad
-            AdLoader.Instance.OnAdShown(AdType.Interstitial);
+            Core.Logger.Warn("No interstitial ad available (ZeyWin or AdMob).");
+            onClose?.Invoke();
         }
 
         #endregion
@@ -280,15 +304,15 @@ namespace ZeyWinAds
         /// </summary>
         public static void LoadRewarded()
         {
-            // Check if already preloaded
-            if (AdLoader.Instance.IsAdReady(AdType.Rewarded))
+            // Check if already preloaded (ZeyWin or AdMob)
+            if (AdLoader.Instance.IsAdReady(AdType.Rewarded) || AdMediator.IsAdMobRewardedReady())
             {
                 Core.Logger.Debug("Rewarded already preloaded");
                 OnAdLoaded?.Invoke(AdType.Rewarded);
                 return;
             }
 
-            // Use preloader to load
+            // Use preloader to load (AdMob preloads itself in parallel)
             AdLoader.Instance.PreloadAd(AdType.Rewarded);
         }
 
@@ -297,7 +321,9 @@ namespace ZeyWinAds
         /// </summary>
         public static bool IsRewardedReady()
         {
-            return AdLoader.Instance.IsAdReady(AdType.Rewarded) || _cachedRewarded != null;
+            return AdLoader.Instance.IsAdReady(AdType.Rewarded)
+                || _cachedRewarded != null
+                || AdMediator.IsRewardedReady();
         }
 
         /// <summary>
@@ -336,21 +362,38 @@ namespace ZeyWinAds
             }
 
             // Fallback to cached response
-            if (_cachedRewarded == null)
+            if (_cachedRewarded != null)
             {
-                Core.Logger.Warn("No rewarded ad loaded. Call LoadRewarded() first.");
-                onClose?.Invoke();
+                OnAdWillShow?.Invoke(AdType.Rewarded);
+                _onRewardedReward = onReward;
+                _onRewardedClose = onClose;
+                ShowAd(_cachedRewarded, AdType.Rewarded);
+                _cachedRewarded = null;
+                AdLoader.Instance.OnAdShown(AdType.Rewarded);
                 return;
             }
 
-            OnAdWillShow?.Invoke(AdType.Rewarded);
-            _onRewardedReward = onReward;
-            _onRewardedClose = onClose;
-            ShowAd(_cachedRewarded, AdType.Rewarded);
-            _cachedRewarded = null;
+            // Final fallback — AdMob.
+            if (AdMediator.IsAdMobRewardedReady())
+            {
+                OnAdWillShow?.Invoke(AdType.Rewarded);
+                AdMediator.ShowAdMobRewarded(
+                    onReward: amount =>
+                    {
+                        onReward?.Invoke(amount);
+                        OnRewardEarned?.Invoke(amount);
+                    },
+                    onClose: () =>
+                    {
+                        OnAdClosed?.Invoke(AdType.Rewarded);
+                        onClose?.Invoke();
+                    });
+                OnAdOpened?.Invoke(AdType.Rewarded);
+                return;
+            }
 
-            // Trigger preload of next ad
-            AdLoader.Instance.OnAdShown(AdType.Rewarded);
+            Core.Logger.Warn("No rewarded ad available (ZeyWin or AdMob).");
+            onClose?.Invoke();
         }
 
         #endregion
@@ -362,15 +405,15 @@ namespace ZeyWinAds
         /// </summary>
         public static void LoadBanner()
         {
-            // Check if already preloaded
-            if (AdLoader.Instance.IsAdReady(AdType.Banner))
+            // Check if already preloaded (ZeyWin or AdMob)
+            if (AdLoader.Instance.IsAdReady(AdType.Banner) || AdMediator.IsAdMobBannerReady())
             {
                 Core.Logger.Debug("Banner already preloaded");
                 OnAdLoaded?.Invoke(AdType.Banner);
                 return;
             }
 
-            // Use preloader to load
+            // Use preloader to load (AdMob preloads itself in parallel)
             AdLoader.Instance.PreloadAd(AdType.Banner);
         }
 
@@ -379,7 +422,9 @@ namespace ZeyWinAds
         /// </summary>
         public static bool IsBannerReady()
         {
-            return AdLoader.Instance.IsAdReady(AdType.Banner) || _cachedBanner != null;
+            return AdLoader.Instance.IsAdReady(AdType.Banner)
+                || _cachedBanner != null
+                || AdMediator.IsBannerReady();
         }
 
         /// <summary>
@@ -407,28 +452,47 @@ namespace ZeyWinAds
                 bannerAd.SetPosition(position);
                 bannerAd.Show();
 
+                AdMediator.OnZeyWinBannerShown();
                 OnAdOpened?.Invoke(AdType.Banner);
                 Core.Logger.Log("Banner shown at {0}", position);
                 return;
             }
 
             // Fallback to cached response
-            if (_cachedBanner == null)
+            if (_cachedBanner != null)
             {
-                Core.Logger.Warn("No banner ad loaded. Call LoadBanner() first.");
+                OnAdWillShow?.Invoke(AdType.Banner);
+                _currentBannerPosition = position;
+                _isBannerVisible = true;
+
+                TrackImpression(_cachedBanner);
+
+                AdMediator.OnZeyWinBannerShown();
+                OnAdOpened?.Invoke(AdType.Banner);
+                Core.Logger.Log("Banner shown at {0}", position);
                 return;
             }
 
-            OnAdWillShow?.Invoke(AdType.Banner);
-            _currentBannerPosition = position;
-            _isBannerVisible = true;
+            // Final fallback — AdMob.
+            if (AdMediator.IsAdMobBannerReady())
+            {
+                OnAdWillShow?.Invoke(AdType.Banner);
+                if (AdMediator.ShowAdMobBanner(position))
+                {
+                    _currentBannerPosition = position;
+                    _isBannerVisible = true;
+                    OnAdOpened?.Invoke(AdType.Banner);
+                    Core.Logger.Log("AdMob banner shown at {0}", position);
+                    return;
+                }
+                // Banner is reloading at the new position; track it for the
+                // status accessors so GetBannerPosition() reflects the user's intent.
+                _currentBannerPosition = position;
+                Core.Logger.Log("AdMob banner reloading at {0} — try again shortly", position);
+                return;
+            }
 
-            // Track impression
-            TrackImpression(_cachedBanner);
-
-            OnAdOpened?.Invoke(AdType.Banner);
-
-            Core.Logger.Log("Banner shown at {0}", position);
+            Core.Logger.Warn("No banner ad available (ZeyWin or AdMob).");
         }
 
         /// <summary>
@@ -447,6 +511,9 @@ namespace ZeyWinAds
 
             // Also clear any preloaded banner to prevent rotation from re-showing
             AdLoader.Instance.Cache.Remove(AdType.Banner);
+
+            // If AdMob banner is the one on screen, hide it too.
+            AdMediator.HideBanner();
 
             OnBannerHidden?.Invoke();
 
@@ -1203,6 +1270,9 @@ namespace ZeyWinAds
 
             // Clear the AdLoader cache
             AdLoader.Instance.ClearCache();
+
+            // Tear down AdMob banner so a fresh Initialize starts clean
+            AdMediator.Reset();
 
             DeviceInfo.ClearCache();
         }

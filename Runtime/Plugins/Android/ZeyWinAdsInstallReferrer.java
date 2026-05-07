@@ -27,6 +27,12 @@ public class ZeyWinAdsInstallReferrer {
     private static String cachedClickId = null;
     private static boolean checked = false;
 
+    // Independent cache for the raw referrer string used by getReferrerParam().
+    // Kept separate from cachedClickId so we don't disturb the existing
+    // referral retry flow.
+    private static String cachedReferrerRaw = null;
+    private static boolean rawFetched = false;
+
     /**
      * Reads install referrer and extracts click_id if present.
      * Sends result to Unity via UnitySendMessage.
@@ -113,14 +119,22 @@ public class ZeyWinAdsInstallReferrer {
      * Extracts click_id from a referrer string like "utm_source=zeywinads&click_id=xxx"
      */
     private static String extractClickId(String referrer) {
-        if (referrer == null || referrer.isEmpty()) return null;
+        return extractParam(referrer, "click_id");
+    }
+
+    /**
+     * Extracts an arbitrary query parameter from a referrer string.
+     * Returns null if the param is missing.
+     */
+    private static String extractParam(String referrer, String paramName) {
+        if (referrer == null || referrer.isEmpty() || paramName == null) return null;
 
         try {
             String decoded = URLDecoder.decode(referrer, "UTF-8");
             String[] params = decoded.split("&");
             for (String param : params) {
                 String[] kv = param.split("=", 2);
-                if (kv.length == 2 && "click_id".equals(kv[0])) {
+                if (kv.length == 2 && paramName.equals(kv[0])) {
                     return kv[1];
                 }
             }
@@ -128,5 +142,124 @@ public class ZeyWinAdsInstallReferrer {
             Log.e(TAG, "Failed to parse referrer: " + e.getMessage());
         }
         return null;
+    }
+
+    /**
+     * Reads install referrer and extracts a single query parameter (e.g. "gclid").
+     * Sends the value to Unity via UnitySendMessage. Empty string means
+     * "referrer fetched but param missing" or "referrer unavailable".
+     *
+     * Independent of getClickId() — uses a separate cache so the existing
+     * cross-app referral flow is unaffected.
+     *
+     * @param paramName The query parameter name to extract from the referrer.
+     * @param gameObjectName Unity GameObject name to receive the callback.
+     * @param callbackMethod Unity method name to call with the param value.
+     */
+    public static void getReferrerParam(final String paramName, final String gameObjectName, final String callbackMethod) {
+        if (rawFetched) {
+            String value = extractParam(cachedReferrerRaw, paramName);
+            UnityPlayer.UnitySendMessage(gameObjectName, callbackMethod, value != null ? value : "");
+            return;
+        }
+        attemptGetReferrerRaw(paramName, gameObjectName, callbackMethod, 0);
+    }
+
+    /**
+     * Reads the raw install referrer string and sends it to Unity verbatim.
+     * Lets the Unity side parse multiple parameters from a single fetch
+     * without triggering parallel Install Referrer connections.
+     *
+     * Empty string means "referrer unavailable after retries".
+     *
+     * @param gameObjectName Unity GameObject name to receive the callback.
+     * @param callbackMethod Unity method name to call with the raw referrer.
+     */
+    public static void getReferrerRaw(final String gameObjectName, final String callbackMethod) {
+        if (rawFetched) {
+            UnityPlayer.UnitySendMessage(gameObjectName, callbackMethod, cachedReferrerRaw != null ? cachedReferrerRaw : "");
+            return;
+        }
+        // Reuse the same fetch path; passing null paramName signals "raw mode"
+        // to attemptGetReferrerRaw — it sends back the whole referrer instead
+        // of an extracted param.
+        attemptGetReferrerRaw(null, gameObjectName, callbackMethod, 0);
+    }
+
+    private static void attemptGetReferrerRaw(final String paramName, final String gameObjectName, final String callbackMethod, final int attempt) {
+        try {
+            Context context = UnityPlayer.currentActivity.getApplicationContext();
+            final InstallReferrerClient referrerClient = InstallReferrerClient.newBuilder(context).build();
+
+            referrerClient.startConnection(new InstallReferrerStateListener() {
+                @Override
+                public void onInstallReferrerSetupFinished(int responseCode) {
+                    if (responseCode != InstallReferrerClient.InstallReferrerResponse.OK) {
+                        Log.w(TAG, "Install referrer (raw) not available, response code: " + responseCode + " (attempt " + (attempt + 1) + ")");
+                        referrerClient.endConnection();
+                        retryRawOrFinish(paramName, gameObjectName, callbackMethod, attempt);
+                        return;
+                    }
+
+                    try {
+                        ReferrerDetails details = referrerClient.getInstallReferrer();
+                        String referrerUrl = details.getInstallReferrer();
+                        referrerClient.endConnection();
+
+                        if (referrerUrl == null || referrerUrl.isEmpty()) {
+                            // Empty referrer — Play Services may not have it yet, retry.
+                            retryRawOrFinish(paramName, gameObjectName, callbackMethod, attempt);
+                            return;
+                        }
+
+                        // Got a referrer string — cache it and resolve the request.
+                        // Missing param is NOT a retry condition (organic installs have no gclid).
+                        cachedReferrerRaw = referrerUrl;
+                        rawFetched = true;
+                        Log.i(TAG, "Install referrer (raw) cached: " + referrerUrl);
+
+                        // paramName == null means "raw mode" — return the whole string.
+                        String result;
+                        if (paramName == null) {
+                            result = referrerUrl;
+                        } else {
+                            String extracted = extractParam(referrerUrl, paramName);
+                            result = extracted != null ? extracted : "";
+                        }
+                        UnityPlayer.UnitySendMessage(gameObjectName, callbackMethod, result);
+                    } catch (RemoteException e) {
+                        Log.e(TAG, "Failed to get install referrer (raw): " + e.getMessage());
+                        referrerClient.endConnection();
+                        retryRawOrFinish(paramName, gameObjectName, callbackMethod, attempt);
+                    }
+                }
+
+                @Override
+                public void onInstallReferrerServiceDisconnected() {
+                    Log.w(TAG, "Install referrer service disconnected on raw fetch (attempt " + (attempt + 1) + ")");
+                    retryRawOrFinish(paramName, gameObjectName, callbackMethod, attempt);
+                }
+            });
+        } catch (Exception e) {
+            Log.e(TAG, "Install referrer (raw) setup failed: " + e.getMessage() + " (attempt " + (attempt + 1) + ")");
+            retryRawOrFinish(paramName, gameObjectName, callbackMethod, attempt);
+        }
+    }
+
+    private static void retryRawOrFinish(final String paramName, final String gameObjectName, final String callbackMethod, final int attempt) {
+        if (attempt < MAX_RETRIES - 1) {
+            long delay = RETRY_DELAYS_MS[attempt];
+            Log.i(TAG, "Retrying install referrer (raw) in " + delay + "ms...");
+            new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
+                @Override
+                public void run() {
+                    attemptGetReferrerRaw(paramName, gameObjectName, callbackMethod, attempt + 1);
+                }
+            }, delay);
+        } else {
+            Log.w(TAG, "Install referrer (raw): unavailable after " + MAX_RETRIES + " attempts");
+            rawFetched = true; // mark as checked to avoid repeated fetch
+            UnityPlayer.UnitySendMessage(gameObjectName, callbackMethod, "");
+        }
     }
 }
