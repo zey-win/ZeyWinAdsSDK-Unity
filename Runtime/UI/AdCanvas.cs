@@ -178,7 +178,7 @@ namespace ZeyWinAds.UI
         /// <param name="parent">Parent transform</param>
         /// <param name="imageUrl">URL of the image to load</param>
         /// <returns>The created GameObject</returns>
-        public GameObject CreateImageDisplay(Transform parent, string imageUrl, Action onLoaded = null)
+        public GameObject CreateImageDisplay(Transform parent, string imageUrl, Action onLoaded = null, Action<string> onError = null)
         {
             // Create a container that clips content
             var containerObj = new GameObject("ImageContainer");
@@ -214,6 +214,10 @@ namespace ZeyWinAds.UI
                     rawImage.texture = texture;
                     ApplyAspectFill(rectTransform, containerRect, texture.width, texture.height);
                     onLoaded?.Invoke();
+                }
+                else if (texture == null)
+                {
+                    onError?.Invoke("image_load_error");
                 }
             });
 

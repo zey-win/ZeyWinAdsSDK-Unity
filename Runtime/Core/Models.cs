@@ -159,21 +159,43 @@ namespace ZeyWinAds.Core
         public string app_id;
         public string api_key;
         public string ad_id;
+        public string ad_type;
         public string event_type;
         public string device_model;
         public string os_version;
         public string sdk_version;
+        public string device_id;
+        public string bundle_id;
 
         public EventRequest(string bundleId, string apiKey, string adId, string eventType)
         {
             app_id = bundleId;
+            bundle_id = bundleId;
             api_key = apiKey;
             ad_id = adId;
             event_type = eventType;
             device_model = DeviceInfo.GetDeviceModel();
             os_version = DeviceInfo.GetOSVersion();
             sdk_version = ZeyWinAdsConfig.SdkVersion;
+            device_id = DeviceIdentity.GetCachedGAID();
         }
+    }
+
+    /// <summary>
+    /// Webview render confirmation request. Tells the server whether the
+    /// fullscreen ad surface actually rendered to the user (status="shown")
+    /// or failed to render (status="failed" + a fail_reason).
+    /// </summary>
+    [Serializable]
+    public class WebviewEventRequest
+    {
+        public string api_key;
+        public string bundle_id;
+        public string device_id;
+        public string ad_id;
+        public string ad_type;
+        public string status;
+        public string fail_reason;
     }
 
     /// <summary>

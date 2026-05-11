@@ -110,6 +110,13 @@ namespace ZeyWinAds.Ads
                     _closeButton.gameObject.SetActive(true);
                     _closeButton.StartTimer(ImageCloseDelay, () => { _canClose = true; });
                 }
+
+                // Image is now on-screen — confirm fullscreen render to server.
+                TrackWebviewShown();
+            }, onError: (reason) =>
+            {
+                Debug.LogWarning($"[ZeyWinAds] Interstitial image load failed: {reason}");
+                TrackWebviewFailed(reason);
             });
             imageDisplay.name = "AdImage";
 
@@ -384,7 +391,14 @@ namespace ZeyWinAds.Ads
             _htmlAdView.OnClose += OnHtmlClose;
             _htmlAdView.OnComplete += OnHtmlComplete;
             _htmlAdView.OnError += OnHtmlError;
+            _htmlAdView.OnPageLoaded += OnHtmlPageLoaded;
             _htmlAdView.Show(AdData.media_url);
+        }
+
+        private void OnHtmlPageLoaded()
+        {
+            // Native WebView finished loading the HTML — fullscreen surface is live.
+            TrackWebviewShown();
         }
 
         private void OnHtmlClose()
@@ -402,6 +416,7 @@ namespace ZeyWinAds.Ads
         private void OnHtmlError(string error)
         {
             Debug.LogWarning($"[ZeyWinAds] Interstitial HTML error: {error}");
+            TrackWebviewFailed("html_load_error");
             Close();
         }
 
@@ -412,6 +427,7 @@ namespace ZeyWinAds.Ads
                 _htmlAdView.OnClose -= OnHtmlClose;
                 _htmlAdView.OnComplete -= OnHtmlComplete;
                 _htmlAdView.OnError -= OnHtmlError;
+                _htmlAdView.OnPageLoaded -= OnHtmlPageLoaded;
                 _htmlAdView.DestroyView();
                 _htmlAdView = null;
             }
@@ -429,6 +445,9 @@ namespace ZeyWinAds.Ads
         private void OnVideoPrepared()
         {
             Debug.Log($"[ZeyWinAds] Interstitial video prepared, skip_after={_skipAfterSeconds}s");
+
+            // Video is buffered and the first frame is on-screen.
+            TrackWebviewShown();
 
             if (_skipAfterSeconds > 0)
             {
@@ -467,6 +486,8 @@ namespace ZeyWinAds.Ads
         private void OnVideoError(string error)
         {
             Debug.LogWarning($"[ZeyWinAds] Interstitial video error: {error}");
+
+            TrackWebviewFailed("video_load_error");
 
             // Allow closing on error
             _canClose = true;

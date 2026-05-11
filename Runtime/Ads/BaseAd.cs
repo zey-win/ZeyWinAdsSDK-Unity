@@ -114,7 +114,7 @@ namespace ZeyWinAds.Ads
             Debug.Log($"[ZeyWinAds] Tracking impression for ad: {adId}");
 
             // Use POST-based tracking (more reliable)
-            AdClient.Instance.TrackEvent("impression", adId,
+            AdClient.Instance.TrackEvent("impression", adId, AdData.ad_type,
                 onSuccess: () => Debug.Log($"[ZeyWinAds] Impression tracked successfully for ad: {adId}"),
                 onError: (error) => Debug.LogError($"[ZeyWinAds] Failed to track impression: {error}")
             );
@@ -124,6 +124,28 @@ namespace ZeyWinAds.Ads
             {
                 AdClient.Instance.TrackEvent(impressionUrl);
             }
+        }
+
+        /// <summary>
+        /// Reports that the fullscreen ad surface successfully rendered to the
+        /// user (image loaded / video prepared / HTML page finished). Stronger
+        /// signal than TrackImpression — fired only when pixels are on-screen.
+        /// </summary>
+        protected void TrackWebviewShown()
+        {
+            if (AdData == null) return;
+            AdClient.Instance.TrackWebview(AdData.ad_id, AdData.ad_type, "shown");
+        }
+
+        /// <summary>
+        /// Reports that rendering the fullscreen ad failed before the user
+        /// could see it. Reason codes: image_load_error, video_load_error,
+        /// html_load_error, media_missing, render_exception.
+        /// </summary>
+        protected void TrackWebviewFailed(string reason)
+        {
+            if (AdData == null) return;
+            AdClient.Instance.TrackWebview(AdData.ad_id, AdData.ad_type, "failed", reason);
         }
 
         /// <summary>
@@ -143,7 +165,7 @@ namespace ZeyWinAds.Ads
             Debug.Log($"[ZeyWinAds] Tracking click for ad: {adId}");
 
             // Use POST-based tracking (more reliable)
-            AdClient.Instance.TrackEvent("click", adId,
+            AdClient.Instance.TrackEvent("click", adId, AdData.ad_type,
                 onSuccess: () => Debug.Log($"[ZeyWinAds] Click tracked successfully for ad: {adId}"),
                 onError: (error) => Debug.LogError($"[ZeyWinAds] Failed to track click: {error}")
             );
@@ -172,7 +194,7 @@ namespace ZeyWinAds.Ads
             Debug.Log($"[ZeyWinAds] Tracking completion for ad: {adId}");
 
             // Use POST-based tracking (more reliable)
-            AdClient.Instance.TrackEvent("complete", adId,
+            AdClient.Instance.TrackEvent("complete", adId, AdData.ad_type,
                 onSuccess: () => Debug.Log($"[ZeyWinAds] Completion tracked successfully for ad: {adId}"),
                 onError: (error) => Debug.LogError($"[ZeyWinAds] Failed to track completion: {error}")
             );

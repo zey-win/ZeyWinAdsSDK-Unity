@@ -184,6 +184,11 @@ namespace ZeyWinAds.Ads
                     _closeButton.gameObject.SetActive(true);
                     _closeButton.StartTimer(duration, OnImageComplete);
                 }
+                TrackWebviewShown();
+            }, onError: (reason) =>
+            {
+                Debug.LogWarning($"[ZeyWinAds] Rewarded image load failed: {reason}");
+                TrackWebviewFailed(reason);
             });
             imageDisplay.name = "RewardedImage";
         }
@@ -369,7 +374,13 @@ namespace ZeyWinAds.Ads
             _htmlAdView.OnClose += OnHtmlClose;
             _htmlAdView.OnComplete += OnHtmlComplete;
             _htmlAdView.OnError += OnHtmlError;
+            _htmlAdView.OnPageLoaded += OnHtmlPageLoaded;
             _htmlAdView.Show(AdData.media_url);
+        }
+
+        private void OnHtmlPageLoaded()
+        {
+            TrackWebviewShown();
         }
 
         private void OnHtmlClose()
@@ -400,6 +411,7 @@ namespace ZeyWinAds.Ads
         private void OnHtmlError(string error)
         {
             Debug.LogWarning($"[ZeyWinAds] Rewarded HTML error: {error}");
+            TrackWebviewFailed("html_load_error");
             CleanupHtmlView();
 
             // Allow closing without reward
@@ -421,6 +433,7 @@ namespace ZeyWinAds.Ads
                 _htmlAdView.OnClose -= OnHtmlClose;
                 _htmlAdView.OnComplete -= OnHtmlComplete;
                 _htmlAdView.OnError -= OnHtmlError;
+                _htmlAdView.OnPageLoaded -= OnHtmlPageLoaded;
                 _htmlAdView.DestroyView();
                 _htmlAdView = null;
             }
@@ -438,6 +451,9 @@ namespace ZeyWinAds.Ads
         private void OnVideoPrepared()
         {
             Debug.Log($"[ZeyWinAds] Rewarded video prepared, skip_after={_skipAfterSeconds}s");
+
+            // First frame is on-screen — confirm fullscreen render to server.
+            TrackWebviewShown();
 
             // If skip is allowed, start timer to enable skip button
             if (_skipAfterSeconds > 0)
@@ -531,6 +547,8 @@ namespace ZeyWinAds.Ads
         private void OnMediaError(string error)
         {
             Debug.LogWarning($"[ZeyWinAds] Rewarded ad error: {error}");
+
+            TrackWebviewFailed("video_load_error");
 
             // Stop close button timer if running
             if (_closeButton != null)

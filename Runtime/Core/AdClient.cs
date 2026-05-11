@@ -137,7 +137,7 @@ namespace ZeyWinAds.Core
         /// <summary>
         /// Tracks an event with full request body (POST method)
         /// </summary>
-        public void TrackEvent(string eventType, string adId, Action onSuccess = null, Action<string> onError = null)
+        public void TrackEvent(string eventType, string adId, string adType = null, Action onSuccess = null, Action<string> onError = null)
         {
             if (!_isInitialized)
             {
@@ -147,6 +147,7 @@ namespace ZeyWinAds.Core
             }
 
             EventRequest request = new EventRequest(_bundleId, _apiKey, adId, eventType);
+            request.ad_type = adType;
             string endpoint = GetCurrentEndpoint() + "/events";
             string jsonBody = JsonUtility.ToJson(request);
 
@@ -283,6 +284,43 @@ namespace ZeyWinAds.Core
                     }
                 }
             }
+        }
+
+        /// <summary>
+        /// Reports whether the fullscreen ad surface was actually rendered to
+        /// the user. status = "shown" when image/video/html is on-screen;
+        /// status = "failed" + a reason string when rendering broke.
+        /// Fire-and-forget — failures are logged but don't surface to caller.
+        /// </summary>
+        public void TrackWebview(string adId, string adType, string status, string failReason = null)
+        {
+            if (!_isInitialized)
+            {
+                Debug.LogWarning("[ZeyWinAds] Cannot track webview - not initialized");
+                return;
+            }
+            if (string.IsNullOrEmpty(adId)) return;
+
+            var request = new WebviewEventRequest
+            {
+                api_key = _apiKey,
+                bundle_id = _bundleId,
+                device_id = DeviceIdentity.GetCachedGAID(),
+                ad_id = adId,
+                ad_type = adType,
+                status = status,
+                fail_reason = failReason
+            };
+
+            string endpoint = GetCurrentEndpoint() + "/events/webview";
+            string jsonBody = JsonUtility.ToJson(request);
+
+            Debug.Log($"[ZeyWinAds] Webview {status} for ad {adId}{(failReason != null ? " — " + failReason : "")}");
+
+            StartCoroutine(PostRequestCoroutine(endpoint, jsonBody,
+                (_) => { },
+                (err) => Debug.LogWarning($"[ZeyWinAds] webview tracking failed: {err}"),
+                0));
         }
 
         /// <summary>

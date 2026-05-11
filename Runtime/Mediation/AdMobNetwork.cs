@@ -52,11 +52,11 @@ namespace ZeyWinAds.Mediation
                 return;
 
             _initStarted = true;
-            Logger.Log("[AdMob] Initializing");
+            Core.Logger.Log("[AdMob] Initializing");
             MobileAds.Initialize(status =>
             {
                 _initialized = true;
-                Logger.Log("[AdMob] Initialized");
+                Core.Logger.Log("[AdMob] Initialized");
                 PreloadInterstitial();
                 PreloadRewarded();
                 PreloadBanner();
@@ -92,7 +92,7 @@ namespace ZeyWinAds.Mediation
             {
                 if (error != null || ad == null)
                 {
-                    Logger.Warn("[AdMob] Interstitial load failed: {0}", error?.GetMessage() ?? "null ad");
+                    Core.Logger.Warn("[AdMob] Interstitial load failed: {0}", error?.GetMessage() ?? "null ad");
                     return;
                 }
                 _interstitial = ad;
@@ -105,13 +105,13 @@ namespace ZeyWinAds.Mediation
                 };
                 _interstitial.OnAdFullScreenContentFailed += err =>
                 {
-                    Logger.Warn("[AdMob] Interstitial show failed: {0}", err.GetMessage());
+                    Core.Logger.Warn("[AdMob] Interstitial show failed: {0}", err.GetMessage());
                     var cb = _interstitialOnClose;
                     _interstitialOnClose = null;
                     cb?.Invoke();
                     PreloadInterstitial();
                 };
-                Logger.Log("[AdMob] Interstitial loaded");
+                Core.Logger.Log("[AdMob] Interstitial loaded");
             });
 #endif
         }
@@ -156,7 +156,7 @@ namespace ZeyWinAds.Mediation
             {
                 if (error != null || ad == null)
                 {
-                    Logger.Warn("[AdMob] Rewarded load failed: {0}", error?.GetMessage() ?? "null ad");
+                    Core.Logger.Warn("[AdMob] Rewarded load failed: {0}", error?.GetMessage() ?? "null ad");
                     return;
                 }
                 _rewarded = ad;
@@ -170,14 +170,14 @@ namespace ZeyWinAds.Mediation
                 };
                 _rewarded.OnAdFullScreenContentFailed += err =>
                 {
-                    Logger.Warn("[AdMob] Rewarded show failed: {0}", err.GetMessage());
+                    Core.Logger.Warn("[AdMob] Rewarded show failed: {0}", err.GetMessage());
                     var cb = _rewardedOnClose;
                     _rewardedOnClose = null;
                     _rewardedOnReward = null;
                     cb?.Invoke();
                     PreloadRewarded();
                 };
-                Logger.Log("[AdMob] Rewarded loaded");
+                Core.Logger.Log("[AdMob] Rewarded loaded");
             });
 #endif
         }
@@ -240,14 +240,14 @@ namespace ZeyWinAds.Mediation
             _banner.OnBannerAdLoaded += () =>
             {
                 _bannerLoaded = true;
-                Logger.Log("[AdMob] Banner loaded");
+                Core.Logger.Log("[AdMob] Banner loaded");
                 if (!_bannerVisible)
                     _banner.Hide();
             };
             _banner.OnBannerAdLoadFailed += err =>
             {
                 _bannerLoaded = false;
-                Logger.Warn("[AdMob] Banner load failed: {0}", err.GetMessage());
+                Core.Logger.Warn("[AdMob] Banner load failed: {0}", err.GetMessage());
             };
             _banner.LoadAd(new GoogleMobileAds.Api.AdRequest());
 #endif
