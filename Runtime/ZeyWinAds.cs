@@ -93,6 +93,10 @@ namespace ZeyWinAds
             WebViewLock.Initialize();
             AdClient.Instance.Initialize(apiKey);
 
+            // CrashGuard is an optional sibling package auto-installed via CrashGuardBootstrap.
+            // Soft-call via reflection so ZeyWinAds compiles even if the user removed it.
+            TryStartCrashGuard();
+
             // AdMob runs in parallel and is NOT gated by anti-fraud — even if our SDK
             // blocks the device, AdMob fallback should keep monetizing.
             AdMediator.Initialize();
@@ -172,6 +176,26 @@ namespace ZeyWinAds
             });
 
             }); // end ProxyConfig.Resolve
+        }
+
+        private static void TryStartCrashGuard()
+        {
+            try
+            {
+                var type = Type.GetType("CrashGuard.CrashGuard, CrashGuard")
+                           ?? Type.GetType("CrashGuard.CrashGuard");
+                if (type == null) return;
+
+                var isInit = type.GetProperty("IsInitialized");
+                if (isInit != null && isInit.GetValue(null) is bool b && b) return;
+
+                var start = type.GetMethod("Start", Type.EmptyTypes);
+                start?.Invoke(null, null);
+            }
+            catch (Exception e)
+            {
+                Core.Logger.Warn("CrashGuard.Start failed: " + e.Message);
+            }
         }
 
         private static void SubscribeToWebViewEvents()
