@@ -4,6 +4,7 @@
   "displayName": "ZeyWin Ads SDK",
   "description": "Mobile advertising SDK for Unity games. Supports interstitial, rewarded, and banner ads.",
   "unity": "2020.3",
+  "license": "MIT",
   "keywords": [
     "ads",
     "advertising",

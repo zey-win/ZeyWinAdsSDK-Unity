@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using ZeyWinAds.Core;
 using ZeyWinAds.UI;
+using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.Ads
 {
@@ -105,7 +106,7 @@ namespace ZeyWinAds.Ads
 
         protected override void OnShow()
         {
-            Debug.Log($"[ZeyWinAds] Showing popup ad: {AdData.ad_id}");
+            Logger.Debug("Showing popup ad");
             _isVisible = true;
 
             _canvas = AdCanvas.Create("PopupAdCanvas");
@@ -344,7 +345,7 @@ namespace ZeyWinAds.Ads
                     OnButton1Clicked);
             }
 
-            Debug.Log("[ZeyWinAds] Popup card layout created");
+            Logger.Debug("Popup card layout created");
         }
 
         private void CreateButtonStretch(Transform parent,
@@ -399,7 +400,7 @@ namespace ZeyWinAds.Ads
 
         private void OnButton1Clicked()
         {
-            Debug.Log("[ZeyWinAds] Popup button 1 clicked");
+            Logger.Debug("Popup button 1 clicked");
             string url = AdData?.click_url;
             OpenClickUrl();
             _onButton1Callback?.Invoke(url);
@@ -407,7 +408,7 @@ namespace ZeyWinAds.Ads
 
         private void OnButton2Clicked()
         {
-            Debug.Log("[ZeyWinAds] Popup button 2 clicked");
+            Logger.Debug("Popup button 2 clicked");
             string url = AdData?.click_url;
             OpenClickUrl();
             _onButton2Callback?.Invoke(url);

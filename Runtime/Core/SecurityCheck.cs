@@ -31,7 +31,7 @@ namespace ZeyWinAds.Core
             }
             catch (System.Exception e)
             {
-                Debug.LogError($"[ZeyWinAds] Security check failed: {e.Message}");
+                Logger.Error("Security check failed: {0}", e.Message);
                 _isClean = true; // Don't block on error
                 _detectedPackages = "";
             }

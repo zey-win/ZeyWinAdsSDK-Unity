@@ -50,7 +50,7 @@ namespace ZeyWinAds.Core
         /// <summary>
         /// Delay in seconds before starting preload after initialization.
         /// </summary>
-        public float preloadDelaySeconds = 0.5f;
+        public float preloadDelaySeconds = 0.0f;
 
         /// <summary>
         /// Delay in seconds before reloading after an ad is shown.
@@ -236,6 +236,7 @@ namespace ZeyWinAds.Core
                 return;
             }
 
+            _loadingTypes.Add(type);
             StartCoroutine(PreloadAdCoroutine(type));
         }
 
@@ -329,7 +330,6 @@ namespace ZeyWinAds.Core
 
         private IEnumerator PreloadAdCoroutine(AdType type)
         {
-            _loadingTypes.Add(type);
             Logger.Log("Preloading {0} ad...", type);
 
             BaseAd ad = CreateAdInstance(type);

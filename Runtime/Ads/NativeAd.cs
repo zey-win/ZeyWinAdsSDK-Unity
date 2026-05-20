@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using ZeyWinAds.Core;
 using ZeyWinAds.UI;
+using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.Ads
 {
@@ -53,7 +54,7 @@ namespace ZeyWinAds.Ads
 
         protected override void OnShow()
         {
-            Debug.Log($"[ZeyWinAds] Showing native ad at {Position}: {AdData.ad_id}");
+            Logger.Debug("Showing native ad at {0}", Position);
 
             IsVisible = true;
 
@@ -321,12 +322,12 @@ namespace ZeyWinAds.Ads
                 arrowText.alignment = TextAnchor.MiddleCenter;
             }
 
-            Debug.Log("[ZeyWinAds] Native ad layout created");
+            Logger.Debug("Native ad layout created");
         }
 
         private void OnClicked()
         {
-            Debug.Log("[ZeyWinAds] Native ad clicked");
+            Logger.Debug("Native ad clicked");
             OpenClickUrl();
         }
 
@@ -335,7 +336,7 @@ namespace ZeyWinAds.Ads
             if (!IsVisible)
                 return;
 
-            Debug.Log("[ZeyWinAds] Hiding native ad");
+            Logger.Debug("Hiding native ad");
             IsVisible = false;
 
             if (_container != null)

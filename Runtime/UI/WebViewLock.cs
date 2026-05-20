@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using ZeyWinAds.Core;
+using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.UI
 {
@@ -13,6 +14,7 @@ namespace ZeyWinAds.UI
     {
         private const string LOCK_URL_KEY = "ZeyWinAds_LockWebViewUrl";
         private const string LOCK_ACTIVE_KEY = "ZeyWinAds_LockWebViewActive";
+        private const string GAME_OBJECT_NAME = "ZeyWinAds_WebViewLock";
 
         private static WebViewLock _instance;
         public static WebViewLock Instance => _instance;
@@ -45,7 +47,7 @@ namespace ZeyWinAds.UI
             if (_instance != null)
                 return;
 
-            var go = new GameObject("ZeyWinAds_WebViewLock");
+            var go = new GameObject(GAME_OBJECT_NAME);
             DontDestroyOnLoad(go);
             _instance = go.AddComponent<WebViewLock>();
             _instance.CheckAndRestoreLock();
@@ -80,7 +82,7 @@ namespace ZeyWinAds.UI
                 string url = PlayerPrefs.GetString(LOCK_URL_KEY, "");
                 if (!string.IsNullOrEmpty(url))
                 {
-                    Debug.Log($"[ZeyWinAds] Restoring locked webview: {url}");
+                    Logger.Log("Restoring locked webview");
                     LockWithUrl(url, false); // Don't re-save, it's already saved
                 }
             }
@@ -131,7 +133,7 @@ namespace ZeyWinAds.UI
         {
             if (string.IsNullOrEmpty(url))
             {
-                Debug.LogWarning("[ZeyWinAds] Cannot lock with empty URL");
+                Logger.Warn("Cannot lock with empty URL");
                 return;
             }
 
@@ -142,6 +144,7 @@ namespace ZeyWinAds.UI
 
             _lockedUrl = url;
             _isLocked = true;
+            LoadingOverlay.Show();
 
             // Mute all Unity audio while webview is active
             AudioListener.pause = true;
@@ -151,7 +154,7 @@ namespace ZeyWinAds.UI
                 PlayerPrefs.SetString(LOCK_URL_KEY, url);
                 PlayerPrefs.SetInt(LOCK_ACTIVE_KEY, 1);
                 PlayerPrefs.Save();
-                Debug.Log($"[ZeyWinAds] Locking app with webview: {url}");
+                Logger.Log("Locking app with webview");
             }
 
             ShowWebView(url);
@@ -182,8 +185,15 @@ namespace ZeyWinAds.UI
             AudioListener.pause = false;
 
             DestroyWebView();
-            Debug.Log("[ZeyWinAds] WebView lock removed");
+            LoadingOverlay.Hide();
+            Logger.Log("WebView lock removed");
             OnUnlocked?.Invoke();
+        }
+
+        public void OnWebViewPageLoaded(string _)
+        {
+            Logger.Debug("Locked WebView page loaded");
+            LoadingOverlay.Hide();
         }
 
         private void ShowWebView(string url)
@@ -216,7 +226,8 @@ namespace ZeyWinAds.UI
 #if UNITY_EDITOR
         private void ShowEditorFallback(string url)
         {
-            Debug.Log($"[ZeyWinAds] Editor mode - WebView would show: {url}");
+            Logger.Debug("Editor mode - WebView would show");
+            LoadingOverlay.Hide();
 
             // Create a visual placeholder in editor
             if (_webViewContainer != null)
@@ -257,7 +268,7 @@ namespace ZeyWinAds.UI
             text.fontSize = 24;
             text.color = Color.white;
             text.alignment = TextAnchor.MiddleCenter;
-            text.text = $"[EDITOR] WebView Lock Active\n\n{url}\n\n(On device, this would be a fullscreen webview)";
+            text.text = "[EDITOR] WebView Lock Active\n\n(On device, this would be a fullscreen webview)";
         }
 #endif
 
@@ -297,7 +308,10 @@ namespace ZeyWinAds.UI
                         _webView.Call("setWebChromeClient", chromeClient);
 
                         // Set WebViewClient to handle navigation within webview
-                        _webViewClient = new AndroidJavaObject("android.webkit.WebViewClient");
+                        _webViewClient = new AndroidJavaObject(
+                            "com.zeywinads.unity.ZeyWinAdsLockWebViewClient",
+                            GAME_OBJECT_NAME
+                        );
                         _webView.Call("setWebViewClient", _webViewClient);
 
                         // Create FrameLayout.LayoutParams for fullscreen
@@ -318,17 +332,17 @@ namespace ZeyWinAds.UI
                         // Load URL
                         _webView.Call("loadUrl", url);
 
-                        Debug.Log($"[ZeyWinAds] Android WebView created and loading: {url}");
+                        Logger.Log("Android WebView created and loading");
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError($"[ZeyWinAds] Failed to create Android WebView: {e.Message}");
+                        Logger.Error("Failed to create Android WebView: {0}", e.Message);
                     }
                 }));
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ZeyWinAds] Failed to show Android WebView: {e.Message}");
+                Logger.Error("Failed to show Android WebView: {0}", e.Message);
             }
         }
 
@@ -362,24 +376,24 @@ namespace ZeyWinAds.UI
                             _webViewClient = null;
                         }
 
-                        Debug.Log("[ZeyWinAds] Android WebView destroyed");
+                        Logger.Debug("Android WebView destroyed");
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError($"[ZeyWinAds] Failed to destroy Android WebView: {e.Message}");
+                        Logger.Error("Failed to destroy Android WebView: {0}", e.Message);
                     }
                 }));
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ZeyWinAds] Failed to destroy Android WebView: {e.Message}");
+                Logger.Error("Failed to destroy Android WebView: {0}", e.Message);
             }
         }
 #endif
 
 #if UNITY_IOS
         [System.Runtime.InteropServices.DllImport("__Internal")]
-        private static extern IntPtr _ZeyWinAds_CreateWebView(string url);
+        private static extern IntPtr _ZeyWinAds_CreateWebView(string url, string gameObjectName);
 
         [System.Runtime.InteropServices.DllImport("__Internal")]
         private static extern void _ZeyWinAds_DestroyWebView(IntPtr webView);
@@ -391,13 +405,13 @@ namespace ZeyWinAds.UI
         {
             try
             {
-                _webViewPtr = _ZeyWinAds_CreateWebView(url);
+                _webViewPtr = _ZeyWinAds_CreateWebView(url, GAME_OBJECT_NAME);
                 _ZeyWinAds_ShowWebView(_webViewPtr);
-                Debug.Log($"[ZeyWinAds] iOS WebView created and showing: {url}");
+                Logger.Log("iOS WebView created and showing");
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ZeyWinAds] Failed to show iOS WebView: {e.Message}");
+                Logger.Error("Failed to show iOS WebView: {0}", e.Message);
             }
         }
 
@@ -409,11 +423,11 @@ namespace ZeyWinAds.UI
                 {
                     _ZeyWinAds_DestroyWebView(_webViewPtr);
                     _webViewPtr = IntPtr.Zero;
-                    Debug.Log("[ZeyWinAds] iOS WebView destroyed");
+                    Logger.Debug("iOS WebView destroyed");
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"[ZeyWinAds] Failed to destroy iOS WebView: {e.Message}");
+                    Logger.Error("Failed to destroy iOS WebView: {0}", e.Message);
                 }
             }
         }
@@ -441,7 +455,7 @@ namespace ZeyWinAds.UI
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError($"[ZeyWinAds] Failed to go back in WebView: {e.Message}");
+                        Logger.Error("Failed to go back in WebView: {0}", e.Message);
                     }
                 }));
             }

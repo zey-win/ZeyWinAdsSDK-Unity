@@ -39,11 +39,10 @@ public class ZeyWinAdsDevice {
             Context context = UnityPlayer.currentActivity.getApplicationContext();
             String androidId = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
             if (androidId != null && !androidId.isEmpty()) {
-                android.util.Log.i("ZeyWinAds", "GAID unavailable, using Android ID fallback");
                 return "aid_" + androidId;
             }
         } catch (Exception e) {
-            android.util.Log.e("ZeyWinAds", "Android ID fallback failed: " + e.getMessage());
+            // Android ID fallback failed.
         }
 
         return "";

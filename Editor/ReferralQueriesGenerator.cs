@@ -113,10 +113,7 @@ namespace ZeyWinAds.Editor
                 try
                 {
                     string url = $"{endpoint}/apps/bundles";
-                    string proxyUrl = "https://www.proxodi.com/v1/proxy?target=" +
-                        Uri.EscapeDataString(url) + "&auth=asdjkasdkasdasd";
-                    var request = new HttpRequestMessage(HttpMethod.Get, proxyUrl);
-                    request.Headers.Add("X-Internal-Proxy-Auth", "asdjkasdkasdasd");
+                    var request = new HttpRequestMessage(HttpMethod.Get, url);
                     var resp = await http.SendAsync(request);
                     string json = await resp.Content.ReadAsStringAsync();
 
@@ -228,7 +225,7 @@ namespace ZeyWinAds.Editor
         }
 
         // Suspicious packages that must be in <queries> for Android 11+ detection
-        private static readonly string[] SecurityPackages = new[]
+        internal static readonly string[] SecurityPackages = new[]
         {
             // Hooking / Instrumentation
             "de.robv.android.xposed.installer",

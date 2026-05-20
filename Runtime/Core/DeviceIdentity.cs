@@ -74,7 +74,7 @@ namespace ZeyWinAds.Core
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"[ZeyWinAds] Failed to get GAID: {e.Message}");
+                    Logger.Error("Failed to get GAID: {0}", e.Message);
                 }
 
                 _cachedGAID = gaid;
@@ -104,7 +104,7 @@ namespace ZeyWinAds.Core
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ZeyWinAds] Failed to get SIM country: {e.Message}");
+                Logger.Error("Failed to get SIM country: {0}", e.Message);
                 _cachedSimCountry = "";
             }
 #else
@@ -131,7 +131,7 @@ namespace ZeyWinAds.Core
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ZeyWinAds] Failed to check SIM: {e.Message}");
+                Logger.Error("Failed to check SIM: {0}", e.Message);
                 _cachedHasSim = false;
             }
 #else
@@ -155,7 +155,7 @@ namespace ZeyWinAds.Core
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ZeyWinAds] Failed to check app installed: {e.Message}");
+                Logger.Error("Failed to check app installed: {0}", e.Message);
                 return false;
             }
 #else

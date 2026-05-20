@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using ZeyWinAds.Core;
 using ZeyWinAds.UI;
+using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.Ads
 {
@@ -134,7 +135,7 @@ namespace ZeyWinAds.Ads
 
         protected override void OnShow()
         {
-            Debug.Log($"[ZeyWinAds] Showing banner ad at {Position}: {AdData.ad_id}");
+            Logger.Debug("Showing banner ad at {0}", Position);
 
             IsVisible = true;
 
@@ -184,7 +185,7 @@ namespace ZeyWinAds.Ads
 
             rectTransform.sizeDelta = new Vector2(0, bannerHeight);
 
-            Debug.Log($"[ZeyWinAds] Banner safe area - top: {topInset}, bottom: {bottomInset}, scale: {scaleFactor}");
+            Logger.Debug("Banner safe area - top: {0}, bottom: {1}, scale: {2}", topInset, bottomInset, scaleFactor);
 
             // Background
             var background = _bannerContainer.AddComponent<Image>();
@@ -200,7 +201,7 @@ namespace ZeyWinAds.Ads
         {
             if (string.IsNullOrEmpty(AdData.media_url))
             {
-                Debug.LogWarning("[ZeyWinAds] Banner has no media URL");
+                Logger.Warn("Banner has no media URL");
                 return;
             }
 
@@ -241,7 +242,7 @@ namespace ZeyWinAds.Ads
                     if (_bannerContainer != null && IsVisible)
                         _bannerContainer.SetActive(true);
 
-                    Debug.Log($"[ZeyWinAds] Banner image loaded (visible={IsVisible})");
+                    Logger.Debug("Banner image loaded (visible={0})", IsVisible);
                 }
             });
         }
@@ -274,7 +275,7 @@ namespace ZeyWinAds.Ads
 
         private void OnBannerClicked()
         {
-            Debug.Log("[ZeyWinAds] Banner clicked");
+            Logger.Debug("Banner clicked");
             OpenClickUrl();
         }
 
@@ -283,7 +284,7 @@ namespace ZeyWinAds.Ads
         /// </summary>
         public void Hide()
         {
-            Debug.Log("[ZeyWinAds] Hiding banner");
+            Logger.Debug("Hiding banner");
 
             IsVisible = false;
 

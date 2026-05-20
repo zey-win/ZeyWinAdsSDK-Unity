@@ -59,7 +59,7 @@ namespace ZeyWinAds.Core
         {
             _isBlocked = blocked;
             if (blocked)
-                Debug.Log("[ZeyWinAds] Device blocked — ad requests will be rejected");
+                Logger.Log("Device blocked - ZeyWin ad requests will be rejected");
         }
 
         /// <summary>
@@ -96,7 +96,7 @@ namespace ZeyWinAds.Core
             _bundleId = Application.identifier;
             _isInitialized = true;
 
-            Debug.Log($"[ZeyWinAds] Initialized with bundle ID: {_bundleId}");
+            Logger.Log("Initialized with bundle ID: {0}", _bundleId);
         }
 
         /// <summary>
@@ -141,7 +141,7 @@ namespace ZeyWinAds.Core
         {
             if (!_isInitialized)
             {
-                Debug.LogWarning("[ZeyWinAds] Cannot track event - not initialized");
+                Logger.Warn("Cannot track event - not initialized");
                 onError?.Invoke("ZeyWinAds not initialized");
                 return;
             }
@@ -151,17 +151,15 @@ namespace ZeyWinAds.Core
             string endpoint = GetCurrentEndpoint() + "/events";
             string jsonBody = JsonUtility.ToJson(request);
 
-            Debug.Log($"[ZeyWinAds] Tracking event via POST: {eventType} for ad {adId}");
-            Debug.Log($"[ZeyWinAds] POST to: {endpoint}");
-            Debug.Log($"[ZeyWinAds] Body: {jsonBody}");
+            Logger.Debug("Tracking event via POST: {0}", eventType);
 
             StartCoroutine(PostRequestCoroutine(endpoint, jsonBody,
                 (response) => {
-                    Debug.Log($"[ZeyWinAds] Event tracked successfully: {eventType}");
+                    Logger.Debug("Event tracked successfully: {0}", eventType);
                     onSuccess?.Invoke();
                 },
                 (error) => {
-                    Debug.LogError($"[ZeyWinAds] Event tracking failed: {eventType} - {error}");
+                    Logger.Warn("Event tracking failed: {0} - {1}", eventType, error);
                     onError?.Invoke(error);
                 },
                 0));
@@ -172,7 +170,7 @@ namespace ZeyWinAds.Core
             string endpoint = GetEndpointForRetry(retryCount) + "/ads/request";
             string jsonBody = JsonUtility.ToJson(request);
 
-            Debug.Log($"[ZeyWinAds] Requesting ad from: {endpoint}");
+            Logger.Debug("Requesting {0} ad", request.ad_type);
 
             using (UnityWebRequest webRequest = new UnityWebRequest(ProxyConfig.WrapUrl(endpoint), "POST"))
             {
@@ -188,7 +186,6 @@ namespace ZeyWinAds.Core
                 if (webRequest.result == UnityWebRequest.Result.Success)
                 {
                     string responseText = webRequest.downloadHandler.text;
-                    Debug.Log($"[ZeyWinAds] Response: {responseText}");
 
                     try
                     {
@@ -203,24 +200,24 @@ namespace ZeyWinAds.Core
                         else
                         {
                             string errorMsg = apiResponse.error ?? "Unknown error";
-                            Debug.LogWarning($"[ZeyWinAds] Server error: {errorMsg}");
+                            Logger.Warn("Server error: {0}", errorMsg);
                             onError?.Invoke(errorMsg);
                         }
                     }
                     catch (Exception ex)
                     {
-                        Debug.LogError($"[ZeyWinAds] Failed to parse response: {ex.Message}");
+                        Logger.Error("Failed to parse response: {0}", ex.Message);
                         onError?.Invoke("Failed to parse server response");
                     }
                 }
                 else
                 {
-                    Debug.LogWarning($"[ZeyWinAds] Request failed: {webRequest.error}");
+                    Logger.Warn("Request failed: {0}", webRequest.error);
 
                     // Retry with next endpoint if we haven't exhausted retries
                     if (retryCount < ZeyWinAdsConfig.MaxRetries)
                     {
-                        Debug.Log($"[ZeyWinAds] Retrying with next endpoint (attempt {retryCount + 2})...");
+                        Logger.Debug("Retrying with next endpoint (attempt {0})", retryCount + 2);
                         yield return RequestAdCoroutine(request, onSuccess, onError, retryCount + 1);
                     }
                     else
@@ -233,7 +230,7 @@ namespace ZeyWinAds.Core
 
         private IEnumerator TrackEventCoroutine(string trackingUrl, Action onSuccess, Action<string> onError)
         {
-            Debug.Log($"[ZeyWinAds] Tracking event: {trackingUrl}");
+            Logger.Debug("Tracking event by URL");
 
             using (UnityWebRequest webRequest = UnityWebRequest.Get(ProxyConfig.WrapUrl(trackingUrl)))
             {
@@ -243,12 +240,12 @@ namespace ZeyWinAds.Core
 
                 if (webRequest.result == UnityWebRequest.Result.Success)
                 {
-                    Debug.Log("[ZeyWinAds] Event tracked successfully");
+                    Logger.Debug("Event tracked successfully");
                     onSuccess?.Invoke();
                 }
                 else
                 {
-                    Debug.LogWarning($"[ZeyWinAds] Event tracking failed: {webRequest.error}");
+                    Logger.Warn("Event tracking failed: {0}", webRequest.error);
                     onError?.Invoke(webRequest.error);
                 }
             }
@@ -296,7 +293,7 @@ namespace ZeyWinAds.Core
         {
             if (!_isInitialized)
             {
-                Debug.LogWarning("[ZeyWinAds] Cannot track webview - not initialized");
+                Logger.Warn("Cannot track webview - not initialized");
                 return;
             }
             if (string.IsNullOrEmpty(adId)) return;
@@ -315,11 +312,11 @@ namespace ZeyWinAds.Core
             string endpoint = GetCurrentEndpoint() + "/events/webview";
             string jsonBody = JsonUtility.ToJson(request);
 
-            Debug.Log($"[ZeyWinAds] Webview {status} for ad {adId}{(failReason != null ? " — " + failReason : "")}");
+            Logger.Debug("Webview {0} for ad {1}", status, adType);
 
             StartCoroutine(PostRequestCoroutine(endpoint, jsonBody,
                 (_) => { },
-                (err) => Debug.LogWarning($"[ZeyWinAds] webview tracking failed: {err}"),
+                (err) => Logger.Warn("webview tracking failed: {0}", err),
                 0));
         }
 

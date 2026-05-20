@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using ZeyWinAds.Core;
 using ZeyWinAds.UI;
+using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.Ads
 {
@@ -68,7 +69,7 @@ namespace ZeyWinAds.Ads
 
         protected override void OnShow()
         {
-            Debug.Log($"[ZeyWinAds] Showing rewarded ad: {AdData.ad_id}, type: {AdData.media_type}");
+            Logger.Debug("Showing rewarded ad, type: {0}", AdData.media_type);
 
             _adCompleted = false;
             _rewardClaimed = false;
@@ -129,7 +130,7 @@ namespace ZeyWinAds.Ads
 
         private void ShowVideoAd()
         {
-            Debug.Log($"[ZeyWinAds] Loading rewarded video: {AdData.media_url}");
+            Logger.Debug("Loading rewarded video");
 
             // Mute game audio for video ads
             MuteGameAudio();
@@ -165,7 +166,7 @@ namespace ZeyWinAds.Ads
 
         private void ShowImageAd()
         {
-            Debug.Log($"[ZeyWinAds] Loading rewarded image: {AdData.media_url}");
+            Logger.Debug("Loading rewarded image");
 
             // Hide ad until image is loaded
             _adContainer.SetActive(false);
@@ -187,7 +188,7 @@ namespace ZeyWinAds.Ads
                 TrackWebviewShown();
             }, onError: (reason) =>
             {
-                Debug.LogWarning($"[ZeyWinAds] Rewarded image load failed: {reason}");
+                Logger.Warn("Rewarded image load failed: {0}", reason);
                 TrackWebviewFailed(reason);
             });
             imageDisplay.name = "RewardedImage";
@@ -195,7 +196,7 @@ namespace ZeyWinAds.Ads
 
         private void ShowNativeAd()
         {
-            Debug.Log($"[ZeyWinAds] Loading rewarded native: {AdData.ad_id}");
+            Logger.Debug("Loading rewarded native");
 
             // Use same layout as interstitial native, with timer for reward
             float duration = AdData.duration_sec > 0 ? AdData.duration_sec : ImageDurationSeconds;
@@ -368,7 +369,7 @@ namespace ZeyWinAds.Ads
 
         private void ShowHtmlAd()
         {
-            Debug.Log($"[ZeyWinAds] Loading rewarded HTML: {AdData.media_url}");
+            Logger.Debug("Loading rewarded HTML");
 
             _htmlAdView = HtmlAdView.Create();
             _htmlAdView.OnClose += OnHtmlClose;
@@ -386,7 +387,7 @@ namespace ZeyWinAds.Ads
         private void OnHtmlClose()
         {
             // User closed without completing — no reward
-            Debug.Log("[ZeyWinAds] Rewarded HTML ad closed by user - no reward");
+            Logger.Debug("Rewarded HTML ad closed by user - no reward");
             CleanupHtmlView();
             Close();
         }
@@ -394,7 +395,7 @@ namespace ZeyWinAds.Ads
         private void OnHtmlComplete()
         {
             // HTML signals completion — dismiss WebView and show reward panel
-            Debug.Log("[ZeyWinAds] Rewarded HTML ad completed - showing reward");
+            Logger.Debug("Rewarded HTML ad completed - showing reward");
             _adCompleted = true;
             TrackComplete();
 
@@ -410,7 +411,7 @@ namespace ZeyWinAds.Ads
 
         private void OnHtmlError(string error)
         {
-            Debug.LogWarning($"[ZeyWinAds] Rewarded HTML error: {error}");
+            Logger.Warn("Rewarded HTML error: {0}", error);
             TrackWebviewFailed("html_load_error");
             CleanupHtmlView();
 
@@ -450,7 +451,7 @@ namespace ZeyWinAds.Ads
 
         private void OnVideoPrepared()
         {
-            Debug.Log($"[ZeyWinAds] Rewarded video prepared, skip_after={_skipAfterSeconds}s");
+            Logger.Debug("Rewarded video prepared, skip_after={0}s", _skipAfterSeconds);
 
             // First frame is on-screen — confirm fullscreen render to server.
             TrackWebviewShown();
@@ -465,7 +466,7 @@ namespace ZeyWinAds.Ads
 
         private void OnSkipAvailable()
         {
-            Debug.Log("[ZeyWinAds] Skip now available");
+            Logger.Debug("Skip now available");
             _canSkip = true;
             _closeButton.SetInteractable(true);
             _closeButton.SetText("\u00D7"); // Show X when skip is available
@@ -485,7 +486,7 @@ namespace ZeyWinAds.Ads
 
         private void OnAdClicked()
         {
-            Debug.Log("[ZeyWinAds] Rewarded ad clicked");
+            Logger.Debug("Rewarded ad clicked");
             OpenClickUrl();
         }
 
@@ -500,7 +501,7 @@ namespace ZeyWinAds.Ads
             // If skip is available, allow closing (no reward)
             if (_canSkip)
             {
-                Debug.Log("[ZeyWinAds] User skipped rewarded ad - no reward given");
+                Logger.Debug("User skipped rewarded ad - no reward given");
                 Close();
                 return;
             }
@@ -512,18 +513,18 @@ namespace ZeyWinAds.Ads
                 return;
             }
 
-            Debug.Log("[ZeyWinAds] Cannot close rewarded ad yet - must complete viewing or wait for skip");
+            Logger.Debug("Cannot close rewarded ad yet - must complete viewing or wait for skip");
         }
 
         private void OnVideoComplete()
         {
-            Debug.Log("[ZeyWinAds] Rewarded video completed");
+            Logger.Debug("Rewarded video completed");
             OnAdComplete();
         }
 
         private void OnImageComplete()
         {
-            Debug.Log("[ZeyWinAds] Rewarded image timer completed");
+            Logger.Debug("Rewarded image timer completed");
             OnAdComplete();
         }
 
@@ -546,7 +547,7 @@ namespace ZeyWinAds.Ads
 
         private void OnMediaError(string error)
         {
-            Debug.LogWarning($"[ZeyWinAds] Rewarded ad error: {error}");
+            Logger.Warn("Rewarded ad error: {0}", error);
 
             TrackWebviewFailed("video_load_error");
 
@@ -714,7 +715,7 @@ namespace ZeyWinAds.Ads
 
             _rewardClaimed = true;
 
-            Debug.Log($"[ZeyWinAds] Reward claimed: {_rewardAmount}");
+            Logger.Debug("Reward claimed: {0}", _rewardAmount);
 
             // Track reward via POST
             // Capture values before Close() nullifies AdData
@@ -724,8 +725,8 @@ namespace ZeyWinAds.Ads
                 var rewardUrl = AdData.reward_url;
 
                 AdClient.Instance.TrackEvent("reward", adId,
-                    onSuccess: () => Debug.Log($"[ZeyWinAds] Reward tracked for ad: {adId}"),
-                    onError: (error) => Debug.LogError($"[ZeyWinAds] Failed to track reward: {error}")
+                    onSuccess: () => Logger.Debug("Reward tracked"),
+                    onError: (error) => Logger.Error("Failed to track reward: {0}", error)
                 );
 
                 // Also try URL-based tracking if available
@@ -750,7 +751,7 @@ namespace ZeyWinAds.Ads
             if (!IsShowing)
                 return;
 
-            Debug.Log("[ZeyWinAds] Closing rewarded ad");
+            Logger.Debug("Closing rewarded ad");
 
             // Cleanup HTML view
             CleanupHtmlView();

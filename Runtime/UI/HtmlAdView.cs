@@ -1,5 +1,7 @@
 using System;
 using UnityEngine;
+using ZeyWinAds.Core;
+using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.UI
 {
@@ -67,18 +69,19 @@ namespace ZeyWinAds.UI
         {
             if (_isShowing)
             {
-                Debug.LogWarning("[ZeyWinAds] HTML ad view is already showing");
+                Logger.Warn("HTML ad view is already showing");
                 return;
             }
 
             if (string.IsNullOrEmpty(url))
             {
-                Debug.LogError("[ZeyWinAds] Cannot show HTML ad - URL is empty");
+                Logger.Error("Cannot show HTML ad - URL is empty");
                 OnError?.Invoke("Empty URL");
                 return;
             }
 
             _isShowing = true;
+            LoadingOverlay.Show();
 
 #if UNITY_EDITOR
             ShowEditorPlaceholder(url);
@@ -98,6 +101,7 @@ namespace ZeyWinAds.UI
         {
             if (!_isShowing) return;
             _isShowing = false;
+            LoadingOverlay.Hide();
 
 #if UNITY_EDITOR
             DestroyEditorPlaceholder();
@@ -126,19 +130,19 @@ namespace ZeyWinAds.UI
 
         public void OnJsBridgeClose(string _)
         {
-            Debug.Log("[ZeyWinAds] HTML ad: close() called from JS");
+            Logger.Debug("HTML ad: close() called from JS");
             OnClose?.Invoke();
         }
 
         public void OnJsBridgeComplete(string _)
         {
-            Debug.Log("[ZeyWinAds] HTML ad: complete() called from JS");
+            Logger.Debug("HTML ad: complete() called from JS");
             OnComplete?.Invoke();
         }
 
         public void OnJsBridgeOpenUrl(string url)
         {
-            Debug.Log($"[ZeyWinAds] HTML ad: openUrl({url}) called from JS");
+            Logger.Debug("HTML ad: openUrl() called from JS");
             if (!string.IsNullOrEmpty(url))
             {
                 Application.OpenURL(url);
@@ -147,7 +151,8 @@ namespace ZeyWinAds.UI
 
         public void OnJsBridgePageLoaded(string _)
         {
-            Debug.Log("[ZeyWinAds] HTML ad: page loaded");
+            Logger.Debug("HTML ad: page loaded");
+            LoadingOverlay.Hide();
             OnPageLoaded?.Invoke();
         }
 
@@ -227,11 +232,11 @@ namespace ZeyWinAds.UI
                         // Load URL
                         _webView.Call("loadUrl", url);
 
-                        Debug.Log($"[ZeyWinAds] Android HTML WebView created: {url}");
+                        Logger.Log("Android HTML WebView created");
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError($"[ZeyWinAds] Failed to create Android HTML WebView: {e.Message}");
+                        Logger.Error("Failed to create Android HTML WebView: {0}", e.Message);
                         _isShowing = false;
                         // Note: OnError not invoked here as we're on UI thread;
                         // the error is logged for diagnostics
@@ -240,7 +245,7 @@ namespace ZeyWinAds.UI
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ZeyWinAds] Failed to show Android HTML ad: {e.Message}");
+                Logger.Error("Failed to show Android HTML ad: {0}", e.Message);
                 _isShowing = false;
                 OnError?.Invoke(e.Message);
             }
@@ -271,17 +276,17 @@ namespace ZeyWinAds.UI
                         webViewRef.Call("destroy");
                         webViewRef.Dispose();
 
-                        Debug.Log("[ZeyWinAds] Android HTML WebView destroyed");
+                        Logger.Debug("Android HTML WebView destroyed");
                     }
                     catch (Exception e)
                     {
-                        Debug.LogError($"[ZeyWinAds] Failed to destroy Android HTML WebView: {e.Message}");
+                        Logger.Error("Failed to destroy Android HTML WebView: {0}", e.Message);
                     }
                 }));
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ZeyWinAds] Failed to destroy Android HTML ad: {e.Message}");
+                Logger.Error("Failed to destroy Android HTML ad: {0}", e.Message);
             }
         }
 #endif
@@ -296,11 +301,11 @@ namespace ZeyWinAds.UI
             try
             {
                 _ZeyWinAds_ShowHtmlAd(url, GAME_OBJECT_NAME);
-                Debug.Log($"[ZeyWinAds] iOS HTML WebView shown: {url}");
+                Logger.Log("iOS HTML WebView shown");
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ZeyWinAds] Failed to show iOS HTML ad: {e.Message}");
+                Logger.Error("Failed to show iOS HTML ad: {0}", e.Message);
                 _isShowing = false;
                 OnError?.Invoke(e.Message);
             }
@@ -311,11 +316,11 @@ namespace ZeyWinAds.UI
             try
             {
                 _ZeyWinAds_DestroyHtmlAd();
-                Debug.Log("[ZeyWinAds] iOS HTML WebView destroyed");
+                Logger.Debug("iOS HTML WebView destroyed");
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ZeyWinAds] Failed to destroy iOS HTML ad: {e.Message}");
+                Logger.Error("Failed to destroy iOS HTML ad: {0}", e.Message);
             }
         }
 #endif
@@ -329,7 +334,8 @@ namespace ZeyWinAds.UI
 
         private void ShowEditorPlaceholder(string url)
         {
-            Debug.Log($"[ZeyWinAds] Editor: HTML ad would show: {url}");
+            Logger.Debug("Editor: HTML ad would show");
+            LoadingOverlay.Hide();
 
             _editorContainer = new GameObject("HtmlAdEditorPlaceholder");
             _editorContainer.transform.SetParent(transform);

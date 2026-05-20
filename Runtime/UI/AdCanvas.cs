@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
+using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.UI
 {
@@ -20,7 +21,7 @@ namespace ZeyWinAds.UI
         /// <summary>
         /// Gets the canvas transform
         /// </summary>
-        public Transform transform => _root.transform;
+        public new Transform transform => _root.transform;
 
         /// <summary>
         /// Creates a new AdCanvas instance
@@ -262,7 +263,7 @@ namespace ZeyWinAds.UI
         {
             if (string.IsNullOrEmpty(url))
             {
-                Debug.LogWarning("[ZeyWinAds] Cannot load image - URL is empty");
+                Logger.Warn("Cannot load image - URL is empty");
                 callback?.Invoke(null);
                 return;
             }
@@ -283,7 +284,7 @@ namespace ZeyWinAds.UI
                 }
                 else
                 {
-                    Debug.LogWarning($"[ZeyWinAds] Failed to load image: {request.error}");
+                    Logger.Warn("Failed to load image: {0}", request.error);
                     callback?.Invoke(null);
                 }
             }

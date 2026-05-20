@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
 using UnityEngine.Video;
+using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.UI
 {
@@ -139,7 +140,7 @@ namespace ZeyWinAds.UI
                 return;
             }
 
-            Debug.Log($"[ZeyWinAds] Playing video: {url}");
+            Logger.Debug("Playing video");
 
             _hasCompleted = false;
 
@@ -147,7 +148,7 @@ namespace ZeyWinAds.UI
             string cachedPath = GetCachedPath(url);
             if (File.Exists(cachedPath))
             {
-                Debug.Log($"[ZeyWinAds] Playing from cache: {cachedPath}");
+                Logger.Debug("Playing video from cache");
                 PlayFromFile(cachedPath);
             }
             else
@@ -169,7 +170,7 @@ namespace ZeyWinAds.UI
 
         private IEnumerator DownloadAndPlayCoroutine(string url, string cachePath)
         {
-            Debug.Log($"[ZeyWinAds] Downloading video: {url}");
+            Logger.Debug("Downloading video");
 
             // Ensure cache directory exists
             try
@@ -178,7 +179,7 @@ namespace ZeyWinAds.UI
             }
             catch (Exception e)
             {
-                Debug.LogError($"[ZeyWinAds] Failed to create cache directory: {e.Message}");
+                Logger.Error("Failed to create cache directory: {0}", e.Message);
                 OnVideoError?.Invoke($"Failed to create cache: {e.Message}");
                 yield break;
             }
@@ -199,7 +200,7 @@ namespace ZeyWinAds.UI
 
                 if (request.result != UnityWebRequest.Result.Success)
                 {
-                    Debug.LogError($"[ZeyWinAds] Failed to download video: {request.error}");
+                    Logger.Error("Failed to download video: {0}", request.error);
 
                     // Clean up partial download
                     try
@@ -213,7 +214,7 @@ namespace ZeyWinAds.UI
                     yield break;
                 }
 
-                Debug.Log($"[ZeyWinAds] Video downloaded to: {cachePath}");
+                Logger.Debug("Video downloaded to cache");
             }
 
             // Play from downloaded file
@@ -308,7 +309,7 @@ namespace ZeyWinAds.UI
 
         private void OnPrepareCompleted(VideoPlayer source)
         {
-            Debug.Log($"[ZeyWinAds] Video prepared: {source.width}x{source.height}, starting playback");
+            Logger.Debug("Video prepared: {0}x{1}, starting playback", source.width, source.height);
 
             // Create render texture at video's native resolution
             int videoWidth = (int)source.width;
@@ -381,7 +382,8 @@ namespace ZeyWinAds.UI
             }
 
             imageRect.sizeDelta = new Vector2(width, height);
-            Debug.Log($"[ZeyWinAds] Video aspect fill: container={containerWidth}x{containerHeight}, video={videoWidth}x{videoHeight}, result={width}x{height}");
+            Logger.Debug("Video aspect fill: container={0}x{1}, video={2}x{3}, result={4}x{5}",
+                containerWidth, containerHeight, videoWidth, videoHeight, width, height);
         }
 
         private void OnLoopPointReached(VideoPlayer source)
@@ -390,7 +392,7 @@ namespace ZeyWinAds.UI
                 return;
 
             _hasCompleted = true;
-            Debug.Log("[ZeyWinAds] Video playback complete");
+            Logger.Debug("Video playback complete");
 
             if (_progressCoroutine != null)
             {
@@ -403,7 +405,7 @@ namespace ZeyWinAds.UI
 
         private void OnErrorReceived(VideoPlayer source, string message)
         {
-            Debug.LogError($"[ZeyWinAds] Video error: {message}");
+            Logger.Error("Video error: {0}", message);
 
             if (_progressCoroutine != null)
             {
@@ -472,12 +474,12 @@ namespace ZeyWinAds.UI
                 if (Directory.Exists(CacheDirectory))
                 {
                     Directory.Delete(CacheDirectory, true);
-                    Debug.Log("[ZeyWinAds] Video cache cleared");
+                    Logger.Debug("Video cache cleared");
                 }
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[ZeyWinAds] Failed to clear video cache: {e.Message}");
+                Logger.Warn("Failed to clear video cache: {0}", e.Message);
             }
         }
 

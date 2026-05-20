@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: d2d14c2d3e9c942c8958219044ed99f1
+guid: ae32bfb3579b43bbb0507ad49794c843
 PluginImporter:
   externalObjects: {}
   serializedVersion: 2
@@ -7,12 +7,12 @@ PluginImporter:
   executionOrder: {}
   defineConstraints: []
   isPreloaded: 0
-  isOverridable: 0
+  isOverridable: 1
   isExplicitlyReferenced: 0
   validateReferences: 1
   platformData:
   - first:
-      Any:
+      Any: 
     second:
       enabled: 0
       settings: {}
@@ -23,10 +23,13 @@ PluginImporter:
       settings:
         DefaultValueInitialized: true
   - first:
-      Android: Android
+      iPhone: iOS
     second:
       enabled: 1
-      settings: {}
-  userData:
-  assetBundleName:
-  assetBundleVariant:
+      settings:
+        AddToEmbeddedBinaries: false
+        CompileFlags: 
+        FrameworkDependencies: AppTrackingTransparency
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 

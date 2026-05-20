@@ -1,5 +1,6 @@
 using System.IO;
-using System.Text.RegularExpressions;
+using System.Collections.Generic;
+using System.Xml;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -27,12 +28,13 @@ namespace ZeyWinAds.Editor
         public void OnPreprocessBuild(BuildReport report)
         {
             var settings = ZeyWinAdsSettingsEditor.LoadOrCreate();
-            if (settings == null || !settings.enableAdMob)
-                return;
 
             if (report.summary.platform == BuildTarget.Android)
             {
-                PatchAndroidManifest(settings.admobAppIdAndroid);
+                EnsureAndroidManifestSecurityQueries();
+
+                if (settings != null && settings.enableAdMob)
+                    PatchAndroidManifest(settings.admobAppIdAndroid);
             }
         }
 
@@ -45,7 +47,7 @@ namespace ZeyWinAds.Editor
 #if UNITY_IOS
             if (report.summary.platform == BuildTarget.iOS)
             {
-                PatchInfoPlist(report.summary.outputPath, settings.admobAppIdIOS);
+                PatchInfoPlist(report.summary.outputPath, settings.admobAppIdIOS, settings);
             }
 #endif
         }
@@ -62,37 +64,154 @@ namespace ZeyWinAds.Editor
             string fullPath = Path.GetFullPath(AndroidManifestPath);
             if (!File.Exists(fullPath))
             {
-                Debug.LogWarning($"[ZeyWinAds] {AndroidManifestPath} not found. Create it manually " +
-                                 $"and add a meta-data tag with name=\"{AdMobMetaName}\" value=\"{appId}\".");
+                CreateAndroidManifest(fullPath);
+            }
+
+            var doc = new XmlDocument();
+            doc.Load(fullPath);
+
+            XmlElement manifest = doc.DocumentElement;
+            if (manifest == null)
                 return;
+
+            string ns = "http://schemas.android.com/apk/res/android";
+            XmlElement application = manifest.SelectSingleNode("application") as XmlElement;
+            if (application == null)
+            {
+                application = doc.CreateElement("application");
+                manifest.AppendChild(application);
             }
 
-            string xml = File.ReadAllText(fullPath);
-            string metaPattern = $@"<meta-data\s+android:name=""{Regex.Escape(AdMobMetaName)}""[^/]*/>";
-            string newMeta = $"<meta-data android:name=\"{AdMobMetaName}\" android:value=\"{appId}\"/>";
-
-            if (Regex.IsMatch(xml, metaPattern))
+            XmlElement meta = null;
+            var metaNodes = application.SelectNodes("meta-data");
+            if (metaNodes != null)
             {
-                xml = Regex.Replace(xml, metaPattern, newMeta);
-            }
-            else
-            {
-                // Insert before </application>
-                int closingApp = xml.LastIndexOf("</application>", System.StringComparison.Ordinal);
-                if (closingApp < 0)
+                foreach (XmlNode node in metaNodes)
                 {
-                    Debug.LogWarning("[ZeyWinAds] AndroidManifest.xml has no </application> tag — skipping AdMob meta.");
-                    return;
+                    if (node is XmlElement element
+                        && element.Attributes?.GetNamedItem("name", ns)?.Value == AdMobMetaName)
+                    {
+                        meta = element;
+                        break;
+                    }
                 }
-                xml = xml.Insert(closingApp, "    " + newMeta + "\n    ");
             }
 
-            File.WriteAllText(fullPath, xml);
-            Debug.Log($"[ZeyWinAds] Wrote AdMob App ID to AndroidManifest.xml: {appId}");
+            if (meta == null)
+            {
+                meta = doc.CreateElement("meta-data");
+                application.AppendChild(meta);
+            }
+
+            meta.SetAttribute("name", ns, AdMobMetaName);
+            meta.SetAttribute("value", ns, appId);
+
+            SaveXml(doc, fullPath);
+        }
+
+        private static void EnsureAndroidManifestSecurityQueries()
+        {
+            string fullPath = Path.GetFullPath(AndroidManifestPath);
+            if (!File.Exists(fullPath))
+                CreateAndroidManifest(fullPath);
+
+            var doc = new XmlDocument();
+            doc.Load(fullPath);
+
+            XmlElement manifest = doc.DocumentElement;
+            if (manifest == null)
+                return;
+
+            string ns = "http://schemas.android.com/apk/res/android";
+            EnsurePermission(doc, manifest, ns, "com.google.android.gms.permission.AD_ID");
+
+            XmlElement queries = manifest.SelectSingleNode("queries") as XmlElement;
+            if (queries == null)
+            {
+                queries = doc.CreateElement("queries");
+                XmlNode appNode = manifest.SelectSingleNode("application");
+                if (appNode != null)
+                    manifest.InsertBefore(queries, appNode);
+                else
+                    manifest.AppendChild(queries);
+            }
+
+            var existingPackages = new HashSet<string>();
+            var packageNodes = queries.SelectNodes("package");
+            if (packageNodes != null)
+            {
+                foreach (XmlNode node in packageNodes)
+                {
+                    var name = node.Attributes?.GetNamedItem("name", ns)?.Value;
+                    if (!string.IsNullOrEmpty(name))
+                        existingPackages.Add(name);
+                }
+            }
+
+            foreach (string bundle in ReferralQueriesGenerator.SecurityPackages)
+            {
+                if (string.IsNullOrEmpty(bundle) || existingPackages.Contains(bundle))
+                    continue;
+
+                XmlElement pkg = doc.CreateElement("package");
+                pkg.SetAttribute("name", ns, bundle);
+                queries.AppendChild(pkg);
+            }
+
+            SaveXml(doc, fullPath);
+        }
+
+        private static void EnsurePermission(XmlDocument doc, XmlElement manifest, string ns, string permissionName)
+        {
+            var permissions = manifest.SelectNodes("uses-permission");
+            if (permissions != null)
+            {
+                foreach (XmlNode perm in permissions)
+                {
+                    if (perm.Attributes?.GetNamedItem("name", ns)?.Value == permissionName)
+                        return;
+                }
+            }
+
+            XmlElement permission = doc.CreateElement("uses-permission");
+            permission.SetAttribute("name", ns, permissionName);
+            manifest.InsertBefore(permission, manifest.FirstChild);
+        }
+
+        private static void CreateAndroidManifest(string fullPath)
+        {
+            string dir = Path.GetDirectoryName(fullPath);
+            if (!Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            var doc = new XmlDocument();
+            doc.LoadXml(
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+                "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\">\n" +
+                "    <uses-permission android:name=\"com.google.android.gms.permission.AD_ID\" />\n" +
+                "    <application>\n" +
+                "    </application>\n" +
+                "</manifest>");
+
+            SaveXml(doc, fullPath);
+        }
+
+        private static void SaveXml(XmlDocument doc, string fullPath)
+        {
+            using (var writer = XmlWriter.Create(fullPath, new XmlWriterSettings
+            {
+                Indent = true,
+                IndentChars = "    ",
+                NewLineChars = "\n",
+                NewLineHandling = NewLineHandling.Replace
+            }))
+            {
+                doc.Save(writer);
+            }
         }
 
 #if UNITY_IOS
-        private static void PatchInfoPlist(string buildPath, string appId)
+        private static void PatchInfoPlist(string buildPath, string appId, ZeyWinAdsSettings settings)
         {
             if (string.IsNullOrEmpty(appId))
             {
@@ -105,9 +224,104 @@ namespace ZeyWinAds.Editor
             var plist = new PlistDocument();
             plist.ReadFromFile(plistPath);
             plist.root.SetString("GADApplicationIdentifier", appId);
+            PatchIosPrivacy(plist, settings);
             plist.WriteToFile(plistPath);
-            Debug.Log($"[ZeyWinAds] Wrote AdMob App ID to Info.plist: {appId}");
         }
+
+        private static void PatchIosPrivacy(PlistDocument plist, ZeyWinAdsSettings settings)
+        {
+            if (!string.IsNullOrEmpty(settings.trackingUsageDescription))
+            {
+                plist.root.SetString("NSUserTrackingUsageDescription", settings.trackingUsageDescription);
+            }
+
+            if (!settings.addGoogleSkAdNetworkIds)
+                return;
+
+            PlistElementArray items;
+            if (plist.root.values.TryGetValue("SKAdNetworkItems", out var existing) && existing is PlistElementArray existingArray)
+                items = existingArray;
+            else
+                items = plist.root.CreateArray("SKAdNetworkItems");
+
+            foreach (string id in GoogleSkAdNetworkIds)
+            {
+                if (HasSkAdNetworkId(items, id))
+                    continue;
+
+                var dict = items.AddDict();
+                dict.SetString("SKAdNetworkIdentifier", id);
+            }
+        }
+
+        private static bool HasSkAdNetworkId(PlistElementArray items, string id)
+        {
+            foreach (var item in items.values)
+            {
+                if (item is PlistElementDict dict
+                    && dict.values.TryGetValue("SKAdNetworkIdentifier", out var value)
+                    && value.AsString() == id)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private static readonly string[] GoogleSkAdNetworkIds =
+        {
+            "cstr6suwn9.skadnetwork",
+            "4fzdc2evr5.skadnetwork",
+            "2fnua5tdw4.skadnetwork",
+            "ydx93a7ass.skadnetwork",
+            "p78axxw29g.skadnetwork",
+            "v72qych5uu.skadnetwork",
+            "ludvb6z3bs.skadnetwork",
+            "cp8zw746q7.skadnetwork",
+            "3sh42y64q3.skadnetwork",
+            "c6k4g5qg8m.skadnetwork",
+            "s39g8k73mm.skadnetwork",
+            "wg4vff78zm.skadnetwork",
+            "3qy4746246.skadnetwork",
+            "f38h382jlk.skadnetwork",
+            "hs6bdukanm.skadnetwork",
+            "mlmmfzh3r3.skadnetwork",
+            "v4nxqhlyqp.skadnetwork",
+            "wzmmz9fp6w.skadnetwork",
+            "su67r6k2v3.skadnetwork",
+            "yclnxrl5pm.skadnetwork",
+            "t38b2kh725.skadnetwork",
+            "7ug5zh24hu.skadnetwork",
+            "gta9lk7p23.skadnetwork",
+            "vutu7akeur.skadnetwork",
+            "y5ghdn5j9k.skadnetwork",
+            "v9wttpbfk9.skadnetwork",
+            "n38lu8286q.skadnetwork",
+            "47vhws6wlr.skadnetwork",
+            "kbd757ywx3.skadnetwork",
+            "9t245vhmpl.skadnetwork",
+            "a2p9lx4jpn.skadnetwork",
+            "22mmun2rn5.skadnetwork",
+            "44jx6755aq.skadnetwork",
+            "k674qkevps.skadnetwork",
+            "4468km3ulz.skadnetwork",
+            "2u9pt9hc89.skadnetwork",
+            "8s468mfl3y.skadnetwork",
+            "klf5c3l5u5.skadnetwork",
+            "ppxm28t8ap.skadnetwork",
+            "kbmxgpxpgc.skadnetwork",
+            "uw77j35x4d.skadnetwork",
+            "578prtvx9j.skadnetwork",
+            "4dzt52r2t5.skadnetwork",
+            "tl55sbb4fm.skadnetwork",
+            "c3frkrj4fj.skadnetwork",
+            "e5fvkxwrpn.skadnetwork",
+            "8c4e2ghe7u.skadnetwork",
+            "3rd42ekr43.skadnetwork",
+            "97r2b46745.skadnetwork",
+            "3qcr597p9d.skadnetwork"
+        };
 #endif
     }
 }

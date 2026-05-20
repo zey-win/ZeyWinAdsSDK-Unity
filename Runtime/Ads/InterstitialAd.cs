@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using ZeyWinAds.Core;
 using ZeyWinAds.UI;
+using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.Ads
 {
@@ -42,7 +43,7 @@ namespace ZeyWinAds.Ads
 
         protected override void OnShow()
         {
-            Debug.Log($"[ZeyWinAds] Showing interstitial ad: {AdData.ad_id}");
+            Logger.Debug("Showing interstitial ad");
 
             _canClose = false;
             _showTime = Time.realtimeSinceStartup;
@@ -92,7 +93,7 @@ namespace ZeyWinAds.Ads
 
         private void ShowImageAd()
         {
-            Debug.Log($"[ZeyWinAds] Loading interstitial image: {AdData.media_url}");
+            Logger.Debug("Loading interstitial image");
 
             // Hide ad until image is loaded
             _adContainer.SetActive(false);
@@ -115,7 +116,7 @@ namespace ZeyWinAds.Ads
                 TrackWebviewShown();
             }, onError: (reason) =>
             {
-                Debug.LogWarning($"[ZeyWinAds] Interstitial image load failed: {reason}");
+                Logger.Warn("Interstitial image load failed: {0}", reason);
                 TrackWebviewFailed(reason);
             });
             imageDisplay.name = "AdImage";
@@ -137,7 +138,7 @@ namespace ZeyWinAds.Ads
         /// </summary>
         private void ShowNativeAd()
         {
-            Debug.Log($"[ZeyWinAds] Loading native interstitial: {AdData.ad_id}");
+            Logger.Debug("Loading native interstitial");
 
             // Main layout container (centered card)
             var cardObj = new GameObject("NativeCard");
@@ -328,7 +329,7 @@ namespace ZeyWinAds.Ads
             ctaText.fontStyle = FontStyle.Bold;
             ctaText.alignment = TextAnchor.MiddleCenter;
 
-            Debug.Log("[ZeyWinAds] Native interstitial layout created");
+            Logger.Debug("Native interstitial layout created");
         }
 
         private void MuteGameAudio()
@@ -349,7 +350,7 @@ namespace ZeyWinAds.Ads
 
         private void ShowVideoAd()
         {
-            Debug.Log($"[ZeyWinAds] Loading interstitial video: {AdData.media_url}");
+            Logger.Debug("Loading interstitial video");
 
             // Mute game audio for video ads
             MuteGameAudio();
@@ -385,7 +386,7 @@ namespace ZeyWinAds.Ads
 
         private void ShowHtmlAd()
         {
-            Debug.Log($"[ZeyWinAds] Loading interstitial HTML: {AdData.media_url}");
+            Logger.Debug("Loading interstitial HTML");
 
             _htmlAdView = HtmlAdView.Create();
             _htmlAdView.OnClose += OnHtmlClose;
@@ -415,7 +416,7 @@ namespace ZeyWinAds.Ads
 
         private void OnHtmlError(string error)
         {
-            Debug.LogWarning($"[ZeyWinAds] Interstitial HTML error: {error}");
+            Logger.Warn("Interstitial HTML error: {0}", error);
             TrackWebviewFailed("html_load_error");
             Close();
         }
@@ -444,7 +445,7 @@ namespace ZeyWinAds.Ads
 
         private void OnVideoPrepared()
         {
-            Debug.Log($"[ZeyWinAds] Interstitial video prepared, skip_after={_skipAfterSeconds}s");
+            Logger.Debug("Interstitial video prepared, skip_after={0}s", _skipAfterSeconds);
 
             // Video is buffered and the first frame is on-screen.
             TrackWebviewShown();
@@ -464,7 +465,7 @@ namespace ZeyWinAds.Ads
 
         private void OnSkipAvailable()
         {
-            Debug.Log("[ZeyWinAds] Skip now available");
+            Logger.Debug("Skip now available");
             _canClose = true;
             _closeButton.SetInteractable(true);
             _closeButton.SetText("\u00D7");
@@ -472,7 +473,7 @@ namespace ZeyWinAds.Ads
 
         private void OnVideoComplete()
         {
-            Debug.Log("[ZeyWinAds] Interstitial video completed");
+            Logger.Debug("Interstitial video completed");
 
             _canClose = true;
             _closeButton.gameObject.SetActive(true);
@@ -485,7 +486,7 @@ namespace ZeyWinAds.Ads
 
         private void OnVideoError(string error)
         {
-            Debug.LogWarning($"[ZeyWinAds] Interstitial video error: {error}");
+            Logger.Warn("Interstitial video error: {0}", error);
 
             TrackWebviewFailed("video_load_error");
 
@@ -498,7 +499,7 @@ namespace ZeyWinAds.Ads
 
         private void OnAdClicked()
         {
-            Debug.Log("[ZeyWinAds] Interstitial ad clicked");
+            Logger.Debug("Interstitial ad clicked");
             OpenClickUrl();
         }
 
@@ -506,7 +507,7 @@ namespace ZeyWinAds.Ads
         {
             if (!_canClose)
             {
-                Debug.Log("[ZeyWinAds] Cannot close yet - waiting for close delay");
+                Logger.Debug("Cannot close yet - waiting for close delay");
                 return;
             }
 
@@ -521,7 +522,7 @@ namespace ZeyWinAds.Ads
             if (!IsShowing)
                 return;
 
-            Debug.Log("[ZeyWinAds] Closing interstitial ad");
+            Logger.Debug("Closing interstitial ad");
 
             // Cleanup HTML view
             CleanupHtmlView();

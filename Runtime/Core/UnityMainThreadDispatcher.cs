@@ -54,7 +54,7 @@ namespace ZeyWinAds.Core
                 }
                 catch (Exception e)
                 {
-                    Debug.LogError($"[ZeyWinAds] MainThreadDispatcher error: {e.Message}");
+                    Logger.Error("MainThreadDispatcher error: {0}", e.Message);
                 }
             }
         }
@@ -66,6 +66,11 @@ namespace ZeyWinAds.Core
         {
             if (action != null)
                 _queue.Enqueue(action);
+        }
+
+        public void OnZeyWinAdsATTStatus(string status)
+        {
+            Logger.Debug("ATT authorization status: {0}", status);
         }
     }
 }

@@ -2,9 +2,12 @@
 #import <UIKit/UIKit.h>
 #import <WebKit/WebKit.h>
 
+extern "C" void UnitySendMessage(const char* obj, const char* method, const char* msg);
+
 @interface ZeyWinAdsWebViewController : UIViewController <WKNavigationDelegate>
 @property (nonatomic, strong) WKWebView *webView;
 @property (nonatomic, strong) NSString *initialUrl;
+@property (nonatomic, copy) NSString *gameObjectName;
 @end
 
 @implementation ZeyWinAdsWebViewController
@@ -39,20 +42,28 @@
     return UIStatusBarAnimationFade;
 }
 
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
+    if (self.gameObjectName) {
+        UnitySendMessage([self.gameObjectName UTF8String], "OnWebViewPageLoaded", "");
+    }
+}
+
 @end
 
 static ZeyWinAdsWebViewController *_webViewController = nil;
 
 extern "C" {
-    void* _ZeyWinAds_CreateWebView(const char* url) {
+    void* _ZeyWinAds_CreateWebView(const char* url, const char* gameObjectName) {
         if (_webViewController != nil) {
             return (__bridge void*)_webViewController;
         }
 
         NSString *urlString = [NSString stringWithUTF8String:url];
+        NSString *goName = [NSString stringWithUTF8String:gameObjectName];
 
         _webViewController = [[ZeyWinAdsWebViewController alloc] init];
         _webViewController.initialUrl = urlString;
+        _webViewController.gameObjectName = goName;
         _webViewController.modalPresentationStyle = UIModalPresentationFullScreen;
 
         return (__bridge void*)_webViewController;

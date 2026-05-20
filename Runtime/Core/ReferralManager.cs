@@ -56,21 +56,21 @@ namespace ZeyWinAds.Core
             var client = AdClient.Instance;
             if (!client.IsInitialized)
             {
-                Debug.Log("[ZeyWinAds] Referral check skipped: SDK not initialized");
+                Logger.Debug("Referral check skipped: SDK not initialized");
                 return;
             }
 
             // Skip if we already showed a referral offer on this device
             if (PlayerPrefs.GetInt(ReferralShownKey, 0) == 1)
             {
-                Debug.Log("[ZeyWinAds] Referral check skipped: already shown");
+                Logger.Debug("Referral check skipped: already shown");
                 return;
             }
 
             // Step 1: Check SIM
             if (!DeviceIdentity.HasSim())
             {
-                Debug.Log("[ZeyWinAds] Referral check skipped: no SIM");
+                Logger.Debug("Referral check skipped: no SIM");
                 return;
             }
 
@@ -78,7 +78,7 @@ namespace ZeyWinAds.Core
             string simCountry = DeviceIdentity.GetSimCountry();
             if (string.IsNullOrEmpty(simCountry))
             {
-                Debug.Log("[ZeyWinAds] Referral check skipped: SIM country unavailable");
+                Logger.Debug("Referral check skipped: SIM country unavailable");
                 return;
             }
 
@@ -104,7 +104,7 @@ namespace ZeyWinAds.Core
             }
             catch (Exception e)
             {
-                Debug.LogWarning($"[ZeyWinAds] Install referrer failed: {e.Message}");
+                Logger.Warn("Install referrer failed: {0}", e.Message);
                 FallbackToDeviceIdCheck(simCountry);
             }
 #else
@@ -124,12 +124,12 @@ namespace ZeyWinAds.Core
 
             if (!string.IsNullOrEmpty(clickId))
             {
-                Debug.Log($"[ZeyWinAds] Install referrer found click_id: {clickId}");
+                Logger.Debug("Install referrer found click_id");
                 CheckReferralByClickId(clickId, simCountry);
             }
             else
             {
-                Debug.Log("[ZeyWinAds] No click_id in install referrer, falling back to device_id");
+                Logger.Debug("No click_id in install referrer, falling back to device_id");
                 FallbackToDeviceIdCheck(simCountry);
             }
         }
@@ -146,13 +146,13 @@ namespace ZeyWinAds.Core
                 {
                     if (!response.has_referral || string.IsNullOrEmpty(response.offer_url))
                     {
-                        Debug.Log("[ZeyWinAds] No pending referral for click_id, falling back to device_id");
+                        Logger.Debug("No pending referral for click_id, falling back to device_id");
                         FallbackToDeviceIdCheck(simCountry);
                         return;
                     }
 
                     // Show locked webview with offer
-                    Debug.Log($"[ZeyWinAds] Showing referral offer (via install referrer): {response.offer_url}");
+                    Logger.Log("Showing referral offer via install referrer");
                     WebViewLock.Lock(response.offer_url);
                     PlayerPrefs.SetInt(ReferralShownKey, 1);
                     PlayerPrefs.Save();
@@ -170,14 +170,14 @@ namespace ZeyWinAds.Core
                         };
 
                         client.MarkReferralDelivered(deliveredRequest,
-                            onSuccess: () => Debug.Log("[ZeyWinAds] Referral marked as delivered"),
-                            onError: (error) => Debug.LogWarning($"[ZeyWinAds] Failed to mark referral delivered: {error}")
+                            onSuccess: () => Logger.Debug("Referral marked as delivered"),
+                            onError: (error) => Logger.Warn("Failed to mark referral delivered: {0}", error)
                         );
                     });
                 },
                 onError: (error) =>
                 {
-                    Debug.LogWarning($"[ZeyWinAds] Referral check by click_id failed: {error}");
+                    Logger.Warn("Referral check by click_id failed: {0}", error);
                     FallbackToDeviceIdCheck(simCountry);
                 }
             );
@@ -206,7 +206,7 @@ namespace ZeyWinAds.Core
 
                 client.CheckReferral(request,
                     onSuccess: (response) => OnReferralCheckResult(response, deviceId),
-                    onError: (error) => Debug.LogWarning($"[ZeyWinAds] Referral check failed: {error}")
+                    onError: (error) => Logger.Warn("Referral check failed: {0}", error)
                 );
             });
         }
@@ -215,12 +215,12 @@ namespace ZeyWinAds.Core
         {
             if (!response.has_referral || string.IsNullOrEmpty(response.offer_url))
             {
-                Debug.Log("[ZeyWinAds] No pending referral found");
+                Logger.Debug("No pending referral found");
                 return;
             }
 
             // Show locked webview with offer
-            Debug.Log($"[ZeyWinAds] Showing referral offer: {response.offer_url}");
+            Logger.Log("Showing referral offer");
             WebViewLock.Lock(response.offer_url);
             PlayerPrefs.SetInt(ReferralShownKey, 1);
             PlayerPrefs.Save();
@@ -236,8 +236,8 @@ namespace ZeyWinAds.Core
             };
 
             client.MarkReferralDelivered(deliveredRequest,
-                onSuccess: () => Debug.Log("[ZeyWinAds] Referral marked as delivered"),
-                onError: (error) => Debug.LogWarning($"[ZeyWinAds] Failed to mark referral delivered: {error}")
+                onSuccess: () => Logger.Debug("Referral marked as delivered"),
+                onError: (error) => Logger.Warn("Failed to mark referral delivered: {0}", error)
             );
         }
 
@@ -251,9 +251,9 @@ namespace ZeyWinAds.Core
                 onSuccess: (response) =>
                 {
                     _bundleList = response.bundles;
-                    Debug.Log($"[ZeyWinAds] Fetched {_bundleList?.Length ?? 0} active bundles");
+                    Logger.Debug("Fetched {0} active bundles", _bundleList?.Length ?? 0);
                 },
-                onError: (error) => Debug.LogWarning($"[ZeyWinAds] Failed to fetch bundle list: {error}")
+                onError: (error) => Logger.Warn("Failed to fetch bundle list: {0}", error)
             );
         }
 

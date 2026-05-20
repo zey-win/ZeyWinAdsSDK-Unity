@@ -11,9 +11,22 @@ namespace ZeyWinAds
     {
         public const string ResourcePath = "ZeyWinAdsSettings";
 
+        [Header("ZeyWin")]
+        [Tooltip("API key from the ZeyWin dashboard.")]
+        public string apiKey;
+
+        [Tooltip("Initialize ZeyWin Ads automatically before the first scene loads.")]
+        public bool autoInitializeOnStartup = true;
+
         [Header("AdMob")]
         [Tooltip("Master switch. When disabled, AdMob fallback is never used.")]
         public bool enableAdMob = true;
+
+        [Tooltip("Runs Google UMP consent flow before AdMob starts requesting ads.")]
+        public bool enableUmpConsent = true;
+
+        [Tooltip("Sets UMP TagForUnderAgeOfConsent.")]
+        public bool tagForUnderAgeOfConsent = false;
 
         [Tooltip("AdMob App ID for Android (ca-app-pub-XXX~YYY). Auto-written into AndroidManifest at build.")]
         public string admobAppIdAndroid;
@@ -30,6 +43,16 @@ namespace ZeyWinAds
         public string admobBannerIOS;
         public string admobInterstitialIOS;
         public string admobRewardedIOS;
+
+        [Header("iOS Privacy")]
+        [Tooltip("NSUserTrackingUsageDescription written to Info.plist for ATT prompts.")]
+        public string trackingUsageDescription = "This identifier will be used to deliver personalized ads to you.";
+
+        [Tooltip("Requests App Tracking Transparency authorization on iOS 14+ at SDK startup.")]
+        public bool requestAppTrackingTransparency = true;
+
+        [Tooltip("Writes Google AdMob SKAdNetwork identifiers to Info.plist at iOS build time.")]
+        public bool addGoogleSkAdNetworkIds = true;
 
         private static ZeyWinAdsSettings _instance;
 

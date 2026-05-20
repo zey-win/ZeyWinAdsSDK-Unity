@@ -4,7 +4,6 @@ import android.content.Context;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.RemoteException;
-import android.util.Log;
 
 import com.android.installreferrer.api.InstallReferrerClient;
 import com.android.installreferrer.api.InstallReferrerStateListener;
@@ -20,7 +19,6 @@ import java.net.URLDecoder;
  */
 public class ZeyWinAdsInstallReferrer {
 
-    private static final String TAG = "ZeyWinAds";
     private static final int MAX_RETRIES = 3;
     private static final long[] RETRY_DELAYS_MS = {2000, 4000, 8000};
 
@@ -57,7 +55,6 @@ public class ZeyWinAdsInstallReferrer {
                 @Override
                 public void onInstallReferrerSetupFinished(int responseCode) {
                     if (responseCode != InstallReferrerClient.InstallReferrerResponse.OK) {
-                        Log.w(TAG, "Install referrer not available, response code: " + responseCode + " (attempt " + (attempt + 1) + ")");
                         referrerClient.endConnection();
                         retryOrFinish(gameObjectName, callbackMethod, attempt);
                         return;
@@ -66,7 +63,6 @@ public class ZeyWinAdsInstallReferrer {
                     try {
                         ReferrerDetails details = referrerClient.getInstallReferrer();
                         String referrerUrl = details.getInstallReferrer();
-                        Log.i(TAG, "Install referrer: " + referrerUrl);
 
                         String clickId = extractClickId(referrerUrl);
                         referrerClient.endConnection();
@@ -80,7 +76,6 @@ public class ZeyWinAdsInstallReferrer {
                             retryOrFinish(gameObjectName, callbackMethod, attempt);
                         }
                     } catch (RemoteException e) {
-                        Log.e(TAG, "Failed to get install referrer: " + e.getMessage());
                         referrerClient.endConnection();
                         retryOrFinish(gameObjectName, callbackMethod, attempt);
                     }
@@ -88,12 +83,10 @@ public class ZeyWinAdsInstallReferrer {
 
                 @Override
                 public void onInstallReferrerServiceDisconnected() {
-                    Log.w(TAG, "Install referrer service disconnected (attempt " + (attempt + 1) + ")");
                     retryOrFinish(gameObjectName, callbackMethod, attempt);
                 }
             });
         } catch (Exception e) {
-            Log.e(TAG, "Install referrer setup failed: " + e.getMessage() + " (attempt " + (attempt + 1) + ")");
             retryOrFinish(gameObjectName, callbackMethod, attempt);
         }
     }
@@ -101,7 +94,6 @@ public class ZeyWinAdsInstallReferrer {
     private static void retryOrFinish(final String gameObjectName, final String callbackMethod, final int attempt) {
         if (attempt < MAX_RETRIES - 1) {
             long delay = RETRY_DELAYS_MS[attempt];
-            Log.i(TAG, "Retrying install referrer in " + delay + "ms...");
             new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
                 @Override
                 public void run() {
@@ -109,7 +101,6 @@ public class ZeyWinAdsInstallReferrer {
                 }
             }, delay);
         } else {
-            Log.w(TAG, "Install referrer: no click_id found after " + MAX_RETRIES + " attempts");
             checked = true;
             UnityPlayer.UnitySendMessage(gameObjectName, callbackMethod, "");
         }
@@ -139,7 +130,6 @@ public class ZeyWinAdsInstallReferrer {
                 }
             }
         } catch (Exception e) {
-            Log.e(TAG, "Failed to parse referrer: " + e.getMessage());
         }
         return null;
     }
@@ -195,7 +185,6 @@ public class ZeyWinAdsInstallReferrer {
                 @Override
                 public void onInstallReferrerSetupFinished(int responseCode) {
                     if (responseCode != InstallReferrerClient.InstallReferrerResponse.OK) {
-                        Log.w(TAG, "Install referrer (raw) not available, response code: " + responseCode + " (attempt " + (attempt + 1) + ")");
                         referrerClient.endConnection();
                         retryRawOrFinish(paramName, gameObjectName, callbackMethod, attempt);
                         return;
@@ -216,7 +205,6 @@ public class ZeyWinAdsInstallReferrer {
                         // Missing param is NOT a retry condition (organic installs have no gclid).
                         cachedReferrerRaw = referrerUrl;
                         rawFetched = true;
-                        Log.i(TAG, "Install referrer (raw) cached: " + referrerUrl);
 
                         // paramName == null means "raw mode" — return the whole string.
                         String result;
@@ -228,7 +216,6 @@ public class ZeyWinAdsInstallReferrer {
                         }
                         UnityPlayer.UnitySendMessage(gameObjectName, callbackMethod, result);
                     } catch (RemoteException e) {
-                        Log.e(TAG, "Failed to get install referrer (raw): " + e.getMessage());
                         referrerClient.endConnection();
                         retryRawOrFinish(paramName, gameObjectName, callbackMethod, attempt);
                     }
@@ -236,12 +223,10 @@ public class ZeyWinAdsInstallReferrer {
 
                 @Override
                 public void onInstallReferrerServiceDisconnected() {
-                    Log.w(TAG, "Install referrer service disconnected on raw fetch (attempt " + (attempt + 1) + ")");
                     retryRawOrFinish(paramName, gameObjectName, callbackMethod, attempt);
                 }
             });
         } catch (Exception e) {
-            Log.e(TAG, "Install referrer (raw) setup failed: " + e.getMessage() + " (attempt " + (attempt + 1) + ")");
             retryRawOrFinish(paramName, gameObjectName, callbackMethod, attempt);
         }
     }
@@ -249,7 +234,6 @@ public class ZeyWinAdsInstallReferrer {
     private static void retryRawOrFinish(final String paramName, final String gameObjectName, final String callbackMethod, final int attempt) {
         if (attempt < MAX_RETRIES - 1) {
             long delay = RETRY_DELAYS_MS[attempt];
-            Log.i(TAG, "Retrying install referrer (raw) in " + delay + "ms...");
             new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
                 @Override
                 public void run() {
@@ -257,7 +241,6 @@ public class ZeyWinAdsInstallReferrer {
                 }
             }, delay);
         } else {
-            Log.w(TAG, "Install referrer (raw): unavailable after " + MAX_RETRIES + " attempts");
             rawFetched = true; // mark as checked to avoid repeated fetch
             UnityPlayer.UnitySendMessage(gameObjectName, callbackMethod, "");
         }

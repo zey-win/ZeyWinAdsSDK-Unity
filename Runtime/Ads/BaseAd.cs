@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using ZeyWinAds.Core;
 using ZeyWinAds.UI;
+using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.Ads
 {
@@ -45,14 +46,14 @@ namespace ZeyWinAds.Ads
         {
             if (_isLoading)
             {
-                Debug.LogWarning($"[ZeyWinAds] {AdType} ad is already loading");
+                Logger.Warn("{0} ad is already loading", AdType);
                 callback?.Invoke(false);
                 return;
             }
 
             if (_isLoaded && AdData != null)
             {
-                Debug.Log($"[ZeyWinAds] {AdType} ad is already loaded");
+                Logger.Debug("{0} ad is already loaded", AdType);
                 callback?.Invoke(true);
                 return;
             }
@@ -60,7 +61,7 @@ namespace ZeyWinAds.Ads
             _loadCallback = callback;
             _isLoading = true;
 
-            Debug.Log($"[ZeyWinAds] Loading {AdType} ad...");
+            Logger.Log("Loading {0} ad...", AdType);
 
             AdClient.Instance.RequestAd(AdType,
                 onSuccess: OnAdLoaded,
@@ -76,14 +77,14 @@ namespace ZeyWinAds.Ads
         {
             if (!IsReady)
             {
-                Debug.LogWarning($"[ZeyWinAds] {AdType} ad is not ready. Call Load() first.");
+                Logger.Warn("{0} ad is not ready. Call Load() first.", AdType);
                 onClose?.Invoke();
                 return;
             }
 
             if (IsShowing)
             {
-                Debug.LogWarning($"[ZeyWinAds] {AdType} ad is already showing");
+                Logger.Warn("{0} ad is already showing", AdType);
                 return;
             }
 
@@ -104,19 +105,19 @@ namespace ZeyWinAds.Ads
         {
             if (AdData == null)
             {
-                Debug.LogWarning($"[ZeyWinAds] Cannot track impression - AdData is null");
+                Logger.Warn("Cannot track impression - AdData is null");
                 return;
             }
 
             var adId = AdData.ad_id;
             var impressionUrl = AdData.impression_url;
 
-            Debug.Log($"[ZeyWinAds] Tracking impression for ad: {adId}");
+            Logger.Debug("Tracking impression");
 
             // Use POST-based tracking (more reliable)
             AdClient.Instance.TrackEvent("impression", adId, AdData.ad_type,
-                onSuccess: () => Debug.Log($"[ZeyWinAds] Impression tracked successfully for ad: {adId}"),
-                onError: (error) => Debug.LogError($"[ZeyWinAds] Failed to track impression: {error}")
+                onSuccess: () => Logger.Debug("Impression tracked successfully"),
+                onError: (error) => Logger.Error("Failed to track impression: {0}", error)
             );
 
             // Also try URL-based tracking if available
@@ -155,19 +156,19 @@ namespace ZeyWinAds.Ads
         {
             if (AdData == null)
             {
-                Debug.LogWarning($"[ZeyWinAds] Cannot track click - AdData is null");
+                Logger.Warn("Cannot track click - AdData is null");
                 return;
             }
 
             var adId = AdData.ad_id;
             var clickTrackingUrl = AdData.click_tracking_url;
 
-            Debug.Log($"[ZeyWinAds] Tracking click for ad: {adId}");
+            Logger.Debug("Tracking click");
 
             // Use POST-based tracking (more reliable)
             AdClient.Instance.TrackEvent("click", adId, AdData.ad_type,
-                onSuccess: () => Debug.Log($"[ZeyWinAds] Click tracked successfully for ad: {adId}"),
-                onError: (error) => Debug.LogError($"[ZeyWinAds] Failed to track click: {error}")
+                onSuccess: () => Logger.Debug("Click tracked successfully"),
+                onError: (error) => Logger.Error("Failed to track click: {0}", error)
             );
 
             // Also try URL-based tracking if available
@@ -184,19 +185,19 @@ namespace ZeyWinAds.Ads
         {
             if (AdData == null)
             {
-                Debug.LogWarning($"[ZeyWinAds] Cannot track complete - AdData is null");
+                Logger.Warn("Cannot track complete - AdData is null");
                 return;
             }
 
             var adId = AdData.ad_id;
             var completeUrl = AdData.complete_url;
 
-            Debug.Log($"[ZeyWinAds] Tracking completion for ad: {adId}");
+            Logger.Debug("Tracking completion");
 
             // Use POST-based tracking (more reliable)
             AdClient.Instance.TrackEvent("complete", adId, AdData.ad_type,
-                onSuccess: () => Debug.Log($"[ZeyWinAds] Completion tracked successfully for ad: {adId}"),
-                onError: (error) => Debug.LogError($"[ZeyWinAds] Failed to track completion: {error}")
+                onSuccess: () => Logger.Debug("Completion tracked successfully"),
+                onError: (error) => Logger.Error("Failed to track completion: {0}", error)
             );
 
             // Also try URL-based tracking if available
@@ -214,7 +215,7 @@ namespace ZeyWinAds.Ads
         {
             if (AdData == null)
             {
-                Debug.LogWarning($"[ZeyWinAds] Cannot open click URL - AdData is null");
+                Logger.Warn("Cannot open click URL - AdData is null");
                 return;
             }
 
@@ -238,7 +239,7 @@ namespace ZeyWinAds.Ads
             {
                 if (AdData.lock_webview)
                 {
-                    Debug.Log($"[ZeyWinAds] Opening URL with lock_webview: {AdData.click_url}");
+                    Logger.Log("Opening click URL with lock_webview");
                     WebViewLock.Lock(AdData.click_url);
                 }
                 else
@@ -248,7 +249,7 @@ namespace ZeyWinAds.Ads
             }
             else
             {
-                Debug.LogWarning($"[ZeyWinAds] No URL available to open");
+                Logger.Warn("No URL available to open");
             }
         }
 
@@ -280,14 +281,14 @@ namespace ZeyWinAds.Ads
                 client.RegisterClick(request,
                     onSuccess: (resp) =>
                     {
-                        Debug.Log($"[ZeyWinAds] Click registered: {resp.click_id}");
+                        Logger.Debug("Click registered");
                         // Append click_id as referrer to Play Store URL
                         string urlWithReferrer = UrlHelper.AppendReferrer(storeUrl, resp.click_id);
                         Application.OpenURL(urlWithReferrer);
                     },
                     onError: (err) =>
                     {
-                        Debug.LogWarning($"[ZeyWinAds] Click registration failed: {err}");
+                        Logger.Warn("Click registration failed: {0}", err);
                         Application.OpenURL(storeUrl);
                     }
                 );
@@ -318,8 +319,11 @@ namespace ZeyWinAds.Ads
             _isLoaded = true;
             AdData = response;
 
-            Debug.Log($"[ZeyWinAds] {AdType} ad loaded: {response.ad_id}");
-            Debug.Log($"[ZeyWinAds] Ad URLs - impression: {response.impression_url ?? "null"}, click: {response.click_tracking_url ?? "null"}, media: {response.media_url ?? "null"}");
+            Logger.Log("{0} ad loaded", AdType);
+            Logger.Debug("Ad response contains impression={0}, click={1}, media={2}",
+                !string.IsNullOrEmpty(response.impression_url),
+                !string.IsNullOrEmpty(response.click_tracking_url),
+                !string.IsNullOrEmpty(response.media_url));
 
             _loadCallback?.Invoke(true);
             _loadCallback = null;
@@ -337,7 +341,7 @@ namespace ZeyWinAds.Ads
             _isLoaded = false;
             AdData = null;
 
-            Debug.LogWarning($"[ZeyWinAds] {AdType} ad failed to load: {error}");
+            Logger.Warn("{0} ad failed to load: {1}", AdType, error);
 
             _loadCallback?.Invoke(false);
             _loadCallback = null;
@@ -352,7 +356,7 @@ namespace ZeyWinAds.Ads
             _isLoaded = false;
             AdData = null;
 
-            Debug.Log($"[ZeyWinAds] {AdType} ad closed");
+            Logger.Log("{0} ad closed", AdType);
 
             _onCloseCallback?.Invoke();
             _onCloseCallback = null;

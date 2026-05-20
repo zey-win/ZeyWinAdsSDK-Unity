@@ -4,6 +4,7 @@ using ZeyWinAds.Core;
 
 #if ZEYWIN_ADMOB
 using GoogleMobileAds.Api;
+using GoogleMobileAds.Ump.Api;
 #endif
 
 namespace ZeyWinAds.Mediation
@@ -53,6 +54,57 @@ namespace ZeyWinAds.Mediation
 
             _initStarted = true;
             Core.Logger.Log("[AdMob] Initializing");
+            if (settings.enableUmpConsent)
+            {
+                UpdateConsentThenInitialize(settings);
+                return;
+            }
+
+            InitializeMobileAds();
+#endif
+        }
+
+#if ZEYWIN_ADMOB
+        private static void UpdateConsentThenInitialize(ZeyWinAdsSettings settings)
+        {
+            var request = new ConsentRequestParameters
+            {
+                TagForUnderAgeOfConsent = settings.tagForUnderAgeOfConsent
+            };
+
+            ConsentInformation.Update(request, updateError =>
+            {
+                if (updateError != null)
+                {
+                    Core.Logger.Warn("[AdMob] UMP consent update failed: {0}", updateError.Message);
+                    InitializeMobileAds();
+                    return;
+                }
+
+                ConsentForm.LoadAndShowConsentFormIfRequired(formError =>
+                {
+                    if (formError != null)
+                    {
+                        Core.Logger.Warn("[AdMob] UMP consent form failed: {0}", formError.Message);
+                    }
+
+                    if (ConsentInformation.CanRequestAds())
+                    {
+                        InitializeMobileAds();
+                    }
+                    else
+                    {
+                        Core.Logger.Warn("[AdMob] UMP consent flow completed but ads cannot be requested yet");
+                    }
+                });
+            });
+        }
+
+        private static void InitializeMobileAds()
+        {
+            if (_initialized)
+                return;
+
             MobileAds.Initialize(status =>
             {
                 _initialized = true;
@@ -61,8 +113,8 @@ namespace ZeyWinAds.Mediation
                 PreloadRewarded();
                 PreloadBanner();
             });
-#endif
         }
+#endif
 
         // ---------------- Interstitial ----------------
 
