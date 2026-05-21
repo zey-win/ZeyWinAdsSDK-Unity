@@ -198,8 +198,8 @@ namespace ZeyWinAds.Ads
             var textGroupRect = textGroupObj.AddComponent<RectTransform>();
             textGroupRect.anchorMin = new Vector2(0, 0);
             textGroupRect.anchorMax = new Vector2(1, 1);
-            textGroupRect.offsetMin = new Vector2(contentLeft, padding);
-            textGroupRect.offsetMax = new Vector2(-(padding + ctaWidth + 12f), -padding);
+            textGroupRect.offsetMin = new Vector2(contentLeft, hasCta ? padding + ctaHeight + 8f : padding);
+            textGroupRect.offsetMax = new Vector2(-padding, -padding);
 
             var headlineObj = new GameObject("Headline");
             headlineObj.transform.SetParent(textGroupObj.transform, false);
@@ -246,10 +246,10 @@ namespace ZeyWinAds.Ads
                 var ctaObj = new GameObject("CTAButton");
                 ctaObj.transform.SetParent(cardObj.transform, false);
                 var ctaRect = ctaObj.AddComponent<RectTransform>();
-                ctaRect.anchorMin = new Vector2(1, 0.5f);
-                ctaRect.anchorMax = new Vector2(1, 0.5f);
-                ctaRect.pivot = new Vector2(1, 0.5f);
-                ctaRect.anchoredPosition = new Vector2(-padding, -4f);
+                ctaRect.anchorMin = new Vector2(1, 0);
+                ctaRect.anchorMax = new Vector2(1, 0);
+                ctaRect.pivot = new Vector2(1, 0);
+                ctaRect.anchoredPosition = new Vector2(-padding, padding);
                 ctaRect.sizeDelta = new Vector2(ctaWidth, ctaHeight);
 
                 var ctaBg = ctaObj.AddComponent<Image>();
@@ -285,7 +285,7 @@ namespace ZeyWinAds.Ads
                 arrowRect.anchorMin = new Vector2(1, 0.5f);
                 arrowRect.anchorMax = new Vector2(1, 0.5f);
                 arrowRect.pivot = new Vector2(1, 0.5f);
-                arrowRect.anchoredPosition = new Vector2(-padding, -4f);
+                arrowRect.anchoredPosition = new Vector2(-padding, 0f);
                 arrowRect.sizeDelta = new Vector2(24f, 24f);
 
                 var arrowText = arrowObj.AddComponent<Text>();
@@ -314,6 +314,9 @@ namespace ZeyWinAds.Ads
 
             if (!string.IsNullOrEmpty(AdData.cta_text) && AdData.cta_text.Length > 12)
                 height += 14f;
+
+            if (!string.IsNullOrEmpty(AdData.cta_text))
+                height += 24f;
 
             return Mathf.Clamp(height, MinHeight, MaxHeight);
         }
