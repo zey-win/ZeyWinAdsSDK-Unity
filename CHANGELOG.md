@@ -6,6 +6,7 @@ All notable changes to this package are documented in this file.
 
 - Added startup auto-initialization from `ZeyWinAdsSettings`.
 - Added SDK-owned WebView loading overlay with a spinner and `Loading` label.
+- Added automated native banner rendering: white 80% width card, 150 px minimum adaptive height, top/bottom slide-in, and Google Play redirect through `store_url`.
 - Added fast startup offer flow with Google AdMob fallback handling.
 - Added Android and iOS WebView load callbacks for hiding the loading overlay.
 - Added AdMob build-time Android and iOS configuration helpers.

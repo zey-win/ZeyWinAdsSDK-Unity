@@ -76,8 +76,24 @@ public class AdExample : MonoBehaviour
 
     public void ShowBanner() => ZeyWinAds.ShowBanner(BannerPosition.Bottom);
     public void HideBanner() => ZeyWinAds.HideBanner();
+
+    public void ShowNativeBanner()
+    {
+        if (ZeyWinAds.IsNativeReady())
+            ZeyWinAds.ShowNative(BannerPosition.Bottom);
+    }
+
+    public void HideNativeBanner() => ZeyWinAds.HideNative();
 }
 ```
+
+## Automated Native Banner
+
+`ShowNative(BannerPosition.Top)` and `ShowNative(BannerPosition.Bottom)` render an SDK-owned native banner for connected games. The banner is a white card, 80% of the screen width, with a minimum height of 150 px and adaptive height for longer headlines, body text, and CTA labels.
+
+The card slides in from the requested edge, respects the device safe area, and only the white card captures taps. Empty space around it remains transparent so game UI outside the banner stays interactive.
+
+On tap, the SDK calls the same click flow used by other ZeyWin ads. If the ad response includes `store_url` with a Google Play URL, the SDK registers the referral click and opens Google Play for the target app. If `store_url` is missing, it falls back to `click_url`.
 
 ## Mediation behaviour
 
@@ -108,7 +124,8 @@ public class AdExample : MonoBehaviour
 - **InterstitialAd** — full-screen ads (ZeyWin → AdMob fallback)
 - **RewardedAd** — full-screen ads with rewards (ZeyWin → AdMob fallback)
 - **BannerAd** — banner ads, top/bottom (ZeyWin → AdMob fallback)
-- **NativeAd**, **PopupAd** — ZeyWin-only
+- **NativeAd** — automated native banner, top/bottom, white 80% width card, Google Play redirect via `store_url`
+- **PopupAd** — ZeyWin-only
 
 ## Requirements
 
