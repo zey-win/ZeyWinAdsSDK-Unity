@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using ZeyWinAds.Core;
 
@@ -105,6 +106,7 @@ namespace ZeyWinAds.Mediation
             if (_initialized)
                 return;
 
+            ConfigureTestDevices();
             MobileAds.Initialize(status =>
             {
                 _initialized = true;
@@ -113,6 +115,16 @@ namespace ZeyWinAds.Mediation
                 PreloadRewarded();
                 PreloadBanner();
             });
+        }
+
+        private static void ConfigureTestDevices()
+        {
+            var testDeviceIds = new List<string> { "E2D426604A92FFADE86351336AAC473E" };
+            MobileAds.SetRequestConfiguration(new RequestConfiguration
+            {
+                TestDeviceIds = testDeviceIds
+            });
+            Core.Logger.Log("[AdMob] Test device ids configured: {0}", string.Join(",", testDeviceIds));
         }
 #endif
 
