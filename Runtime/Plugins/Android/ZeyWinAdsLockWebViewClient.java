@@ -30,4 +30,15 @@ public class ZeyWinAdsLockWebViewClient extends WebViewClient {
             UnityPlayer.UnitySendMessage(gameObjectName, "OnWebViewPageLoaded", "");
         }
     }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+        super.onReceivedError(view, errorCode, description, failingUrl);
+        if (!initialLoadDone) {
+            initialLoadDone = true;
+            String message = description != null ? description : "WebView load error";
+            UnityPlayer.UnitySendMessage(gameObjectName, "OnWebViewLoadError", message);
+        }
+    }
 }

@@ -52,4 +52,15 @@ public class ZeyWinAdsHtmlWebViewClient extends WebViewClient {
             UnityPlayer.UnitySendMessage(gameObjectName, "OnJsBridgePageLoaded", "");
         }
     }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
+        super.onReceivedError(view, errorCode, description, failingUrl);
+        if (!initialLoadDone && (failingUrl == null || failingUrl.equals(originalUrl))) {
+            initialLoadDone = true;
+            String message = description != null ? description : "WebView load error";
+            UnityPlayer.UnitySendMessage(gameObjectName, "OnJsBridgeLoadError", message);
+        }
+    }
 }

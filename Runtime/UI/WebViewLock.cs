@@ -28,6 +28,8 @@ namespace ZeyWinAds.UI
 #if UNITY_ANDROID
         private AndroidJavaObject _webView;
         private AndroidJavaObject _webViewClient;
+        private AndroidJavaObject _nativeWebViewContainer;
+        private AndroidJavaObject _nativeLoadingOverlay;
 #endif
 
 #if UNITY_IOS
@@ -193,6 +195,14 @@ namespace ZeyWinAds.UI
         public void OnWebViewPageLoaded(string _)
         {
             Logger.Debug("Locked WebView page loaded");
+            HideNativeLoadingOverlay();
+            LoadingOverlay.Hide();
+        }
+
+        public void OnWebViewLoadError(string error)
+        {
+            Logger.Warn("Locked WebView load error: {0}", error);
+            HideNativeLoadingOverlay();
             LoadingOverlay.Hide();
         }
 
@@ -278,6 +288,11 @@ namespace ZeyWinAds.UI
 #endif
 
 #if UNITY_ANDROID
+        private static int AndroidColor(uint argb)
+        {
+            return unchecked((int)argb);
+        }
+
         private void ShowAndroidWebView(string url)
         {
             try
@@ -326,13 +341,20 @@ namespace ZeyWinAds.UI
                             -1  // MATCH_PARENT
                         );
 
-                        // Add to activity's content view
+                        _nativeWebViewContainer = new AndroidJavaObject("android.widget.FrameLayout", activity);
+                        _nativeWebViewContainer.Call("setBackgroundColor", AndroidColor(0xFF000000));
+                        _nativeWebViewContainer.Call("addView", _webView, layoutParams);
+                        _nativeLoadingOverlay = CreateAndroidLoadingOverlay(activity);
+                        _nativeWebViewContainer.Call("addView", _nativeLoadingOverlay, layoutParams);
+
+                        // Add to activity's content view. The native loading overlay is
+                        // inside the same hierarchy as the WebView, so it stays above it.
                         AndroidJavaObject decorView = activity.Call<AndroidJavaObject>("getWindow")
                             .Call<AndroidJavaObject>("getDecorView");
                         AndroidJavaObject contentView = decorView.Call<AndroidJavaObject>("findViewById",
                             new AndroidJavaClass("android.R$id").GetStatic<int>("content"));
 
-                        contentView.Call("addView", _webView, layoutParams);
+                        contentView.Call("addView", _nativeWebViewContainer, layoutParams);
 
                         // Load URL
                         _webView.Call("loadUrl", url);
@@ -355,13 +377,22 @@ namespace ZeyWinAds.UI
 
         private void DestroyAndroidWebView()
         {
-            if (_webView == null)
+            if (_webView == null && _nativeWebViewContainer == null)
                 return;
 
             try
             {
                 AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
                 AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+
+                var containerRef = _nativeWebViewContainer;
+                var webViewRef = _webView;
+                var webViewClientRef = _webViewClient;
+                var loadingRef = _nativeLoadingOverlay;
+                _nativeWebViewContainer = null;
+                _webView = null;
+                _webViewClient = null;
+                _nativeLoadingOverlay = null;
 
                 activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
                 {
@@ -372,16 +403,18 @@ namespace ZeyWinAds.UI
                         AndroidJavaObject contentView = decorView.Call<AndroidJavaObject>("findViewById",
                             new AndroidJavaClass("android.R$id").GetStatic<int>("content"));
 
-                        contentView.Call("removeView", _webView);
-                        _webView.Call("destroy");
-                        _webView.Dispose();
-                        _webView = null;
-
-                        if (_webViewClient != null)
+                        if (containerRef != null)
                         {
-                            _webViewClient.Dispose();
-                            _webViewClient = null;
+                            contentView.Call("removeView", containerRef);
                         }
+                        if (webViewRef != null)
+                        {
+                            webViewRef.Call("destroy");
+                            webViewRef.Dispose();
+                        }
+                        webViewClientRef?.Dispose();
+                        loadingRef?.Dispose();
+                        containerRef?.Dispose();
 
                         Logger.Debug("Android WebView destroyed");
                     }
@@ -396,6 +429,67 @@ namespace ZeyWinAds.UI
                 Logger.Error("Failed to destroy Android WebView: {0}", e.Message);
             }
         }
+
+        private AndroidJavaObject CreateAndroidLoadingOverlay(AndroidJavaObject activity)
+        {
+            var overlay = new AndroidJavaObject("android.widget.FrameLayout", activity);
+            overlay.Call("setBackgroundColor", AndroidColor(0xCC000000));
+            overlay.Call("setClickable", true);
+
+            var box = new AndroidJavaObject("android.widget.LinearLayout", activity);
+            box.Call("setOrientation", 1);
+            box.Call("setGravity", 17);
+
+            var progress = new AndroidJavaObject("android.widget.ProgressBar", activity);
+            progress.Call("setIndeterminate", true);
+            var text = new AndroidJavaObject("android.widget.TextView", activity);
+            text.Call("setText", "Loading");
+            text.Call("setTextColor", AndroidColor(0xFFFFFFFF));
+            text.Call("setTextSize", 18f);
+            text.Call("setGravity", 17);
+
+            var wrapParams = new AndroidJavaObject("android.widget.LinearLayout$LayoutParams", -2, -2);
+            box.Call("addView", progress, wrapParams);
+            box.Call("addView", text, wrapParams);
+
+            var boxParams = new AndroidJavaObject("android.widget.FrameLayout$LayoutParams", -2, -2);
+            boxParams.Set<int>("gravity", 17);
+            overlay.Call("addView", box, boxParams);
+
+            return overlay;
+        }
+
+        private void HideNativeLoadingOverlay()
+        {
+            if (_nativeLoadingOverlay == null)
+                return;
+
+            try
+            {
+                AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+                AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+                var overlay = _nativeLoadingOverlay;
+                _nativeLoadingOverlay = null;
+                activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+                {
+                    try
+                    {
+                        overlay.Call("setVisibility", 8);
+                        overlay.Dispose();
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.Warn("Failed to hide Android locked WebView loading overlay: {0}", e.Message);
+                    }
+                }));
+            }
+            catch (Exception e)
+            {
+                Logger.Warn("Failed to schedule Android locked WebView loading overlay hide: {0}", e.Message);
+            }
+        }
+#else
+        private void HideNativeLoadingOverlay() {}
 #endif
 
 #if UNITY_IOS

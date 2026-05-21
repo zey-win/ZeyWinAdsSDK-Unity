@@ -9,6 +9,7 @@ extern "C" void UnitySendMessage(const char* obj, const char* method, const char
 
 @interface ZeyWinAdsHtmlViewController : UIViewController <WKNavigationDelegate, WKScriptMessageHandler>
 @property (nonatomic, strong) WKWebView *webView;
+@property (nonatomic, strong) UIView *loadingOverlay;
 @property (nonatomic, strong) NSString *mediaUrl;
 @property (nonatomic, copy) NSString *gameObjectName;
 @end
@@ -44,6 +45,7 @@ extern "C" void UnitySendMessage(const char* obj, const char* method, const char
     self.webView.navigationDelegate = self;
     self.webView.scrollView.bounces = NO;
     [self.view addSubview:self.webView];
+    [self addLoadingOverlay];
 
     if (self.mediaUrl) {
         NSURL *url = [NSURL URLWithString:self.mediaUrl];
@@ -107,7 +109,55 @@ extern "C" void UnitySendMessage(const char* obj, const char* method, const char
 }
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
+    [self hideLoadingOverlay];
     UnitySendMessage([self.gameObjectName UTF8String], "OnJsBridgePageLoaded", "");
+}
+
+- (void)webView:(WKWebView *)webView didFailNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    [self hideLoadingOverlay];
+    UnitySendMessage([self.gameObjectName UTF8String], "OnJsBridgeLoadError", [[error localizedDescription] UTF8String]);
+}
+
+- (void)webView:(WKWebView *)webView didFailProvisionalNavigation:(WKNavigation *)navigation withError:(NSError *)error {
+    [self hideLoadingOverlay];
+    UnitySendMessage([self.gameObjectName UTF8String], "OnJsBridgeLoadError", [[error localizedDescription] UTF8String]);
+}
+
+- (void)addLoadingOverlay {
+    self.loadingOverlay = [[UIView alloc] initWithFrame:self.view.bounds];
+    self.loadingOverlay.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    self.loadingOverlay.backgroundColor = [[UIColor blackColor] colorWithAlphaComponent:0.80];
+    self.loadingOverlay.userInteractionEnabled = YES;
+
+    UIStackView *stack = [[UIStackView alloc] init];
+    stack.axis = UILayoutConstraintAxisVertical;
+    stack.alignment = UIStackViewAlignmentCenter;
+    stack.spacing = 14.0;
+    stack.translatesAutoresizingMaskIntoConstraints = NO;
+
+    UIActivityIndicatorView *spinner = [[UIActivityIndicatorView alloc] initWithActivityIndicatorStyle:UIActivityIndicatorViewStyleWhiteLarge];
+    [spinner startAnimating];
+
+    UILabel *label = [[UILabel alloc] init];
+    label.text = @"Loading";
+    label.textColor = [UIColor whiteColor];
+    label.font = [UIFont systemFontOfSize:20.0 weight:UIFontWeightSemibold];
+
+    [stack addArrangedSubview:spinner];
+    [stack addArrangedSubview:label];
+    [self.loadingOverlay addSubview:stack];
+    [self.view addSubview:self.loadingOverlay];
+
+    [NSLayoutConstraint activateConstraints:@[
+        [stack.centerXAnchor constraintEqualToAnchor:self.loadingOverlay.centerXAnchor],
+        [stack.centerYAnchor constraintEqualToAnchor:self.loadingOverlay.centerYAnchor]
+    ]];
+}
+
+- (void)hideLoadingOverlay {
+    if (!self.loadingOverlay) return;
+    [self.loadingOverlay removeFromSuperview];
+    self.loadingOverlay = nil;
 }
 
 - (BOOL)prefersStatusBarHidden {
