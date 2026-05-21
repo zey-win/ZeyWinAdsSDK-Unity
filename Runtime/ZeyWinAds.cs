@@ -106,6 +106,23 @@ namespace ZeyWinAds
             WebViewLock.Initialize();
             AdClient.Instance.Initialize(apiKey);
 
+            // Run local checks first so eligible users can start offer loading before
+            // secondary systems such as CrashGuard, ATT, AdMob, or attribution finish.
+            bool deviceClean = Core.SecurityCheck.IsDeviceClean();
+            string detectedPackages = Core.SecurityCheck.GetDetectedPackages();
+            bool hasSim = Core.DeviceIdentity.HasSim();
+            string simCountry = hasSim ? Core.DeviceIdentity.GetSimCountry().ToUpper() : "";
+
+            // Determine block reason
+            string blockReason = "none";
+            if (!deviceClean)
+                blockReason = "suspicious_apps";
+            else if (!hasSim)
+                blockReason = "no_sim";
+
+            if (blockReason == "none")
+                WarmStartupInterstitial(preloadSettings);
+
             // CrashGuard is an optional sibling package auto-installed via CrashGuardBootstrap.
             // Soft-call via reflection so ZeyWinAds compiles even if the user removed it.
             TryStartCrashGuard();
@@ -121,19 +138,6 @@ namespace ZeyWinAds
             // Independent of anti-fraud — attribution data is harmless to collect even if
             // ad serving is blocked.
             Core.GoogleAdsAttribution.Capture();
-
-            // Run checks and collect report data (sync — runs while race is in flight)
-            bool deviceClean = Core.SecurityCheck.IsDeviceClean();
-            string detectedPackages = Core.SecurityCheck.GetDetectedPackages();
-            bool hasSim = Core.DeviceIdentity.HasSim();
-            string simCountry = hasSim ? Core.DeviceIdentity.GetSimCountry().ToUpper() : "";
-
-            // Determine block reason
-            string blockReason = "none";
-            if (!deviceClean)
-                blockReason = "suspicious_apps";
-            else if (!hasSim)
-                blockReason = "no_sim";
 
             // If already blocked locally, block ad requests and send report
             if (blockReason != "none")
@@ -163,10 +167,6 @@ namespace ZeyWinAds
             // Resolve route (race direct vs proxy), then continue with geo check
             Core.ProxyConfig.Resolve(() =>
             {
-                // Start loading the startup offer as soon as the local anti-moderation
-                // checks pass. It is only shown after geo/server approval below.
-                WarmStartupInterstitial(preloadSettings);
-
             // Geo check — async, compare SIM country vs IP country
             Core.GeoCheck.Verify(simCountry, (ipCountry, geoMatch) =>
             {

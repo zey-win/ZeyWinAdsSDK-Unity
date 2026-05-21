@@ -7,7 +7,7 @@ namespace ZeyWinAds
     /// </summary>
     internal static class ZeyWinAdsAutoInitializer
     {
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
         private static void InitializeBeforeSceneLoad()
         {
             var settings = ZeyWinAdsSettings.Load();
