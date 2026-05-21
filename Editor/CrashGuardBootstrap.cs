@@ -21,7 +21,7 @@ namespace ZeyWinAds.Editor
         private const string MarkerKey = "ZeyWinAds_CrashGuardBootstrap_Done";
         private const string CrashGuardPackage = "com.crashguard.sdk";
         private const string CrashGuardGitUrl =
-            "https://github.com/zey-win/CrashGuardSDK-Unity.git#472b7bcf009a3ebcc9c5eb039be81bb4b314a224";
+            "https://github.com/zey-win/CrashGuardSDK-Unity.git#2b3947155206bc445e2d6088ac51cdf2760f921d";
 
         static CrashGuardBootstrap()
         {
