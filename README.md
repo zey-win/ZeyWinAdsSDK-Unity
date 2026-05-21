@@ -8,7 +8,7 @@ Mobile advertising SDK for Unity games. Supports fast startup WebView offers, in
 
 1. Open **Window > Package Manager**
 2. Click **+** button → **Add package from git URL**
-3. Enter: `https://github.com/thewhiteapps/ZeyWinAdsSDK-Unity.git`
+3. Enter: `https://github.com/zey-win/ZeyWinAdsSDK-Unity.git`
 4. Click **Add**
 
 On first import the SDK will automatically add:
