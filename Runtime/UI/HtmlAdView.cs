@@ -156,6 +156,13 @@ namespace ZeyWinAds.UI
             OnPageLoaded?.Invoke();
         }
 
+        private void FailShow(string error)
+        {
+            _isShowing = false;
+            LoadingOverlay.Hide();
+            OnError?.Invoke(error);
+        }
+
         private void OnDestroy()
         {
             DestroyView();
@@ -236,18 +243,16 @@ namespace ZeyWinAds.UI
                     }
                     catch (Exception e)
                     {
-                        Logger.Error("Failed to create Android HTML WebView: {0}", e.Message);
-                        _isShowing = false;
-                        // Note: OnError not invoked here as we're on UI thread;
-                        // the error is logged for diagnostics
+                        string message = e.Message;
+                        Logger.Error("Failed to create Android HTML WebView: {0}", message);
+                        UnityMainThreadDispatcher.Instance.Enqueue(() => FailShow(message));
                     }
                 }));
             }
             catch (Exception e)
             {
                 Logger.Error("Failed to show Android HTML ad: {0}", e.Message);
-                _isShowing = false;
-                OnError?.Invoke(e.Message);
+                FailShow(e.Message);
             }
         }
 
@@ -306,8 +311,7 @@ namespace ZeyWinAds.UI
             catch (Exception e)
             {
                 Logger.Error("Failed to show iOS HTML ad: {0}", e.Message);
-                _isShowing = false;
-                OnError?.Invoke(e.Message);
+                FailShow(e.Message);
             }
         }
 

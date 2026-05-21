@@ -196,6 +196,11 @@ namespace ZeyWinAds.UI
             LoadingOverlay.Hide();
         }
 
+        private void HideLoadingAfterShowFailure()
+        {
+            LoadingOverlay.Hide();
+        }
+
         private void ShowWebView(string url)
         {
 #if UNITY_EDITOR
@@ -337,12 +342,14 @@ namespace ZeyWinAds.UI
                     catch (Exception e)
                     {
                         Logger.Error("Failed to create Android WebView: {0}", e.Message);
+                        UnityMainThreadDispatcher.Instance.Enqueue(HideLoadingAfterShowFailure);
                     }
                 }));
             }
             catch (Exception e)
             {
                 Logger.Error("Failed to show Android WebView: {0}", e.Message);
+                HideLoadingAfterShowFailure();
             }
         }
 
@@ -412,6 +419,7 @@ namespace ZeyWinAds.UI
             catch (Exception e)
             {
                 Logger.Error("Failed to show iOS WebView: {0}", e.Message);
+                HideLoadingAfterShowFailure();
             }
         }
 
