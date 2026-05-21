@@ -813,8 +813,7 @@ namespace ZeyWinAds
                 _isNativeVisible = true;
                 _activeNative = nativeAd;
 
-                nativeAd.SetPosition(position);
-                nativeAd.Show();
+                nativeAd.Show(position);
 
                 OnAdOpened?.Invoke(AdType.Native);
                 Core.Logger.Log("Native ad shown at {0}", position);
