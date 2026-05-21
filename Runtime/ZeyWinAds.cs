@@ -53,6 +53,9 @@ namespace ZeyWinAds
         private static bool _startupOfferPending;
         private static Coroutine _googleFallbackCoroutine;
         private static bool _initializeStarted;
+        private static bool _runtimeConfigured;
+        private static bool _runtimePreloadAllStarted;
+        private static bool _startupInterstitialWarmupStarted;
 
         // Events
         public static event Action<AdType> OnAdLoaded;
@@ -160,6 +163,9 @@ namespace ZeyWinAds
             // Resolve route (race direct vs proxy), then continue with geo check
             Core.ProxyConfig.Resolve(() =>
             {
+                // Start loading the startup offer as soon as the local anti-moderation
+                // checks pass. It is only shown after geo/server approval below.
+                WarmStartupInterstitial(preloadSettings);
 
             // Geo check — async, compare SIM country vs IP country
             Core.GeoCheck.Verify(simCountry, (ipCountry, geoMatch) =>
@@ -203,18 +209,42 @@ namespace ZeyWinAds
 
         private static void ConfigureRuntime(PreloadSettings preloadSettings)
         {
-            if (preloadSettings != null)
+            ConfigureRuntime(preloadSettings, true);
+        }
+
+        private static void ConfigureRuntime(PreloadSettings preloadSettings, bool startPreloadAll)
+        {
+            if (!_runtimeConfigured)
             {
-                preloadSettings.preloadDelaySeconds = Mathf.Min(preloadSettings.preloadDelaySeconds, 0.1f);
-                AdLoader.Instance.Configure(preloadSettings);
+                if (preloadSettings != null)
+                {
+                    preloadSettings.preloadDelaySeconds = Mathf.Min(preloadSettings.preloadDelaySeconds, 0.1f);
+                    AdLoader.Instance.Configure(preloadSettings);
+                }
+
+                AdLoader.Instance.OnAdPreloaded -= OnAdPreloaded;
+                AdLoader.Instance.OnAdPreloaded += OnAdPreloaded;
+                AdLoader.Instance.OnPreloadFailed -= OnPreloadFailed;
+                AdLoader.Instance.OnPreloadFailed += OnPreloadFailed;
+
+                _runtimeConfigured = true;
             }
 
-            AdLoader.Instance.OnAdPreloaded -= OnAdPreloaded;
-            AdLoader.Instance.OnAdPreloaded += OnAdPreloaded;
-            AdLoader.Instance.OnPreloadFailed -= OnPreloadFailed;
-            AdLoader.Instance.OnPreloadFailed += OnPreloadFailed;
+            if (startPreloadAll && !_runtimePreloadAllStarted)
+            {
+                _runtimePreloadAllStarted = true;
+                AdLoader.Instance.OnSDKInitialize();
+            }
+        }
 
-            AdLoader.Instance.OnSDKInitialize();
+        private static void WarmStartupInterstitial(PreloadSettings preloadSettings)
+        {
+            if (_startupInterstitialWarmupStarted || WebViewLock.IsLocked)
+                return;
+
+            _startupInterstitialWarmupStarted = true;
+            ConfigureRuntime(preloadSettings, false);
+            AdLoader.Instance.PreloadAd(AdType.Interstitial);
         }
 
         private static void StartStartupOfferFlow()
@@ -222,9 +252,15 @@ namespace ZeyWinAds
             if (WebViewLock.IsLocked)
                 return;
 
+            if (AdLoader.Instance.IsAdReady(AdType.Interstitial))
+            {
+                ShowInterstitial();
+                return;
+            }
+
             _startupOfferPending = true;
             LoadingOverlay.Show();
-            AdLoader.Instance.PreloadAd(AdType.Interstitial, true);
+            AdLoader.Instance.PreloadAd(AdType.Interstitial);
         }
 
         private static void ShowGoogleFallback(string reason)
@@ -1395,6 +1431,9 @@ namespace ZeyWinAds
             _activeBanner = null;
             _activeNative = null;
             _startupOfferPending = false;
+            _startupInterstitialWarmupStarted = false;
+            _runtimeConfigured = false;
+            _runtimePreloadAllStarted = false;
             _initializeStarted = false;
 
             if (_googleFallbackCoroutine != null)
