@@ -31,6 +31,8 @@ namespace ZeyWinAds.UI
         public event Action<string> OnError;
 
         private bool _isShowing;
+        private GameObject _uniWebViewObject;
+        private UniWebView _uniWebView;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         private AndroidJavaObject _webView;
@@ -87,12 +89,8 @@ namespace ZeyWinAds.UI
 
 #if UNITY_EDITOR
             ShowEditorPlaceholder(url);
-#elif UNITY_ANDROID
-            ShowAndroid(url);
-#elif UNITY_IOS
-            ShowiOS(url);
 #else
-            ShowEditorPlaceholder(url);
+            ShowUniWebView(url);
 #endif
         }
 
@@ -107,10 +105,8 @@ namespace ZeyWinAds.UI
 
 #if UNITY_EDITOR
             DestroyEditorPlaceholder();
-#elif UNITY_ANDROID
-            DestroyAndroid();
-#elif UNITY_IOS
-            DestroyiOS();
+#else
+            DestroyUniWebView();
 #endif
         }
 
@@ -181,6 +177,139 @@ namespace ZeyWinAds.UI
             DestroyView();
             if (_instance == this) _instance = null;
         }
+
+        // ============================================================
+        // UniWebView implementation
+        // ============================================================
+
+#if !UNITY_EDITOR
+        private void ShowUniWebView(string url)
+        {
+            try
+            {
+                DestroyUniWebView();
+
+                _uniWebViewObject = new GameObject("ZeyWinAds_UniWebViewHtmlAd");
+                DontDestroyOnLoad(_uniWebViewObject);
+                _uniWebView = _uniWebViewObject.AddComponent<UniWebView>();
+
+                ConfigureUniWebView(_uniWebView, url);
+                _uniWebView.OnPageFinished += (view, statusCode, pageUrl) => OnJsBridgePageLoaded(pageUrl);
+                _uniWebView.OnLoadingErrorReceived += (view, errorCode, errorMessage, payload) =>
+                {
+                    OnJsBridgeLoadError(string.IsNullOrEmpty(errorMessage) ? "WebView load error" : errorMessage);
+                };
+                _uniWebView.OnMessageReceived += HandleUniWebViewMessage;
+                _uniWebView.OnShouldClose += (view) =>
+                {
+                    OnJsBridgeClose("");
+                    return false;
+                };
+
+                _uniWebView.AddUrlScheme("zeywinads");
+                _uniWebView.AddJavaScript(GetBridgeJavascript());
+                _uniWebView.Load(url);
+                _uniWebView.Show();
+
+                Logger.Log("UniWebView HTML ad created and loading");
+            }
+            catch (Exception e)
+            {
+                Logger.Error("Failed to show UniWebView HTML ad: {0}", e.Message);
+                FailShow(e.Message);
+            }
+        }
+
+        private static void ConfigureUniWebView(UniWebView webView, string url)
+        {
+            UniWebView.SetAllowAutoPlay(true);
+            UniWebView.SetAllowJavaScriptOpenWindow(true);
+            UniWebView.SetAllowUniversalAccessFromFileURLs(true);
+
+            webView.Frame = new Rect(0, 0, Screen.width, Screen.height);
+            webView.BackgroundColor = Color.black;
+            webView.SetShowToolbar(false);
+            webView.SetBackButtonEnabled(true);
+            webView.SetOpenLinksInExternalBrowser(false);
+            webView.SetSupportMultipleWindows(true, true);
+            webView.SetAllowFileAccess(true);
+            webView.SetAllowFileAccessFromFileURLs(true);
+            webView.SetAcceptThirdPartyCookies(true);
+            webView.SetAllowHTTPAuthPopUpWindow(true);
+            webView.SetShowSpinnerWhileLoading(true);
+            webView.SetSpinnerText("Loading");
+            webView.SetAllowUserDismissSpinner(false);
+
+            string host = GetHost(url);
+            if (!string.IsNullOrEmpty(host))
+                webView.AddPermissionTrustDomain(host);
+        }
+
+        private static string GetHost(string url)
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return uri.Host;
+
+            return null;
+        }
+
+        private static string GetBridgeJavascript()
+        {
+            return @"(function() {
+                if (window.ZeyWinAds) return;
+                window.ZeyWinAds = {
+                    close: function() { window.location.href = 'zeywinads://close'; },
+                    complete: function() { window.location.href = 'zeywinads://complete'; },
+                    openUrl: function(url) {
+                        window.location.href = 'zeywinads://open?url=' + encodeURIComponent(url || '');
+                    }
+                };
+            })();";
+        }
+
+        private void HandleUniWebViewMessage(UniWebView view, UniWebViewMessage message)
+        {
+            if (!string.Equals(message.Scheme, "zeywinads", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            string path = (message.Path ?? "").Trim('/').ToLowerInvariant();
+            if (path == "close")
+            {
+                OnJsBridgeClose("");
+                return;
+            }
+
+            if (path == "complete")
+            {
+                OnJsBridgeComplete("");
+                return;
+            }
+
+            if (path == "open")
+            {
+                string url = null;
+                if (message.Args != null)
+                    message.Args.TryGetValue("url", out url);
+                OnJsBridgeOpenUrl(url);
+            }
+        }
+
+        private void DestroyUniWebView()
+        {
+            if (_uniWebView != null)
+            {
+                _uniWebView.Hide();
+                Destroy(_uniWebView);
+                _uniWebView = null;
+            }
+
+            if (_uniWebViewObject != null)
+            {
+                Destroy(_uniWebViewObject);
+                _uniWebViewObject = null;
+            }
+        }
+#endif
 
         // ============================================================
         // Android implementation

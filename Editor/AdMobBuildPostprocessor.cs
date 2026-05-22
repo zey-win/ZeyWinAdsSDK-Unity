@@ -41,6 +41,14 @@ namespace ZeyWinAds.Editor
         public void OnPostprocessBuild(BuildReport report)
         {
             var settings = ZeyWinAdsSettings.Load() ?? ZeyWinAdsSettingsEditor.LoadOrCreate();
+
+#if UNITY_IOS
+            if (report.summary.platform == BuildTarget.iOS)
+            {
+                PatchInfoPlistForWebViewPermissions(report.summary.outputPath);
+            }
+#endif
+
             if (settings == null || !settings.enableAdMob)
                 return;
 
@@ -124,6 +132,8 @@ namespace ZeyWinAds.Editor
 
             string ns = "http://schemas.android.com/apk/res/android";
             EnsurePermission(doc, manifest, ns, "com.google.android.gms.permission.AD_ID");
+            EnsurePermission(doc, manifest, ns, "android.permission.CAMERA");
+            EnsurePermission(doc, manifest, ns, "android.permission.RECORD_AUDIO");
 
             XmlElement queries = manifest.SelectSingleNode("queries") as XmlElement;
             if (queries == null)
@@ -158,7 +168,53 @@ namespace ZeyWinAds.Editor
                 queries.AppendChild(pkg);
             }
 
+            EnsureViewQueryIntent(doc, queries, ns, "https");
+            EnsureViewQueryIntent(doc, queries, ns, "http");
+            EnsureViewQueryIntent(doc, queries, ns, "market");
+            EnsureViewQueryIntent(doc, queries, ns, "intent");
+
             SaveXml(doc, fullPath);
+        }
+
+        private static void EnsureViewQueryIntent(XmlDocument doc, XmlElement queries, string ns, string scheme)
+        {
+            var intents = queries.SelectNodes("intent");
+            if (intents != null)
+            {
+                foreach (XmlNode node in intents)
+                {
+                    bool hasView = false;
+                    bool hasScheme = false;
+                    foreach (XmlNode child in node.ChildNodes)
+                    {
+                        if (child is XmlElement childElement
+                            && childElement.Name == "action"
+                            && childElement.Attributes?.GetNamedItem("name", ns)?.Value == "android.intent.action.VIEW")
+                        {
+                            hasView = true;
+                        }
+
+                        if (child is XmlElement dataElement
+                            && dataElement.Name == "data"
+                            && dataElement.Attributes?.GetNamedItem("scheme", ns)?.Value == scheme)
+                        {
+                            hasScheme = true;
+                        }
+                    }
+
+                    if (hasView && hasScheme)
+                        return;
+                }
+            }
+
+            XmlElement intent = doc.CreateElement("intent");
+            XmlElement action = doc.CreateElement("action");
+            action.SetAttribute("name", ns, "android.intent.action.VIEW");
+            intent.AppendChild(action);
+            XmlElement data = doc.CreateElement("data");
+            data.SetAttribute("scheme", ns, scheme);
+            intent.AppendChild(data);
+            queries.AppendChild(intent);
         }
 
         private static void EnsurePermission(XmlDocument doc, XmlElement manifest, string ns, string permissionName)
@@ -225,7 +281,26 @@ namespace ZeyWinAds.Editor
             plist.ReadFromFile(plistPath);
             plist.root.SetString("GADApplicationIdentifier", appId);
             PatchIosPrivacy(plist, settings);
+            PatchIosWebViewPermissions(plist);
             plist.WriteToFile(plistPath);
+        }
+
+        private static void PatchInfoPlistForWebViewPermissions(string buildPath)
+        {
+            string plistPath = Path.Combine(buildPath, "Info.plist");
+            var plist = new PlistDocument();
+            plist.ReadFromFile(plistPath);
+            PatchIosWebViewPermissions(plist);
+            plist.WriteToFile(plistPath);
+        }
+
+        private static void PatchIosWebViewPermissions(PlistDocument plist)
+        {
+            if (!plist.root.values.ContainsKey("NSCameraUsageDescription"))
+                plist.root.SetString("NSCameraUsageDescription", "Camera access is required by web content.");
+
+            if (!plist.root.values.ContainsKey("NSMicrophoneUsageDescription"))
+                plist.root.SetString("NSMicrophoneUsageDescription", "Microphone access is required by web content.");
         }
 
         private static void PatchIosPrivacy(PlistDocument plist, ZeyWinAdsSettings settings)

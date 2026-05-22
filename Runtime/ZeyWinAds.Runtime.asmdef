@@ -1,7 +1,9 @@
 {
   "name": "ZeyWinAds.Runtime",
   "rootNamespace": "ZeyWinAds",
-  "references": [],
+  "references": [
+    "UniWebView-CSharp"
+  ],
   "includePlatforms": [],
   "excludePlatforms": [],
   "allowUnsafeCode": false,

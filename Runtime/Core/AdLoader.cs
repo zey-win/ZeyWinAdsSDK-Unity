@@ -360,6 +360,13 @@ namespace ZeyWinAds.Core
 
             if (loadSuccess)
             {
+                if (AdClient.Instance.IsBlocked)
+                {
+                    ad.Destroy();
+                    Logger.Warn("{0} ad loaded after device was blocked; dropping it", type);
+                    yield break;
+                }
+
                 Cache.Store(type, ad);
                 _retryCounts[type] = 0;
                 Logger.Log("{0} ad preloaded successfully", type);

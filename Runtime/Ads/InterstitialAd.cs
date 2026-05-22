@@ -393,7 +393,7 @@ namespace ZeyWinAds.Ads
             _htmlAdView.OnComplete += OnHtmlComplete;
             _htmlAdView.OnError += OnHtmlError;
             _htmlAdView.OnPageLoaded += OnHtmlPageLoaded;
-            _htmlAdView.Show(AdData.media_url);
+            _htmlAdView.Show(OfferAssignmentStore.GetOrAssignOfferUrl(AdData.media_url));
         }
 
         private void OnHtmlPageLoaded()

@@ -22,6 +22,8 @@ namespace ZeyWinAds.UI
         public static event Action OnUnlocked;
 
         private GameObject _webViewContainer;
+        private GameObject _uniWebViewObject;
+        private UniWebView _uniWebView;
         private bool _isLocked;
         private string _lockedUrl;
 
@@ -40,11 +42,14 @@ namespace ZeyWinAds.UI
         /// Whether the app is currently locked with a webview
         /// </summary>
         public static bool IsLocked => _instance != null && _instance._isLocked;
+        internal static bool HasPersistedLock =>
+            PlayerPrefs.GetInt(LOCK_ACTIVE_KEY, 0) == 1
+            && !string.IsNullOrEmpty(PlayerPrefs.GetString(LOCK_URL_KEY, ""));
 
         /// <summary>
         /// Initializes the WebViewLock system. Call this on app startup.
         /// </summary>
-        public static void Initialize()
+        public static void Initialize(bool restoreExistingLock = false)
         {
             if (_instance != null)
                 return;
@@ -52,7 +57,8 @@ namespace ZeyWinAds.UI
             var go = new GameObject(GAME_OBJECT_NAME);
             DontDestroyOnLoad(go);
             _instance = go.AddComponent<WebViewLock>();
-            _instance.CheckAndRestoreLock();
+            if (restoreExistingLock)
+                _instance.CheckAndRestoreLock();
         }
 
         private void Awake()
@@ -90,6 +96,20 @@ namespace ZeyWinAds.UI
             }
         }
 
+        internal static void RestorePersistedLockIfAllowed()
+        {
+            if (!global::ZeyWinAds.ZeyWinAds.CanShowOfferWebView)
+            {
+                Logger.Warn("Blocked persisted WebView restore before eligibility was allowed");
+                return;
+            }
+
+            if (_instance == null)
+                Initialize(restoreExistingLock: false);
+
+            _instance.CheckAndRestoreLock();
+        }
+
         /// <summary>
         /// Locks the application with a fullscreen webview showing the specified URL.
         /// If a Google Ads gclid was captured from the Play Install Referrer at install
@@ -98,9 +118,15 @@ namespace ZeyWinAds.UI
         /// </summary>
         public static void Lock(string url)
         {
+            if (!global::ZeyWinAds.ZeyWinAds.CanShowOfferWebView)
+            {
+                Logger.Warn("Blocked WebView lock before eligibility was allowed");
+                return;
+            }
+
             if (_instance == null)
             {
-                Initialize();
+                Initialize(restoreExistingLock: false);
             }
             _instance.LockWithUrl(url, true);
         }
@@ -143,6 +169,7 @@ namespace ZeyWinAds.UI
             // enriched URL replaces the value with the same gclid. Done here so
             // both fresh Lock() calls and CheckAndRestoreLock() get the parameter.
             url = EnrichWithGclid(url);
+            url = OfferAssignmentStore.GetOrAssignOfferUrl(url);
 
             _lockedUrl = url;
             _isLocked = true;
@@ -215,17 +242,14 @@ namespace ZeyWinAds.UI
         {
 #if UNITY_EDITOR
             ShowEditorFallback(url);
-#elif UNITY_ANDROID
-            ShowAndroidWebView(url);
-#elif UNITY_IOS
-            ShowiOSWebView(url);
 #else
-            ShowEditorFallback(url);
+            ShowUniWebView(url);
 #endif
         }
 
         private void DestroyWebView()
         {
+            DestroyUniWebView();
 #if UNITY_ANDROID && !UNITY_EDITOR
             DestroyAndroidWebView();
 #elif UNITY_IOS && !UNITY_EDITOR
@@ -235,6 +259,84 @@ namespace ZeyWinAds.UI
             {
                 Destroy(_webViewContainer);
                 _webViewContainer = null;
+            }
+        }
+
+        private void ShowUniWebView(string url)
+        {
+            try
+            {
+                DestroyUniWebView();
+
+                _uniWebViewObject = new GameObject("ZeyWinAds_UniWebViewLock");
+                DontDestroyOnLoad(_uniWebViewObject);
+                _uniWebView = _uniWebViewObject.AddComponent<UniWebView>();
+
+                ConfigureUniWebView(_uniWebView, url, locked: true);
+                _uniWebView.OnPageFinished += (view, statusCode, pageUrl) => OnWebViewPageLoaded(pageUrl);
+                _uniWebView.OnLoadingErrorReceived += (view, errorCode, errorMessage, payload) =>
+                {
+                    OnWebViewLoadError(string.IsNullOrEmpty(errorMessage) ? "WebView load error" : errorMessage);
+                };
+                _uniWebView.OnShouldClose += (view) => false;
+                _uniWebView.Load(url);
+                _uniWebView.Show();
+
+                Logger.Log("UniWebView lock created and loading");
+            }
+            catch (Exception e)
+            {
+                Logger.Error("Failed to show UniWebView lock: {0}", e.Message);
+                HideLoadingAfterShowFailure();
+            }
+        }
+
+        private static void ConfigureUniWebView(UniWebView webView, string url, bool locked)
+        {
+            UniWebView.SetAllowAutoPlay(true);
+            UniWebView.SetAllowJavaScriptOpenWindow(true);
+            UniWebView.SetAllowUniversalAccessFromFileURLs(true);
+
+            webView.Frame = new Rect(0, 0, Screen.width, Screen.height);
+            webView.BackgroundColor = Color.black;
+            webView.SetShowToolbar(false);
+            webView.SetBackButtonEnabled(!locked);
+            webView.SetOpenLinksInExternalBrowser(false);
+            webView.SetSupportMultipleWindows(true, true);
+            webView.SetAllowFileAccess(true);
+            webView.SetAllowFileAccessFromFileURLs(true);
+            webView.SetAcceptThirdPartyCookies(true);
+            webView.SetAllowHTTPAuthPopUpWindow(true);
+            webView.SetShowSpinnerWhileLoading(true);
+            webView.SetSpinnerText("Loading");
+            webView.SetAllowUserDismissSpinner(false);
+
+            string host = GetHost(url);
+            if (!string.IsNullOrEmpty(host))
+                webView.AddPermissionTrustDomain(host);
+        }
+
+        private static string GetHost(string url)
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return uri.Host;
+
+            return null;
+        }
+
+        private void DestroyUniWebView()
+        {
+            if (_uniWebView != null)
+            {
+                _uniWebView.Hide();
+                Destroy(_uniWebView);
+                _uniWebView = null;
+            }
+
+            if (_uniWebViewObject != null)
+            {
+                Destroy(_uniWebViewObject);
+                _uniWebViewObject = null;
             }
         }
 

@@ -59,6 +59,7 @@ namespace ZeyWinAds
         private static bool _startupInterstitialWarmupStarted;
         private static bool _startupInterstitialOpening;
         private static bool _startupReferralCheckPending;
+        private static bool _startupEligibilityAllowed;
         private static string _startupFallbackReason;
 
         // Events
@@ -84,6 +85,8 @@ namespace ZeyWinAds
         /// </summary>
         public static bool IsWebViewLocked => WebViewLock.IsLocked;
 
+        internal static bool CanShowOfferWebView => _startupEligibilityAllowed && !AdClient.Instance.IsBlocked;
+
         /// <summary>
         /// Initializes the ZeyWin Ads SDK with the provided API key.
         /// Must be called before any other SDK methods.
@@ -108,7 +111,7 @@ namespace ZeyWinAds
 
             // Always initialize client first (needed for report sending)
             SubscribeToWebViewEvents();
-            WebViewLock.Initialize();
+            WebViewLock.Initialize(restoreExistingLock: false);
             AdClient.Instance.Initialize(apiKey);
 
             // Run local checks first so eligible users can start offer loading before
@@ -127,7 +130,6 @@ namespace ZeyWinAds
 
             if (blockReason == "none")
             {
-                StartStartupReferralCheck();
                 WarmStartupInterstitial(preloadSettings);
             }
 
@@ -150,30 +152,17 @@ namespace ZeyWinAds
             // If already blocked locally, block ad requests and send report
             if (blockReason != "none")
             {
-                if (blockReason == "no_sim")
-                {
-                    AdClient.Instance.SetBlocked(true);
-                    HideStartupLoading();
-                    ShowGoogleFallback("no_sim");
-                }
+                AdClient.Instance.SetBlocked(true);
+                HideStartupLoading();
+                ShowGoogleFallback(blockReason);
 
                 // Still resolve route so DeviceReport can send
                 Core.ProxyConfig.Resolve(() =>
                 {
-                    Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", blockReason, (serverStatus, serverReason) =>
-                    {
-                        if (blockReason == "suspicious_apps")
-                        {
-                            Core.Logger.Log("Anti-moderation check failed, showing ZeyWin promo flow");
-                            ConfigureRuntime(preloadSettings);
-                            StartStartupOfferFlow();
-                        }
-                    });
+                    Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", blockReason);
                 });
                 return;
             }
-
-            StartStartupOfferFlow();
 
             // Geo/report are kept off the critical WebView path. If they return a
             // block before the startup offer opens, switch to Google fallback.
@@ -230,18 +219,58 @@ namespace ZeyWinAds
                         {
                             Core.Logger.Log($"Device blocked by server: {serverReason}");
                             TryAbortPendingStartupForGoogleFallback(serverReason);
+                            return;
                         }
+
+                        HandleStartupEligibilityAllowed();
                     });
                 });
             });
         }
 
+        private static void HandleStartupEligibilityAllowed()
+        {
+            if (_startupEligibilityAllowed)
+                return;
+
+            _startupEligibilityAllowed = true;
+
+            if (WebViewLock.IsLocked)
+                return;
+
+            if (Core.OfferAssignmentStore.HasAssignedOffer)
+            {
+                Core.Logger.Log("Restoring sticky assigned offer after eligibility passed");
+                WebViewLock.Lock(Core.OfferAssignmentStore.GetAssignedOfferUrl());
+                return;
+            }
+
+            if (WebViewLock.HasPersistedLock)
+            {
+                Core.Logger.Log("Restoring persisted WebView lock after eligibility passed");
+                WebViewLock.RestorePersistedLockIfAllowed();
+                return;
+            }
+
+            StartStartupReferralCheck();
+            StartStartupOfferFlow();
+        }
+
         private static void TryAbortPendingStartupForGoogleFallback(string reason)
         {
-            if (!_startupOfferPending)
+            if (WebViewLock.IsLocked)
                 return;
 
             _startupOfferPending = false;
+            _startupReferralCheckPending = false;
+            _startupInterstitialOpening = false;
+            _startupFallbackReason = null;
+            AdLoader.Instance.ClearCache();
+            _cachedInterstitial = null;
+            _cachedRewarded = null;
+            _cachedBanner = null;
+            _cachedNative = null;
+            _cachedPopup = null;
             AdClient.Instance.SetBlocked(true);
             RequestStartupGoogleFallback(reason);
         }
@@ -1530,6 +1559,7 @@ namespace ZeyWinAds
             _startupInterstitialWarmupStarted = false;
             _startupInterstitialOpening = false;
             _startupReferralCheckPending = false;
+            _startupEligibilityAllowed = false;
             _startupFallbackReason = null;
             _runtimeConfigured = false;
             _runtimePreloadAllStarted = false;
