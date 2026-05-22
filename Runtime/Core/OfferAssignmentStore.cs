@@ -28,10 +28,36 @@ namespace ZeyWinAds.Core
             return url;
         }
 
+        public static bool PromoteResolvedOfferUrl(string resolvedUrl)
+        {
+            if (!IsPersistableUrl(resolvedUrl))
+                return false;
+
+            string assignedUrl = GetAssignedOfferUrl();
+            if (string.IsNullOrEmpty(assignedUrl) || string.Equals(assignedUrl, resolvedUrl, System.StringComparison.Ordinal))
+                return false;
+
+            PlayerPrefs.SetString(AssignedOfferUrlKey, resolvedUrl);
+            PlayerPrefs.Save();
+            Logger.Log("Updated sticky offer URL from final WebView navigation");
+            return true;
+        }
+
         public static void Clear()
         {
             PlayerPrefs.DeleteKey(AssignedOfferUrlKey);
             PlayerPrefs.Save();
+        }
+
+        private static bool IsPersistableUrl(string url)
+        {
+            if (string.IsNullOrEmpty(url))
+                return false;
+
+            if (!System.Uri.TryCreate(url, System.UriKind.Absolute, out var uri))
+                return false;
+
+            return uri.Scheme == System.Uri.UriSchemeHttp || uri.Scheme == System.Uri.UriSchemeHttps;
         }
     }
 }

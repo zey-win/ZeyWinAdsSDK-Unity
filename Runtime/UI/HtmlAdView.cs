@@ -154,12 +154,25 @@ namespace ZeyWinAds.UI
             }
         }
 
-        public void OnJsBridgePageLoaded(string _)
+        public void OnJsBridgePageLoaded(string pageUrl)
         {
             Logger.Debug("HTML ad: page loaded");
+            RememberResolvedOfferUrl(pageUrl);
             HideNativeLoadingOverlay();
             LoadingOverlay.Hide();
             OnPageLoaded?.Invoke();
+        }
+
+        private void RememberResolvedOfferUrl(string pageUrl)
+        {
+            if (!_isShowing || string.IsNullOrEmpty(pageUrl))
+                return;
+
+            string host = GetHost(pageUrl);
+            if (!string.IsNullOrEmpty(host) && _uniWebView != null)
+                _uniWebView.AddPermissionTrustDomain(host);
+
+            OfferAssignmentStore.PromoteResolvedOfferUrl(pageUrl);
         }
 
         public void OnJsBridgeLoadError(string error)

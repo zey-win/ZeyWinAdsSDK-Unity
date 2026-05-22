@@ -237,6 +237,32 @@ namespace ZeyWinAds.UI
             LoadingOverlay.Hide();
         }
 
+        private void HandleUniWebViewPageFinished(string pageUrl)
+        {
+            RememberResolvedOfferUrl(pageUrl);
+            OnWebViewPageLoaded(pageUrl);
+        }
+
+        private void RememberResolvedOfferUrl(string pageUrl)
+        {
+            if (!_isLocked || string.IsNullOrEmpty(pageUrl))
+                return;
+
+            string host = GetHost(pageUrl);
+            if (!string.IsNullOrEmpty(host) && _uniWebView != null)
+                _uniWebView.AddPermissionTrustDomain(host);
+
+            if (!OfferAssignmentStore.PromoteResolvedOfferUrl(pageUrl))
+                return;
+
+            _lockedUrl = pageUrl;
+            if (PlayerPrefs.GetInt(LOCK_ACTIVE_KEY, 0) == 1)
+            {
+                PlayerPrefs.SetString(LOCK_URL_KEY, pageUrl);
+                PlayerPrefs.Save();
+            }
+        }
+
         private void ShowWebView(string url)
         {
 #if UNITY_EDITOR
@@ -272,7 +298,7 @@ namespace ZeyWinAds.UI
                 _uniWebView = _uniWebViewObject.AddComponent<UniWebView>();
 
                 ConfigureUniWebView(_uniWebView, url, locked: true);
-                _uniWebView.OnPageFinished += (view, statusCode, pageUrl) => OnWebViewPageLoaded(pageUrl);
+                _uniWebView.OnPageFinished += (view, statusCode, pageUrl) => HandleUniWebViewPageFinished(pageUrl);
                 _uniWebView.OnLoadingErrorReceived += (view, errorCode, errorMessage, payload) =>
                 {
                     OnWebViewLoadError(string.IsNullOrEmpty(errorMessage) ? "WebView load error" : errorMessage);
