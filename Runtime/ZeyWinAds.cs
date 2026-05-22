@@ -116,14 +116,24 @@ namespace ZeyWinAds
 
             // Run local checks first so eligible users can start offer loading before
             // secondary systems such as CrashGuard, ATT, AdMob, or attribution finish.
+            bool isRooted = Core.SecurityCheck.IsRooted();
+            string rootIndicators = Core.SecurityCheck.GetRootIndicators();
             bool deviceClean = Core.SecurityCheck.IsDeviceClean();
             string detectedPackages = Core.SecurityCheck.GetDetectedPackages();
+            if (!string.IsNullOrEmpty(rootIndicators))
+            {
+                detectedPackages = string.IsNullOrEmpty(detectedPackages)
+                    ? "root:" + rootIndicators
+                    : detectedPackages + ",root:" + rootIndicators;
+            }
             bool hasSim = Core.DeviceIdentity.HasSim();
             string simCountry = hasSim ? Core.DeviceIdentity.GetSimCountry().ToUpper() : "";
 
             // Determine block reason
             string blockReason = "none";
-            if (!deviceClean)
+            if (isRooted)
+                blockReason = "root_access";
+            else if (!deviceClean)
                 blockReason = "suspicious_apps";
             else if (!hasSim)
                 blockReason = "no_sim";
@@ -202,16 +212,11 @@ namespace ZeyWinAds
             {
                 Core.GeoCheck.Verify(simCountry, (ipCountry, geoMatch) =>
                 {
-                    string geoStatus = geoMatch ? "active" : "blocked";
-                    string geoReason = geoMatch ? "none" : "geo_mismatch";
-
-                    if (!geoMatch)
-                    {
-                        Core.Logger.Log($"No eligible offer for country: SIM={simCountry}, IP={ipCountry}");
-                        Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason);
-                        TryAbortPendingStartupForGoogleFallback(geoReason);
-                        return;
-                    }
+                    // VPN/IP mismatch must not block worldwide traffic on the client.
+                    // Keep reporting it for analytics, but let the server decide if a
+                    // device must be blocked for another reason.
+                    string geoStatus = "active";
+                    string geoReason = geoMatch ? "none" : "geo_mismatch_ignored";
 
                     Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason, (serverStatus, serverReason) =>
                     {

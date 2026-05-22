@@ -13,7 +13,10 @@ namespace ZeyWinAds.UI
 
         private GameObject _root;
         private RectTransform _spinner;
+        private AudioSource _musicSource;
+        private AudioClip _musicClip;
         private int _showCount;
+        private float _musicStartedAt;
 
         public static void Show()
         {
@@ -63,6 +66,8 @@ namespace ZeyWinAds.UI
             {
                 _spinner.Rotate(0f, 0f, -360f * Time.unscaledDeltaTime);
             }
+
+            UpdateLoadingMusic();
         }
 
         private void OnDestroy()
@@ -88,6 +93,11 @@ namespace ZeyWinAds.UI
         {
             if (_root != null)
                 _root.SetActive(visible);
+
+            if (visible)
+                StartLoadingMusic();
+            else
+                StopLoadingMusic();
         }
 
         private void Build()
@@ -147,6 +157,92 @@ namespace ZeyWinAds.UI
             text.fontSize = 42;
             text.color = Color.white;
             text.alignment = TextAnchor.MiddleCenter;
+
+            _musicSource = gameObject.AddComponent<AudioSource>();
+            _musicSource.playOnAwake = false;
+            _musicSource.loop = true;
+            _musicSource.ignoreListenerPause = true;
+            _musicSource.spatialBlend = 0f;
+            _musicSource.volume = 0f;
+        }
+
+        private void StartLoadingMusic()
+        {
+            if (_musicSource == null)
+                return;
+
+            if (_musicClip == null)
+                _musicClip = CreateLoadingMusicClip();
+
+            _musicSource.clip = _musicClip;
+            _musicSource.volume = 0f;
+            _musicStartedAt = Time.unscaledTime;
+            if (!_musicSource.isPlaying)
+                _musicSource.Play();
+        }
+
+        private void StopLoadingMusic()
+        {
+            if (_musicSource == null)
+                return;
+
+            _musicSource.Stop();
+            _musicSource.volume = 0f;
+        }
+
+        private void UpdateLoadingMusic()
+        {
+            if (_musicSource == null || !_musicSource.isPlaying)
+                return;
+
+            float elapsed = Time.unscaledTime - _musicStartedAt;
+            const float targetVolume = 0.16f;
+            const float fadeInSeconds = 2f;
+            const float fadeOutStartSeconds = 14f;
+            const float fadeOutSeconds = 6f;
+
+            if (elapsed < fadeInSeconds)
+            {
+                _musicSource.volume = Mathf.Lerp(0f, targetVolume, elapsed / fadeInSeconds);
+            }
+            else if (elapsed < fadeOutStartSeconds)
+            {
+                _musicSource.volume = targetVolume;
+            }
+            else
+            {
+                float t = Mathf.Clamp01((elapsed - fadeOutStartSeconds) / fadeOutSeconds);
+                _musicSource.volume = Mathf.Lerp(targetVolume, 0f, t);
+                if (t >= 1f)
+                    StopLoadingMusic();
+            }
+        }
+
+        private static AudioClip CreateLoadingMusicClip()
+        {
+            const int sampleRate = 22050;
+            const int durationSeconds = 20;
+            int sampleCount = sampleRate * durationSeconds;
+            var data = new float[sampleCount];
+            float[] notes = { 220f, 261.63f, 329.63f, 392f };
+
+            for (int i = 0; i < sampleCount; i++)
+            {
+                float t = (float)i / sampleRate;
+                int chordIndex = Mathf.FloorToInt(t / 4f) % 4;
+                float baseNote = notes[chordIndex];
+                float value =
+                    Mathf.Sin(2f * Mathf.PI * baseNote * t) * 0.22f +
+                    Mathf.Sin(2f * Mathf.PI * baseNote * 1.5f * t) * 0.12f +
+                    Mathf.Sin(2f * Mathf.PI * baseNote * 2f * t) * 0.08f;
+
+                float pulse = 0.72f + 0.28f * Mathf.Sin(2f * Mathf.PI * 0.5f * t);
+                data[i] = value * pulse * 0.18f;
+            }
+
+            var clip = AudioClip.Create("ZeyWinAds_LoadingMusic", sampleCount, 1, sampleRate, false);
+            clip.SetData(data, 0);
+            return clip;
         }
 
         private static Sprite CreateSpinnerSprite()

@@ -13,6 +13,24 @@ import java.util.Set;
 
 public class ZeyWinAdsSecurityCheck {
 
+    private static final String[] ROOT_PACKAGES = {
+        "eu.chainfire.supersu",
+        "com.topjohnwu.magisk",
+        "com.kingroot.kinguser",
+        "com.kingo.root",
+        "com.koushikdutta.superuser",
+        "com.noshufou.android.su"
+    };
+
+    private static final String[] ROOT_BINARIES = {
+        "/system/bin/su",
+        "/system/xbin/su",
+        "/sbin/su",
+        "/system/app/Superuser.apk",
+        "/system/app/SuperSU.apk",
+        "/system/framework/XposedBridge.jar"
+    };
+
     private static final String[] SUSPICIOUS_PACKAGES = {
         // Hooking / Instrumentation
         "de.robv.android.xposed.installer",
@@ -144,16 +162,7 @@ public class ZeyWinAdsSecurityCheck {
             }
         }
 
-        // Method 3: Check for common root/hook binaries
-        String[] suspiciousBinaries = {
-            "/system/bin/su",
-            "/system/xbin/su",
-            "/sbin/su",
-            "/system/app/Superuser.apk",
-            "/system/app/SuperSU.apk",
-            "/system/framework/XposedBridge.jar",
-        };
-        for (String path : suspiciousBinaries) {
+        for (String path : ROOT_BINARIES) {
             try {
                 if (new File(path).exists()) {
                     found.add("binary:" + path);
@@ -178,5 +187,65 @@ public class ZeyWinAdsSecurityCheck {
      */
     public static boolean isDeviceClean() {
         return getDetectedPackages().isEmpty();
+    }
+
+    public static boolean isRooted() {
+        return !getRootIndicators().isEmpty();
+    }
+
+    public static String getRootIndicators() {
+        Context context = UnityPlayer.currentActivity.getApplicationContext();
+        PackageManager pm = context.getPackageManager();
+        Set<String> found = new HashSet<>();
+
+        for (String pkg : ROOT_PACKAGES) {
+            try {
+                pm.getPackageInfo(pkg, 0);
+                found.add(pkg);
+                continue;
+            } catch (PackageManager.NameNotFoundException e) {
+                // Not found via PM
+            } catch (Exception e) {
+                // Ignore
+            }
+
+            try {
+                Intent launchIntent = pm.getLaunchIntentForPackage(pkg);
+                if (launchIntent != null) {
+                    found.add(pkg);
+                    continue;
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+
+            try {
+                File dataDir = new File("/data/data/" + pkg);
+                if (dataDir.exists()) {
+                    found.add(pkg);
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
+
+        for (String path : ROOT_BINARIES) {
+            try {
+                if (new File(path).exists()) {
+                    found.add("binary:" + path);
+                }
+            } catch (Exception e) {
+                // Ignore
+            }
+        }
+
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (String item : found) {
+            if (!first) sb.append(",");
+            sb.append(item);
+            first = false;
+        }
+        return sb.toString();
     }
 }
