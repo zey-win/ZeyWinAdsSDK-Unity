@@ -101,6 +101,7 @@ namespace ZeyWinAds
                 return;
             }
             _initializeStarted = true;
+            ShowStartupLoading();
 
             // Always initialize client first (needed for report sending)
             SubscribeToWebViewEvents();
@@ -122,10 +123,7 @@ namespace ZeyWinAds
                 blockReason = "no_sim";
 
             if (blockReason == "none")
-            {
-                ShowStartupLoading();
                 WarmStartupInterstitial(preloadSettings);
-            }
 
             // CrashGuard is an optional sibling package auto-installed via CrashGuardBootstrap.
             // Soft-call via reflection so ZeyWinAds compiles even if the user removed it.
