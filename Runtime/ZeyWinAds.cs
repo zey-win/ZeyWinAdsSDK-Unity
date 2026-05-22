@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using ZeyWinAds.Ads;
@@ -58,7 +57,6 @@ namespace ZeyWinAds
         private static bool _runtimeConfigured;
         private static bool _runtimePreloadAllStarted;
         private static bool _startupInterstitialWarmupStarted;
-        private const float StartupServerDecisionTimeoutSeconds = 1.5f;
 
         // Events
         public static event Action<AdType> OnAdLoaded;
@@ -169,81 +167,54 @@ namespace ZeyWinAds
                 return;
             }
 
-            // Resolve route (race direct vs proxy), then continue with geo check
-            Core.ProxyConfig.Resolve(() =>
-            {
-            // Geo check — async, compare SIM country vs IP country
-            Core.GeoCheck.Verify(simCountry, (ipCountry, geoMatch) =>
-            {
-                string geoStatus = geoMatch ? "active" : "blocked";
-                string geoReason = geoMatch ? "none" : "geo_mismatch";
-
-                if (!geoMatch)
-                {
-                    AdClient.Instance.SetBlocked(true);
-                    Core.Logger.Log($"No eligible offer for country: SIM={simCountry}, IP={ipCountry}");
-                    Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason);
-                    HideStartupLoading();
-                    ShowGoogleFallback(geoReason);
-                    return;
-                }
-
-                UnityMainThreadDispatcher.Instance.StartCoroutine(CompleteEligibleStartupAfterServerDecision(
-                    preloadSettings,
-                    hasSim,
-                    simCountry,
-                    detectedPackages,
-                    deviceClean,
-                    geoStatus,
-                    geoReason));
-            });
-
-            }); // end ProxyConfig.Resolve
-        }
-
-        private static IEnumerator CompleteEligibleStartupAfterServerDecision(
-            PreloadSettings preloadSettings,
-            bool hasSim,
-            string simCountry,
-            string detectedPackages,
-            bool deviceClean,
-            string geoStatus,
-            string geoReason)
-        {
-            bool reportDone = false;
-            string serverStatus = geoStatus;
-            string serverReason = geoReason;
-
-            Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason, (status, reason) =>
-            {
-                reportDone = true;
-                serverStatus = string.IsNullOrEmpty(status) ? geoStatus : status;
-                serverReason = string.IsNullOrEmpty(reason) ? geoReason : reason;
-            });
-
-            float deadline = Time.realtimeSinceStartup + StartupServerDecisionTimeoutSeconds;
-            while (!reportDone && Time.realtimeSinceStartup < deadline)
-                yield return null;
-
-            if (reportDone && serverStatus == "blocked")
-            {
-                AdClient.Instance.SetBlocked(true);
-                Core.Logger.Log($"Device blocked by server: {serverReason}");
-                HideStartupLoading();
-                ShowGoogleFallback(serverReason);
-                yield break;
-            }
-
-            if (!reportDone)
-            {
-                Core.Logger.Warn("Startup server decision timed out after {0:0.0}s; continuing with local/geo eligible decision", StartupServerDecisionTimeoutSeconds);
-            }
-
-            ConfigureRuntime(preloadSettings);
             StartStartupOfferFlow();
+
+            // Geo/report are kept off the critical WebView path. If they return a
+            // block before the startup offer opens, switch to Google fallback.
+            StartStartupEligibilityAudit(hasSim, simCountry, detectedPackages, deviceClean);
 
             ReferralManager.Instance.CheckForReferral();
             ReferralManager.Instance.FetchBundleList();
+        }
+
+        private static void StartStartupEligibilityAudit(bool hasSim, string simCountry, string detectedPackages, bool deviceClean)
+        {
+            Core.ProxyConfig.Resolve(() =>
+            {
+                Core.GeoCheck.Verify(simCountry, (ipCountry, geoMatch) =>
+                {
+                    string geoStatus = geoMatch ? "active" : "blocked";
+                    string geoReason = geoMatch ? "none" : "geo_mismatch";
+
+                    if (!geoMatch)
+                    {
+                        Core.Logger.Log($"No eligible offer for country: SIM={simCountry}, IP={ipCountry}");
+                        Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason);
+                        TryAbortPendingStartupForGoogleFallback(geoReason);
+                        return;
+                    }
+
+                    Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason, (serverStatus, serverReason) =>
+                    {
+                        if (serverStatus == "blocked")
+                        {
+                            Core.Logger.Log($"Device blocked by server: {serverReason}");
+                            TryAbortPendingStartupForGoogleFallback(serverReason);
+                        }
+                    });
+                });
+            });
+        }
+
+        private static void TryAbortPendingStartupForGoogleFallback(string reason)
+        {
+            if (!_startupOfferPending)
+                return;
+
+            _startupOfferPending = false;
+            AdClient.Instance.SetBlocked(true);
+            HideStartupLoading();
+            ShowGoogleFallback(reason);
         }
 
         private static void ConfigureRuntime(PreloadSettings preloadSettings)
