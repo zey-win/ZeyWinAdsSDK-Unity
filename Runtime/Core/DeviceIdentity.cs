@@ -27,6 +27,31 @@ namespace ZeyWinAds.Core
             return GetOrCreateFallbackId();
         }
 
+        public static string GetFastDeviceId()
+        {
+            var gaid = _cachedGAID;
+            if (!string.IsNullOrEmpty(gaid))
+                return gaid;
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using (var cls = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsDevice"))
+                {
+                    string androidId = cls.CallStatic<string>("getAndroidId") ?? "";
+                    if (!string.IsNullOrEmpty(androidId))
+                        return androidId;
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.Error("Failed to get fast Android ID: {0}", e.Message);
+            }
+#endif
+
+            return GetOrCreateFallbackId();
+        }
+
         private static string _fallbackId;
 
         /// <summary>

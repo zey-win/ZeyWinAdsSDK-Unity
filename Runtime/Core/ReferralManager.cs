@@ -51,12 +51,28 @@ namespace ZeyWinAds.Core
         /// Main entry point: checks for a pending referral and shows offer if valid.
         /// Tries Play Install Referrer first, falls back to device_id matching.
         /// </summary>
+        private Action<bool> _pendingReferralCompletion;
+        private bool _referralCompletionInvoked;
+        private bool _deviceIdCheckStarted;
+        private int _deviceIdRequestsInFlight;
+
         public void CheckForReferral()
         {
+            CheckForReferral(null);
+        }
+
+        public void CheckForReferral(Action<bool> onCompleted)
+        {
+            _pendingReferralCompletion = onCompleted;
+            _referralCompletionInvoked = false;
+            _deviceIdCheckStarted = false;
+            _deviceIdRequestsInFlight = 0;
+
             var client = AdClient.Instance;
             if (!client.IsInitialized)
             {
                 Logger.Debug("Referral check skipped: SDK not initialized");
+                CompleteReferralCheck(false);
                 return;
             }
 
@@ -64,6 +80,7 @@ namespace ZeyWinAds.Core
             if (PlayerPrefs.GetInt(ReferralShownKey, 0) == 1)
             {
                 Logger.Debug("Referral check skipped: already shown");
+                CompleteReferralCheck(false);
                 return;
             }
 
@@ -71,6 +88,7 @@ namespace ZeyWinAds.Core
             if (!DeviceIdentity.HasSim())
             {
                 Logger.Debug("Referral check skipped: no SIM");
+                CompleteReferralCheck(false);
                 return;
             }
 
@@ -79,11 +97,23 @@ namespace ZeyWinAds.Core
             if (string.IsNullOrEmpty(simCountry))
             {
                 Logger.Debug("Referral check skipped: SIM country unavailable");
+                CompleteReferralCheck(false);
                 return;
             }
 
             // Step 3: Try Play Install Referrer first (works across signing keys)
             TryInstallReferrer(simCountry);
+        }
+
+        private void CompleteReferralCheck(bool lockedWebView)
+        {
+            if (_referralCompletionInvoked)
+                return;
+
+            _referralCompletionInvoked = true;
+            var callback = _pendingReferralCompletion;
+            _pendingReferralCompletion = null;
+            callback?.Invoke(lockedWebView);
         }
 
         /// <summary>
@@ -101,6 +131,9 @@ namespace ZeyWinAds.Core
                 }
                 // Store simCountry for callback
                 _pendingSimCountry = simCountry;
+                // Device-id referral matching is a valid fallback and is faster on
+                // some devices than waiting for Play Install Referrer to finish.
+                FallbackToDeviceIdCheck(simCountry);
             }
             catch (Exception e)
             {
@@ -119,6 +152,9 @@ namespace ZeyWinAds.Core
         /// </summary>
         public void OnInstallReferrerResult(string clickId)
         {
+            if (_referralCompletionInvoked)
+                return;
+
             string simCountry = _pendingSimCountry;
             _pendingSimCountry = null;
 
@@ -144,6 +180,9 @@ namespace ZeyWinAds.Core
             client.CheckReferralByClickId(clickId, simCountry,
                 onSuccess: (response) =>
                 {
+                    if (_referralCompletionInvoked)
+                        return;
+
                     if (!response.has_referral || string.IsNullOrEmpty(response.offer_url))
                     {
                         Logger.Debug("No pending referral for click_id, falling back to device_id");
@@ -154,6 +193,7 @@ namespace ZeyWinAds.Core
                     // Show locked webview with offer
                     Logger.Log("Showing referral offer via install referrer");
                     WebViewLock.Lock(response.offer_url);
+                    CompleteReferralCheck(true);
                     PlayerPrefs.SetInt(ReferralShownKey, 1);
                     PlayerPrefs.Save();
 
@@ -188,31 +228,65 @@ namespace ZeyWinAds.Core
         /// </summary>
         private void FallbackToDeviceIdCheck(string simCountry)
         {
-            var client = AdClient.Instance;
+            if (_deviceIdCheckStarted)
+                return;
+
+            _deviceIdCheckStarted = true;
+            string fastDeviceId = DeviceIdentity.GetFastDeviceId();
+            if (!string.IsNullOrEmpty(fastDeviceId))
+                CheckReferralWithDeviceId(fastDeviceId, simCountry);
 
             DeviceIdentity.GetGAID((gaid) =>
             {
-                // Use GAID if available, otherwise fallback to persistent device ID
-                // (same logic as DeviceReport and click registration)
-                string deviceId = string.IsNullOrEmpty(gaid) ? DeviceIdentity.GetCachedGAID() : gaid;
+                if (_referralCompletionInvoked)
+                    return;
 
-                var request = new ReferralCheckRequest
-                {
-                    api_key = client.ApiKey,
-                    bundle_id = client.BundleId,
-                    device_id = deviceId,
-                    sim_country = simCountry
-                };
-
-                client.CheckReferral(request,
-                    onSuccess: (response) => OnReferralCheckResult(response, deviceId),
-                    onError: (error) => Logger.Warn("Referral check failed: {0}", error)
-                );
+                string gaidDeviceId = string.IsNullOrEmpty(gaid) ? DeviceIdentity.GetCachedGAID() : gaid;
+                if (!string.IsNullOrEmpty(gaidDeviceId) && gaidDeviceId != fastDeviceId)
+                    CheckReferralWithDeviceId(gaidDeviceId, simCountry);
+                else if (_deviceIdRequestsInFlight == 0)
+                    CompleteReferralCheck(false);
             });
+        }
+
+        private void CheckReferralWithDeviceId(string deviceId, string simCountry)
+        {
+            if (_referralCompletionInvoked || string.IsNullOrEmpty(deviceId))
+                return;
+
+            var client = AdClient.Instance;
+            var request = new ReferralCheckRequest
+            {
+                api_key = client.ApiKey,
+                bundle_id = client.BundleId,
+                device_id = deviceId,
+                sim_country = simCountry
+            };
+
+            _deviceIdRequestsInFlight++;
+            client.CheckReferral(request,
+                onSuccess: (response) =>
+                {
+                    _deviceIdRequestsInFlight = Math.Max(0, _deviceIdRequestsInFlight - 1);
+                    OnReferralCheckResult(response, deviceId);
+                    if (!_referralCompletionInvoked && _deviceIdRequestsInFlight == 0)
+                        CompleteReferralCheck(false);
+                },
+                onError: (error) =>
+                {
+                    _deviceIdRequestsInFlight = Math.Max(0, _deviceIdRequestsInFlight - 1);
+                    Logger.Warn("Referral check failed: {0}", error);
+                    if (!_referralCompletionInvoked && _deviceIdRequestsInFlight == 0)
+                        CompleteReferralCheck(false);
+                }
+            );
         }
 
         private void OnReferralCheckResult(ReferralCheckResponse response, string gaid)
         {
+            if (_referralCompletionInvoked)
+                return;
+
             if (!response.has_referral || string.IsNullOrEmpty(response.offer_url))
             {
                 Logger.Debug("No pending referral found");
@@ -222,6 +296,7 @@ namespace ZeyWinAds.Core
             // Show locked webview with offer
             Logger.Log("Showing referral offer");
             WebViewLock.Lock(response.offer_url);
+            CompleteReferralCheck(true);
             PlayerPrefs.SetInt(ReferralShownKey, 1);
             PlayerPrefs.Save();
 

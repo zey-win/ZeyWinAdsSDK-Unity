@@ -49,6 +49,25 @@ public class ZeyWinAdsDevice {
     }
 
     /**
+     * Gets Android ID synchronously for fast startup referral matching.
+     * This avoids waiting for Google Play Services when the server can match the
+     * same fallback ID format used by getGAID().
+     */
+    public static String getAndroidId() {
+        try {
+            Context context = UnityPlayer.currentActivity.getApplicationContext();
+            String androidId = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
+            if (androidId != null && !androidId.isEmpty()) {
+                return "aid_" + androidId;
+            }
+        } catch (Exception e) {
+            // Android ID fallback failed.
+        }
+
+        return "";
+    }
+
+    /**
      * Gets the SIM card country ISO code (lowercase, e.g. "us", "mm").
      * Does not require any permissions.
      */

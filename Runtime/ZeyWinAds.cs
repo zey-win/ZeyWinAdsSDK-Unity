@@ -58,6 +58,8 @@ namespace ZeyWinAds
         private static bool _runtimePreloadAllStarted;
         private static bool _startupInterstitialWarmupStarted;
         private static bool _startupInterstitialOpening;
+        private static bool _startupReferralCheckPending;
+        private static string _startupFallbackReason;
 
         // Events
         public static event Action<AdType> OnAdLoaded;
@@ -124,7 +126,10 @@ namespace ZeyWinAds
                 blockReason = "no_sim";
 
             if (blockReason == "none")
+            {
+                StartStartupReferralCheck();
                 WarmStartupInterstitial(preloadSettings);
+            }
 
             // CrashGuard is an optional sibling package auto-installed via CrashGuardBootstrap.
             // Soft-call via reflection so ZeyWinAds compiles even if the user removed it.
@@ -174,8 +179,32 @@ namespace ZeyWinAds
             // block before the startup offer opens, switch to Google fallback.
             StartStartupEligibilityAudit(hasSim, simCountry, detectedPackages, deviceClean);
 
-            ReferralManager.Instance.CheckForReferral();
             ReferralManager.Instance.FetchBundleList();
+        }
+
+        private static void StartStartupReferralCheck()
+        {
+            if (_startupReferralCheckPending || WebViewLock.IsLocked)
+                return;
+
+            _startupReferralCheckPending = true;
+            ReferralManager.Instance.CheckForReferral(HandleStartupReferralCheckCompleted);
+        }
+
+        private static void HandleStartupReferralCheckCompleted(bool lockedWebView)
+        {
+            _startupReferralCheckPending = false;
+
+            if (lockedWebView || WebViewLock.IsLocked)
+                return;
+
+            if (!string.IsNullOrEmpty(_startupFallbackReason) && !_startupOfferPending && !_startupInterstitialOpening)
+            {
+                string reason = _startupFallbackReason;
+                _startupFallbackReason = null;
+                HideStartupLoading();
+                ShowGoogleFallback(reason);
+            }
         }
 
         private static void StartStartupEligibilityAudit(bool hasSim, string simCountry, string detectedPackages, bool deviceClean)
@@ -214,8 +243,7 @@ namespace ZeyWinAds
 
             _startupOfferPending = false;
             AdClient.Instance.SetBlocked(true);
-            HideStartupLoading();
-            ShowGoogleFallback(reason);
+            RequestStartupGoogleFallback(reason);
         }
 
         private static void ConfigureRuntime(PreloadSettings preloadSettings)
@@ -296,6 +324,18 @@ namespace ZeyWinAds
             LoadingOverlay.Hide();
         }
 
+        private static void RequestStartupGoogleFallback(string reason)
+        {
+            if (_startupReferralCheckPending)
+            {
+                _startupFallbackReason = reason;
+                return;
+            }
+
+            HideStartupLoading();
+            ShowGoogleFallback(reason);
+        }
+
         private static void ShowGoogleFallback(string reason)
         {
             Core.Logger.Log("Showing Google fallback: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
@@ -367,6 +407,15 @@ namespace ZeyWinAds
 
         private static void HandleWebViewLocked(string url)
         {
+            if (_startupLoadingVisible)
+            {
+                _startupOfferPending = false;
+                _startupReferralCheckPending = false;
+                _startupInterstitialOpening = false;
+                _startupFallbackReason = null;
+                HideStartupLoading();
+            }
+
             OnWebViewLocked?.Invoke(url);
         }
 
@@ -1267,8 +1316,7 @@ namespace ZeyWinAds
             if (_startupOfferPending && adType == AdType.Interstitial)
             {
                 _startupOfferPending = false;
-                HideStartupLoading();
-                ShowGoogleFallback(error);
+                RequestStartupGoogleFallback(error);
             }
         }
 
@@ -1481,6 +1529,8 @@ namespace ZeyWinAds
             _startupLoadingVisible = false;
             _startupInterstitialWarmupStarted = false;
             _startupInterstitialOpening = false;
+            _startupReferralCheckPending = false;
+            _startupFallbackReason = null;
             _runtimeConfigured = false;
             _runtimePreloadAllStarted = false;
             _initializeStarted = false;
