@@ -165,11 +165,10 @@ namespace ZeyWinAds.UI
                 return;
             }
 
-            // Enrich with gclid (sub_id_4). Idempotent — re-enriching an already
-            // enriched URL replaces the value with the same gclid. Done here so
-            // both fresh Lock() calls and CheckAndRestoreLock() get the parameter.
-            url = EnrichWithGclid(url);
+            // Keep the first assigned offer stable for this device, then enrich
+            // the chosen URL for the current WebView load.
             url = OfferAssignmentStore.GetOrAssignOfferUrl(url);
+            url = EnrichWithGclid(url);
 
             _lockedUrl = url;
             _isLocked = true;
