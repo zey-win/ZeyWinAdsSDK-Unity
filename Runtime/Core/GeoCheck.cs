@@ -49,7 +49,7 @@ namespace ZeyWinAds.Core
             using (UnityWebRequest request = UnityWebRequest.Get(ProxyConfig.WrapUrl(url)))
             {
                 ProxyConfig.AddAuthHeader(request);
-                request.timeout = 5;
+                request.timeout = 2;
                 yield return request.SendWebRequest();
 
                 if (request.result == UnityWebRequest.Result.Success)

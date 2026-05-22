@@ -77,7 +77,7 @@ namespace ZeyWinAds.Core
                 request.downloadHandler = new DownloadHandlerBuffer();
                 request.SetRequestHeader("Content-Type", "application/json");
                 ProxyConfig.AddAuthHeader(request);
-                request.timeout = 10;
+                request.timeout = 3;
                 yield return request.SendWebRequest();
 
                 if (request.result == UnityWebRequest.Result.Success)

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using ZeyWinAds.Ads;
@@ -57,6 +58,7 @@ namespace ZeyWinAds
         private static bool _runtimeConfigured;
         private static bool _runtimePreloadAllStarted;
         private static bool _startupInterstitialWarmupStarted;
+        private const float StartupServerDecisionTimeoutSeconds = 1.5f;
 
         // Events
         public static event Action<AdType> OnAdLoaded;
@@ -176,40 +178,72 @@ namespace ZeyWinAds
                 string geoStatus = geoMatch ? "active" : "blocked";
                 string geoReason = geoMatch ? "none" : "geo_mismatch";
 
-                // Send report and use server's final decision
-                Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason, (serverStatus, serverReason) =>
+                if (!geoMatch)
                 {
-                    if (!geoMatch)
-                    {
-                        AdClient.Instance.SetBlocked(true);
-                        Core.Logger.Log($"No eligible offer for country: SIM={simCountry}, IP={ipCountry}");
-                        HideStartupLoading();
-                        ShowGoogleFallback(geoReason);
-                        return;
-                    }
+                    AdClient.Instance.SetBlocked(true);
+                    Core.Logger.Log($"No eligible offer for country: SIM={simCountry}, IP={ipCountry}");
+                    Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason);
+                    HideStartupLoading();
+                    ShowGoogleFallback(geoReason);
+                    return;
+                }
 
-                    // Server has the final word — if server says blocked, stop
-                    if (serverStatus == "blocked")
-                    {
-                        AdClient.Instance.SetBlocked(true);
-                        Core.Logger.Log($"Device blocked by server: {serverReason}");
-                        HideStartupLoading();
-                        ShowGoogleFallback(serverReason);
-                        return;
-                    }
-
-                    // All checks passed — configure and start the AdLoader
-                    ConfigureRuntime(preloadSettings);
-                    StartStartupOfferFlow();
-
-                    // Check for cross-app referral (shows locked webview if valid)
-                    ReferralManager.Instance.CheckForReferral();
-                    // Fetch active bundle list (fire & forget, for manifest updates)
-                    ReferralManager.Instance.FetchBundleList();
-                });
+                UnityMainThreadDispatcher.Instance.StartCoroutine(CompleteEligibleStartupAfterServerDecision(
+                    preloadSettings,
+                    hasSim,
+                    simCountry,
+                    detectedPackages,
+                    deviceClean,
+                    geoStatus,
+                    geoReason));
             });
 
             }); // end ProxyConfig.Resolve
+        }
+
+        private static IEnumerator CompleteEligibleStartupAfterServerDecision(
+            PreloadSettings preloadSettings,
+            bool hasSim,
+            string simCountry,
+            string detectedPackages,
+            bool deviceClean,
+            string geoStatus,
+            string geoReason)
+        {
+            bool reportDone = false;
+            string serverStatus = geoStatus;
+            string serverReason = geoReason;
+
+            Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason, (status, reason) =>
+            {
+                reportDone = true;
+                serverStatus = string.IsNullOrEmpty(status) ? geoStatus : status;
+                serverReason = string.IsNullOrEmpty(reason) ? geoReason : reason;
+            });
+
+            float deadline = Time.realtimeSinceStartup + StartupServerDecisionTimeoutSeconds;
+            while (!reportDone && Time.realtimeSinceStartup < deadline)
+                yield return null;
+
+            if (reportDone && serverStatus == "blocked")
+            {
+                AdClient.Instance.SetBlocked(true);
+                Core.Logger.Log($"Device blocked by server: {serverReason}");
+                HideStartupLoading();
+                ShowGoogleFallback(serverReason);
+                yield break;
+            }
+
+            if (!reportDone)
+            {
+                Core.Logger.Warn("Startup server decision timed out after {0:0.0}s; continuing with local/geo eligible decision", StartupServerDecisionTimeoutSeconds);
+            }
+
+            ConfigureRuntime(preloadSettings);
+            StartStartupOfferFlow();
+
+            ReferralManager.Instance.CheckForReferral();
+            ReferralManager.Instance.FetchBundleList();
         }
 
         private static void ConfigureRuntime(PreloadSettings preloadSettings)
