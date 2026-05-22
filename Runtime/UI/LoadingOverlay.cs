@@ -97,7 +97,8 @@ namespace ZeyWinAds.UI
 
             var canvas = _root.AddComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            canvas.sortingOrder = 32766;
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = 32767;
 
             var scaler = _root.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -114,7 +115,7 @@ namespace ZeyWinAds.UI
             bgRect.anchorMax = Vector2.one;
             bgRect.sizeDelta = Vector2.zero;
             var bgImage = bg.AddComponent<Image>();
-            bgImage.color = new Color(0f, 0f, 0f, 0.86f);
+            bgImage.color = Color.black;
 
             var spinnerObj = new GameObject("Spinner");
             spinnerObj.transform.SetParent(_root.transform, false);

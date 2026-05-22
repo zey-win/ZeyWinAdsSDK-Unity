@@ -336,7 +336,7 @@ namespace ZeyWinAds.UI
         private AndroidJavaObject CreateAndroidLoadingOverlay(AndroidJavaObject activity)
         {
             var overlay = new AndroidJavaObject("android.widget.FrameLayout", activity);
-            overlay.Call("setBackgroundColor", AndroidColor(0xCC000000));
+            overlay.Call("setBackgroundColor", AndroidColor(0xFF000000));
             overlay.Call("setClickable", true);
 
             var box = new AndroidJavaObject("android.widget.LinearLayout", activity);
