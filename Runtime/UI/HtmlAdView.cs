@@ -175,6 +175,14 @@ namespace ZeyWinAds.UI
             OfferAssignmentStore.PromoteResolvedOfferUrl(pageUrl);
         }
 
+        private static string GetHost(string url)
+        {
+            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return uri.Host;
+
+            return null;
+        }
+
         public void OnJsBridgeLoadError(string error)
         {
             Logger.Warn("HTML ad: page load error: {0}", error);
@@ -263,14 +271,6 @@ namespace ZeyWinAds.UI
             string host = GetHost(url);
             if (!string.IsNullOrEmpty(host))
                 webView.AddPermissionTrustDomain(host);
-        }
-
-        private static string GetHost(string url)
-        {
-            if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
-                return uri.Host;
-
-            return null;
         }
 
         private static string GetBridgeJavascript()
