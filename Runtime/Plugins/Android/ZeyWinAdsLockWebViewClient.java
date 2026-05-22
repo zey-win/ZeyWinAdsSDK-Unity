@@ -1,5 +1,7 @@
 package com.zeywinads.unity;
 
+import android.webkit.WebResourceError;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 import com.unity3d.player.UnityPlayer;
@@ -23,6 +25,11 @@ public class ZeyWinAdsLockWebViewClient extends WebViewClient {
     }
 
     @Override
+    public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+        return false;
+    }
+
+    @Override
     public void onPageFinished(WebView view, String url) {
         super.onPageFinished(view, url);
         if (!initialLoadDone) {
@@ -40,5 +47,20 @@ public class ZeyWinAdsLockWebViewClient extends WebViewClient {
             String message = description != null ? description : "WebView load error";
             UnityPlayer.UnitySendMessage(gameObjectName, "OnWebViewLoadError", message);
         }
+    }
+
+    @Override
+    public void onReceivedError(WebView view, WebResourceRequest request, WebResourceError error) {
+        super.onReceivedError(view, request, error);
+        if (initialLoadDone || request == null || !request.isForMainFrame()) {
+            return;
+        }
+
+        initialLoadDone = true;
+        String message = "WebView load error";
+        if (error != null && error.getDescription() != null) {
+            message = error.getDescription().toString();
+        }
+        UnityPlayer.UnitySendMessage(gameObjectName, "OnWebViewLoadError", message);
     }
 }

@@ -260,6 +260,7 @@ namespace ZeyWinAds.UI
                             new AndroidJavaClass("android.R$id").GetStatic<int>("content"));
 
                         contentView.Call("addView", _nativeContainer, layoutParams);
+                        PromoteAndroidLoadingOverlay();
 
                         // Load URL
                         _webView.Call("loadUrl", url);
@@ -359,6 +360,26 @@ namespace ZeyWinAds.UI
             overlay.Call("addView", box, boxParams);
 
             return overlay;
+        }
+
+        private void PromoteAndroidLoadingOverlay()
+        {
+            if (_nativeLoadingOverlay == null)
+                return;
+
+            try
+            {
+                _nativeLoadingOverlay.Call("setVisibility", 0);
+                _nativeLoadingOverlay.Call("bringToFront");
+                _nativeLoadingOverlay.Call("setElevation", 100000f);
+                _nativeLoadingOverlay.Call("setTranslationZ", 100000f);
+                _nativeLoadingOverlay.Call("invalidate");
+                _nativeContainer?.Call("invalidate");
+            }
+            catch (Exception e)
+            {
+                Logger.Warn("Failed to promote Android HTML loading overlay: {0}", e.Message);
+            }
         }
 
         private void HideNativeLoadingOverlay()

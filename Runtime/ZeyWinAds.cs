@@ -51,6 +51,7 @@ namespace ZeyWinAds
         private static Action<string> _popupRepeatOnButton2;
         private static bool _webViewEventsSubscribed;
         private static bool _startupOfferPending;
+        private static bool _startupLoadingVisible;
         private static Coroutine _googleFallbackCoroutine;
         private static bool _initializeStarted;
         private static bool _runtimeConfigured;
@@ -121,7 +122,10 @@ namespace ZeyWinAds
                 blockReason = "no_sim";
 
             if (blockReason == "none")
+            {
+                ShowStartupLoading();
                 WarmStartupInterstitial(preloadSettings);
+            }
 
             // CrashGuard is an optional sibling package auto-installed via CrashGuardBootstrap.
             // Soft-call via reflection so ZeyWinAds compiles even if the user removed it.
@@ -145,6 +149,7 @@ namespace ZeyWinAds
                 if (blockReason == "no_sim")
                 {
                     AdClient.Instance.SetBlocked(true);
+                    HideStartupLoading();
                     ShowGoogleFallback("no_sim");
                 }
 
@@ -180,6 +185,7 @@ namespace ZeyWinAds
                     {
                         AdClient.Instance.SetBlocked(true);
                         Core.Logger.Log($"No eligible offer for country: SIM={simCountry}, IP={ipCountry}");
+                        HideStartupLoading();
                         ShowGoogleFallback(geoReason);
                         return;
                     }
@@ -189,6 +195,7 @@ namespace ZeyWinAds
                     {
                         AdClient.Instance.SetBlocked(true);
                         Core.Logger.Log($"Device blocked by server: {serverReason}");
+                        HideStartupLoading();
                         ShowGoogleFallback(serverReason);
                         return;
                     }
@@ -250,17 +257,39 @@ namespace ZeyWinAds
         private static void StartStartupOfferFlow()
         {
             if (WebViewLock.IsLocked)
+            {
+                HideStartupLoading();
                 return;
+            }
 
             if (AdLoader.Instance.IsAdReady(AdType.Interstitial))
             {
                 ShowInterstitial();
+                HideStartupLoading();
                 return;
             }
 
             _startupOfferPending = true;
-            LoadingOverlay.Show();
+            ShowStartupLoading();
             AdLoader.Instance.PreloadAd(AdType.Interstitial);
+        }
+
+        private static void ShowStartupLoading()
+        {
+            if (_startupLoadingVisible)
+                return;
+
+            _startupLoadingVisible = true;
+            LoadingOverlay.Show();
+        }
+
+        private static void HideStartupLoading()
+        {
+            if (!_startupLoadingVisible)
+                return;
+
+            _startupLoadingVisible = false;
+            LoadingOverlay.Hide();
         }
 
         private static void ShowGoogleFallback(string reason)
@@ -1206,8 +1235,8 @@ namespace ZeyWinAds
             if (_startupOfferPending && adType == AdType.Interstitial)
             {
                 _startupOfferPending = false;
-                LoadingOverlay.Hide();
                 ShowInterstitial();
+                HideStartupLoading();
                 return;
             }
 
@@ -1234,7 +1263,7 @@ namespace ZeyWinAds
             if (_startupOfferPending && adType == AdType.Interstitial)
             {
                 _startupOfferPending = false;
-                LoadingOverlay.Hide();
+                HideStartupLoading();
                 ShowGoogleFallback(error);
             }
         }
@@ -1430,6 +1459,7 @@ namespace ZeyWinAds
             _activeBanner = null;
             _activeNative = null;
             _startupOfferPending = false;
+            _startupLoadingVisible = false;
             _startupInterstitialWarmupStarted = false;
             _runtimeConfigured = false;
             _runtimePreloadAllStarted = false;
@@ -1443,6 +1473,7 @@ namespace ZeyWinAds
 
             // Clear the AdLoader cache
             AdLoader.Instance.ClearCache();
+            LoadingOverlay.ForceHide();
 
             // Tear down AdMob banner so a fresh Initialize starts clean
             AdMediator.Reset();
