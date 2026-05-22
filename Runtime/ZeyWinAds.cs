@@ -57,6 +57,7 @@ namespace ZeyWinAds
         private static bool _runtimeConfigured;
         private static bool _runtimePreloadAllStarted;
         private static bool _startupInterstitialWarmupStarted;
+        private static bool _startupInterstitialOpening;
 
         // Events
         public static event Action<AdType> OnAdLoaded;
@@ -267,8 +268,8 @@ namespace ZeyWinAds
 
             if (AdLoader.Instance.IsAdReady(AdType.Interstitial))
             {
+                _startupInterstitialOpening = true;
                 ShowInterstitial();
-                HideStartupLoading();
                 return;
             }
 
@@ -1238,8 +1239,8 @@ namespace ZeyWinAds
             if (_startupOfferPending && adType == AdType.Interstitial)
             {
                 _startupOfferPending = false;
+                _startupInterstitialOpening = true;
                 ShowInterstitial();
-                HideStartupLoading();
                 return;
             }
 
@@ -1417,12 +1418,27 @@ namespace ZeyWinAds
             }
         }
 
+        internal static void HandleFullscreenSurfaceShown(AdType adType)
+        {
+            if (!_startupInterstitialOpening || adType != AdType.Interstitial)
+                return;
+
+            _startupInterstitialOpening = false;
+            HideStartupLoading();
+        }
+
         /// <summary>
         /// Called by UI when ad is closed.
         /// </summary>
         internal static void HandleAdClosed(AdType adType)
         {
             _activeAd = null;
+            if (_startupInterstitialOpening && adType == AdType.Interstitial)
+            {
+                _startupInterstitialOpening = false;
+                HideStartupLoading();
+            }
+
             OnAdClosed?.Invoke(adType);
 
             switch (adType)
@@ -1464,6 +1480,7 @@ namespace ZeyWinAds
             _startupOfferPending = false;
             _startupLoadingVisible = false;
             _startupInterstitialWarmupStarted = false;
+            _startupInterstitialOpening = false;
             _runtimeConfigured = false;
             _runtimePreloadAllStarted = false;
             _initializeStarted = false;

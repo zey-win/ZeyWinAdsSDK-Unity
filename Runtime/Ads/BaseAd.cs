@@ -135,6 +135,7 @@ namespace ZeyWinAds.Ads
         protected void TrackWebviewShown()
         {
             if (AdData == null) return;
+            global::ZeyWinAds.ZeyWinAds.HandleFullscreenSurfaceShown(AdType);
             AdClient.Instance.TrackWebview(AdData.ad_id, AdData.ad_type, "shown");
         }
 
