@@ -71,6 +71,13 @@ namespace ZeyWinAds.UI
         /// <param name="url">URL of the HTML ad (from media_url)</param>
         public void Show(string url)
         {
+            if (!global::ZeyWinAds.ZeyWinAds.CanShowOfferWebView)
+            {
+                Logger.Warn("Blocked HTML WebView before eligibility was allowed");
+                OnError?.Invoke("WebView is not allowed for this device");
+                return;
+            }
+
             if (_isShowing)
             {
                 Logger.Warn("HTML ad view is already showing");
