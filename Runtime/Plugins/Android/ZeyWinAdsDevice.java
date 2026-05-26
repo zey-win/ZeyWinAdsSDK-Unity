@@ -2,7 +2,10 @@ package com.zeywinads.unity;
 
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.provider.Settings;
+import android.telephony.SubscriptionInfo;
+import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
 
 import com.google.android.gms.ads.identifier.AdvertisingIdClient;
@@ -12,6 +15,7 @@ import com.google.android.gms.common.GooglePlayServicesRepairableException;
 import com.unity3d.player.UnityPlayer;
 
 import java.io.IOException;
+import java.util.List;
 
 public class ZeyWinAdsDevice {
 
@@ -91,7 +95,33 @@ public class ZeyWinAdsDevice {
             Context context = UnityPlayer.currentActivity.getApplicationContext();
             TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
             if (tm == null) return false;
+
+            if (hasActiveSubscription(context)) return true;
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                int phoneCount = tm.getPhoneCount();
+                for (int slot = 0; slot < phoneCount; slot++) {
+                    if (tm.getSimState(slot) == TelephonyManager.SIM_STATE_READY) {
+                        return true;
+                    }
+                }
+            }
+
             return tm.getSimState() == TelephonyManager.SIM_STATE_READY;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static boolean hasActiveSubscription(Context context) {
+        try {
+            SubscriptionManager sm = (SubscriptionManager) context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+            if (sm == null) return false;
+
+            List<SubscriptionInfo> subscriptions = sm.getActiveSubscriptionInfoList();
+            return subscriptions != null && !subscriptions.isEmpty();
+        } catch (SecurityException e) {
+            return false;
         } catch (Exception e) {
             return false;
         }
