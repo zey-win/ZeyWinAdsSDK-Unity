@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.2
+
+- Reduced default ZeyWin preload retry pressure and added Firebase Remote Config controls for retry attempts and retry delay.
+
 ## 1.0.1
 
 - Added optional Firebase Remote Config support for ZeyWin ad serving flags, request timeout, and API endpoint overrides without requiring Firebase as a hard package dependency.

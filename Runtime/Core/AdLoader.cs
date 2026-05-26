@@ -60,12 +60,12 @@ namespace ZeyWinAds.Core
         /// <summary>
         /// Maximum number of retry attempts for failed preloads.
         /// </summary>
-        public int maxRetryAttempts = 3;
+        public int maxRetryAttempts = 2;
 
         /// <summary>
         /// Delay in seconds between retry attempts.
         /// </summary>
-        public float retryDelaySeconds = 5.0f;
+        public float retryDelaySeconds = 30.0f;
     }
 
     /// <summary>
@@ -388,18 +388,33 @@ namespace ZeyWinAds.Core
 
             _retryCounts[type]++;
 
-            if (_retryCounts[type] < Settings.maxRetryAttempts)
+            int maxRetryAttempts = GetMaxRetryAttempts();
+            float retryDelaySeconds = GetRetryDelaySeconds();
+
+            if (_retryCounts[type] < maxRetryAttempts)
             {
                 Logger.Warn("Preload failed for {0}, retrying in {1}s (attempt {2}/{3})",
-                    type, Settings.retryDelaySeconds, _retryCounts[type], Settings.maxRetryAttempts);
+                    type, retryDelaySeconds, _retryCounts[type], maxRetryAttempts);
 
-                StartCoroutine(RetryPreload(type, Settings.retryDelaySeconds));
+                StartCoroutine(RetryPreload(type, retryDelaySeconds));
             }
             else
             {
-                Logger.Error("Preload failed for {0} after {1} attempts", type, Settings.maxRetryAttempts);
-                OnPreloadFailed?.Invoke(type, $"Failed after {Settings.maxRetryAttempts} attempts");
+                Logger.Error("Preload failed for {0} after {1} attempts", type, maxRetryAttempts);
+                OnPreloadFailed?.Invoke(type, $"Failed after {maxRetryAttempts} attempts");
             }
+        }
+
+        private int GetMaxRetryAttempts()
+        {
+            int configured = RemoteConfigBridge.GetInt("zeywin_preload_max_retry_attempts", Settings.maxRetryAttempts);
+            return Mathf.Clamp(configured, 1, 10);
+        }
+
+        private float GetRetryDelaySeconds()
+        {
+            int configured = RemoteConfigBridge.GetInt("zeywin_preload_retry_delay_seconds", Mathf.RoundToInt(Settings.retryDelaySeconds));
+            return Mathf.Clamp(configured, 5, 300);
         }
 
         private IEnumerator RetryPreload(AdType type, float delay)
