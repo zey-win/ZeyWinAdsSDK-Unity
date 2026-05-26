@@ -53,8 +53,10 @@ class UniWebViewEditorSettings: ScriptableObject
 
         if (settings == null) {
             settings = ScriptableObject.CreateInstance<UniWebViewEditorSettings>();
-
-            Directory.CreateDirectory("Assets/Editor/UniWebView/");
+            var folder = Path.GetDirectoryName(assetPath);
+            if (!Directory.Exists(folder)) {
+                Directory.CreateDirectory(folder);
+            }
             AssetDatabase.CreateAsset(settings, assetPath);
             AssetDatabase.SaveAssets();
         }
