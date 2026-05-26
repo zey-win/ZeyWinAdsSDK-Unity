@@ -44,6 +44,8 @@ namespace ZeyWinAds.Mediation
             }
         }
 
+        public static bool IsInitialized => _initialized;
+
         public static void Initialize(ZeyWinAdsSettings settings)
         {
             _settings = settings;

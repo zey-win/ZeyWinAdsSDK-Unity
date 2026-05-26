@@ -5,6 +5,8 @@ All notable changes to this package are documented in this file.
 ## 1.0.2
 
 - Reduced default ZeyWin preload retry pressure and added Firebase Remote Config controls for retry attempts and retry delay.
+- Made the Remote Config bridge ignore empty stub/default values so `zeywin_ads_enabled` does not accidentally disable ZeyWin ads.
+- Avoided duplicate SDK-owned AdMob preload requests during first initialization.
 
 ## 1.0.1
 

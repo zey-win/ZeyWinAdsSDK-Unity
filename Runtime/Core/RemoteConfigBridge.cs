@@ -20,12 +20,15 @@ namespace ZeyWinAds.Core
             if (value == null)
                 return defaultValue;
 
-            object raw = GetPropertyValue(value, "BooleanValue");
-            if (raw is bool boolValue)
-                return boolValue;
-
             string text = GetStringFromValue(value);
-            return bool.TryParse(text, out bool parsed) ? parsed : defaultValue;
+            if (bool.TryParse(text, out bool parsed))
+                return parsed;
+
+            if (string.IsNullOrEmpty(text))
+                return defaultValue;
+
+            object raw = GetPropertyValue(value, "BooleanValue");
+            return raw is bool boolValue ? boolValue : defaultValue;
         }
 
         public static int GetInt(string key, int defaultValue)
@@ -34,14 +37,27 @@ namespace ZeyWinAds.Core
             if (value == null)
                 return defaultValue;
 
+            string text = GetStringFromValue(value);
+            if (int.TryParse(text, out int parsed))
+                return parsed;
+
             object raw = GetPropertyValue(value, "LongValue");
             if (raw is long longValue)
-                return ClampInt(longValue, defaultValue);
-            if (raw is int intValue)
-                return intValue;
+            {
+                if (longValue == 0 && defaultValue != 0 && string.IsNullOrEmpty(text))
+                    return defaultValue;
 
-            string text = GetStringFromValue(value);
-            return int.TryParse(text, out int parsed) ? parsed : defaultValue;
+                return ClampInt(longValue, defaultValue);
+            }
+            if (raw is int intValue)
+            {
+                if (intValue == 0 && defaultValue != 0 && string.IsNullOrEmpty(text))
+                    return defaultValue;
+
+                return intValue;
+            }
+
+            return defaultValue;
         }
 
         public static string GetString(string key, string defaultValue)

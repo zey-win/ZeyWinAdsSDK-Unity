@@ -35,10 +35,13 @@ namespace ZeyWinAds.Mediation
                 return;
             }
 
-            // First call boots MobileAds + preloads. Re-init after Reset() does
-            // not re-init MobileAds (one-shot) but does re-trigger preloads.
+            // First call boots MobileAds + preloads in its init callback.
+            // Re-init after Reset() does not re-init MobileAds (one-shot), so
+            // only then do we explicitly re-trigger preloads.
+            bool wasAdMobInitialized = AdMobNetwork.IsInitialized;
             AdMobNetwork.Initialize(settings);
-            AdMobNetwork.RepreloadAll();
+            if (wasAdMobInitialized)
+                AdMobNetwork.RepreloadAll();
         }
 
         // ---------------- Interstitial ----------------
