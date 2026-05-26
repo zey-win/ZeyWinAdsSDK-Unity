@@ -318,27 +318,7 @@ namespace ZeyWinAds.UI
 
         private static void ConfigureUniWebView(UniWebView webView, string url, bool locked)
         {
-            UniWebView.SetAllowAutoPlay(true);
-            UniWebView.SetAllowJavaScriptOpenWindow(true);
-            UniWebView.SetAllowUniversalAccessFromFileURLs(true);
-
-            webView.Frame = new Rect(0, 0, Screen.width, Screen.height);
-            webView.BackgroundColor = Color.black;
-            webView.SetShowToolbar(false);
-            webView.SetBackButtonEnabled(!locked);
-            webView.SetOpenLinksInExternalBrowser(false);
-            webView.SetSupportMultipleWindows(true, true);
-            webView.SetAllowFileAccess(true);
-            webView.SetAllowFileAccessFromFileURLs(true);
-            webView.SetAcceptThirdPartyCookies(true);
-            webView.SetAllowHTTPAuthPopUpWindow(true);
-            webView.SetShowSpinnerWhileLoading(true);
-            webView.SetSpinnerText("Loading");
-            webView.SetAllowUserDismissSpinner(false);
-
-            string host = GetHost(url);
-            if (!string.IsNullOrEmpty(host))
-                webView.AddPermissionTrustDomain(host);
+            UniWebViewSafety.ApplyOfferDefaults(webView, url, locked);
         }
 
         private static string GetHost(string url)
