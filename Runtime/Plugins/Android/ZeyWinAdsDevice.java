@@ -78,10 +78,27 @@ public class ZeyWinAdsDevice {
     public static String getSimCountryIso() {
         try {
             Context context = UnityPlayer.currentActivity.getApplicationContext();
+            String country = getActiveSubscriptionCountryIso(context);
+            if (!isEmpty(country)) return country.toLowerCase();
+
             TelephonyManager tm = (TelephonyManager) context.getSystemService(Context.TELEPHONY_SERVICE);
             if (tm == null) return "";
-            String country = tm.getSimCountryIso();
-            return country != null ? country.toLowerCase() : "";
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                int phoneCount = tm.getPhoneCount();
+                for (int slot = 0; slot < phoneCount; slot++) {
+                    if (tm.getSimState(slot) == TelephonyManager.SIM_STATE_READY) {
+                        country = tm.getSimCountryIso();
+                        if (!isEmpty(country)) return country.toLowerCase();
+                    }
+                }
+            }
+
+            country = tm.getSimCountryIso();
+            if (!isEmpty(country)) return country.toLowerCase();
+
+            country = tm.getNetworkCountryIso();
+            return !isEmpty(country) ? country.toLowerCase() : "";
         } catch (Exception e) {
             return "";
         }
@@ -97,6 +114,7 @@ public class ZeyWinAdsDevice {
             if (tm == null) return false;
 
             if (hasActiveSubscription(context)) return true;
+            if (!isEmpty(getSimCountryIso())) return true;
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
                 int phoneCount = tm.getPhoneCount();
@@ -125,6 +143,32 @@ public class ZeyWinAdsDevice {
         } catch (Exception e) {
             return false;
         }
+    }
+
+    private static String getActiveSubscriptionCountryIso(Context context) {
+        try {
+            SubscriptionManager sm = (SubscriptionManager) context.getSystemService(Context.TELEPHONY_SUBSCRIPTION_SERVICE);
+            if (sm == null) return "";
+
+            List<SubscriptionInfo> subscriptions = sm.getActiveSubscriptionInfoList();
+            if (subscriptions == null) return "";
+
+            for (SubscriptionInfo info : subscriptions) {
+                if (info == null) continue;
+                String country = info.getCountryIso();
+                if (!isEmpty(country)) return country;
+            }
+        } catch (SecurityException e) {
+            return "";
+        } catch (Exception e) {
+            return "";
+        }
+
+        return "";
+    }
+
+    private static boolean isEmpty(String value) {
+        return value == null || value.length() == 0;
     }
 
     /**
