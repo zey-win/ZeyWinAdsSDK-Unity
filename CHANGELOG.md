@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.1
+
+- Added optional Firebase Remote Config support for ZeyWin ad serving flags, request timeout, and API endpoint overrides without requiring Firebase as a hard package dependency.
+
 ## 1.0.0
 
 - Added safer Android UniWebView handling for offer pages: download links open outside the WebView, context-menu download callbacks are disabled, and the bundled UniWebView receiver registration uses Android 13+ receiver flags.

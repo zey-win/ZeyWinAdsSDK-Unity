@@ -12,11 +12,7 @@ namespace ZeyWinAds.Core
     /// </summary>
     public class AdClient : MonoBehaviour
     {
-        // Server endpoints with failover support
-        private static readonly string[] Endpoints = new string[]
-        {
-            "https://zeywin-ads-api.whiteapps.workers.dev/api/v1"
-        };
+        private const string DefaultEndpoint = "https://zeywin-ads-api.whiteapps.workers.dev/api/v1";
 
         private static AdClient _instance;
         private int _currentEndpointIndex;
@@ -84,7 +80,7 @@ namespace ZeyWinAds.Core
             DontDestroyOnLoad(gameObject);
 
             // Start with a random endpoint for load distribution
-            _currentEndpointIndex = UnityEngine.Random.Range(0, Endpoints.Length);
+            _currentEndpointIndex = UnityEngine.Random.Range(0, EndpointCount);
         }
 
         /// <summary>
@@ -113,6 +109,12 @@ namespace ZeyWinAds.Core
             if (_isBlocked)
             {
                 onError?.Invoke("Device is blocked from showing ads.");
+                return;
+            }
+
+            if (!RemoteConfigBridge.GetBool("zeywin_ads_enabled", true))
+            {
+                onError?.Invoke("ZeyWin ads disabled by remote config.");
                 return;
             }
 
@@ -179,7 +181,7 @@ namespace ZeyWinAds.Core
                 webRequest.downloadHandler = new DownloadHandlerBuffer();
                 webRequest.SetRequestHeader("Content-Type", "application/json");
                 ProxyConfig.AddAuthHeader(webRequest);
-                webRequest.timeout = (int)ZeyWinAdsConfig.RequestTimeoutSeconds;
+                webRequest.timeout = GetRequestTimeoutSeconds();
 
                 yield return webRequest.SendWebRequest();
 
@@ -194,7 +196,7 @@ namespace ZeyWinAds.Core
                         if (apiResponse.success && apiResponse.data != null)
                         {
                             // Update preferred endpoint on success
-                            _currentEndpointIndex = retryCount % Endpoints.Length;
+                            _currentEndpointIndex = retryCount % EndpointCount;
                             onSuccess?.Invoke(apiResponse.data);
                         }
                         else
@@ -260,7 +262,7 @@ namespace ZeyWinAds.Core
                 webRequest.downloadHandler = new DownloadHandlerBuffer();
                 webRequest.SetRequestHeader("Content-Type", "application/json");
                 ProxyConfig.AddAuthHeader(webRequest);
-                webRequest.timeout = (int)ZeyWinAdsConfig.RequestTimeoutSeconds;
+                webRequest.timeout = GetRequestTimeoutSeconds();
 
                 yield return webRequest.SendWebRequest();
 
@@ -432,7 +434,7 @@ namespace ZeyWinAds.Core
             using (UnityWebRequest webRequest = UnityWebRequest.Get(ProxyConfig.WrapUrl(url)))
             {
                 ProxyConfig.AddAuthHeader(webRequest);
-                webRequest.timeout = (int)ZeyWinAdsConfig.RequestTimeoutSeconds;
+                webRequest.timeout = GetRequestTimeoutSeconds();
                 yield return webRequest.SendWebRequest();
 
                 if (webRequest.result == UnityWebRequest.Result.Success)
@@ -442,7 +444,7 @@ namespace ZeyWinAds.Core
                         var apiResponse = JsonUtility.FromJson<ApiResponse<T>>(webRequest.downloadHandler.text);
                         if (apiResponse.success && apiResponse.data != null)
                         {
-                            _currentEndpointIndex = retryCount % Endpoints.Length;
+                            _currentEndpointIndex = retryCount % EndpointCount;
                             onSuccess?.Invoke(apiResponse.data);
                         }
                         else
@@ -468,7 +470,7 @@ namespace ZeyWinAds.Core
 
         private string GetCurrentEndpoint()
         {
-            return Endpoints[_currentEndpointIndex];
+            return GetEndpointByAbsoluteIndex(_currentEndpointIndex);
         }
 
         public string GetGeoEndpoint()
@@ -486,18 +488,62 @@ namespace ZeyWinAds.Core
         /// </summary>
         public string GetEndpointByIndex(int index)
         {
-            return Endpoints[(_currentEndpointIndex + index) % Endpoints.Length];
+            return GetEndpointByAbsoluteIndex(_currentEndpointIndex + index);
         }
 
         /// <summary>
         /// Number of available endpoints.
         /// </summary>
-        public int EndpointCount => Endpoints.Length;
+        public int EndpointCount => GetEndpoints().Length;
 
         private string GetEndpointForRetry(int retryCount)
         {
-            int index = (_currentEndpointIndex + retryCount) % Endpoints.Length;
-            return Endpoints[index];
+            return GetEndpointByAbsoluteIndex(_currentEndpointIndex + retryCount);
+        }
+
+        private static int GetRequestTimeoutSeconds()
+        {
+            int timeout = RemoteConfigBridge.GetInt("zeywin_request_timeout_seconds", (int)ZeyWinAdsConfig.RequestTimeoutSeconds);
+            return Mathf.Clamp(timeout, 5, 120);
+        }
+
+        private static string GetEndpointByAbsoluteIndex(int index)
+        {
+            string[] endpoints = GetEndpoints();
+            int safeIndex = Mathf.Abs(index) % endpoints.Length;
+            return endpoints[safeIndex];
+        }
+
+        private static string[] GetEndpoints()
+        {
+            string configured = RemoteConfigBridge.GetString("zeywin_ads_api_endpoint", null);
+            if (string.IsNullOrWhiteSpace(configured))
+                configured = RemoteConfigBridge.GetString("zeywin_ads_api_endpoints", null);
+
+            if (!string.IsNullOrWhiteSpace(configured))
+            {
+                string[] parts = configured.Split(',');
+                var endpoints = new System.Collections.Generic.List<string>();
+                for (int i = 0; i < parts.Length; i++)
+                {
+                    string endpoint = parts[i]?.Trim().TrimEnd('/');
+                    if (IsValidEndpoint(endpoint))
+                        endpoints.Add(endpoint);
+                }
+
+                if (endpoints.Count > 0)
+                    return endpoints.ToArray();
+            }
+
+            return new[] { DefaultEndpoint };
+        }
+
+        private static bool IsValidEndpoint(string endpoint)
+        {
+            return !string.IsNullOrEmpty(endpoint)
+                && Uri.TryCreate(endpoint, UriKind.Absolute, out Uri uri)
+                && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+                && !string.IsNullOrEmpty(uri.Host);
         }
     }
 }

@@ -1,6 +1,6 @@
 {
   "name": "com.zeywin.ads",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "displayName": "ZeyWin Ads SDK",
   "description": "Mobile advertising SDK for Unity games. Supports interstitial, rewarded, banner, native, popup, WebView offers, and AdMob fallback.",
   "unity": "2020.3",
