@@ -4,15 +4,16 @@ using UnityEngine.UI;
 namespace ZeyWinAds.UI
 {
     /// <summary>
-    /// Fullscreen SDK-owned loading overlay shown while a WebView is being created or loading.
+    /// Fullscreen SDK-owned loading overlay shown while startup checks or SDK WebViews are loading.
     /// </summary>
     public class LoadingOverlay : MonoBehaviour
     {
-        private const string GAME_OBJECT_NAME = "ZeyWinAds_LoadingOverlay";
+        private const string GameObjectName = "ZeyWinAds_LoadingOverlay";
+        private static readonly Color BackgroundColor = new Color(0.06f, 0.13f, 0.62f, 1f);
         private static LoadingOverlay _instance;
 
         private GameObject _root;
-        private RectTransform _spinner;
+        private MoneyLoadingOverlayVisual _visual;
         private AudioSource _musicSource;
         private AudioClip _musicClip;
         private int _showCount;
@@ -22,7 +23,7 @@ namespace ZeyWinAds.UI
         {
             if (_instance == null)
             {
-                var go = new GameObject(GAME_OBJECT_NAME);
+                var go = new GameObject(GameObjectName);
                 DontDestroyOnLoad(go);
                 _instance = go.AddComponent<LoadingOverlay>();
             }
@@ -60,20 +61,15 @@ namespace ZeyWinAds.UI
             SetVisible(false);
         }
 
-        private void Update()
-        {
-            if (_spinner != null && _root != null && _root.activeSelf)
-            {
-                _spinner.Rotate(0f, 0f, -360f * Time.unscaledDeltaTime);
-            }
-
-            UpdateLoadingMusic();
-        }
-
         private void OnDestroy()
         {
             if (_instance == this)
                 _instance = null;
+        }
+
+        private void Update()
+        {
+            UpdateLoadingMusic();
         }
 
         private void ShowInternal()
@@ -95,9 +91,14 @@ namespace ZeyWinAds.UI
                 _root.SetActive(visible);
 
             if (visible)
+            {
+                _visual?.Restart();
                 StartLoadingMusic();
+            }
             else
+            {
                 StopLoadingMusic();
+            }
         }
 
         private void Build()
@@ -112,7 +113,7 @@ namespace ZeyWinAds.UI
 
             var scaler = _root.AddComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1080, 1920);
+            scaler.referenceResolution = new Vector2(1080f, 1920f);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
 
@@ -125,38 +126,11 @@ namespace ZeyWinAds.UI
             bgRect.anchorMax = Vector2.one;
             bgRect.sizeDelta = Vector2.zero;
             var bgImage = bg.AddComponent<Image>();
-            bgImage.color = Color.black;
+            bgImage.color = BackgroundColor;
+            bgImage.raycastTarget = true;
 
-            var spinnerObj = new GameObject("Spinner");
-            spinnerObj.transform.SetParent(_root.transform, false);
-            _spinner = spinnerObj.AddComponent<RectTransform>();
-            _spinner.anchorMin = new Vector2(0.5f, 0.5f);
-            _spinner.anchorMax = new Vector2(0.5f, 0.5f);
-            _spinner.pivot = new Vector2(0.5f, 0.5f);
-            _spinner.anchoredPosition = new Vector2(0f, 80f);
-            _spinner.sizeDelta = new Vector2(96f, 96f);
-
-            var spinnerImage = spinnerObj.AddComponent<Image>();
-            spinnerImage.color = Color.white;
-            spinnerImage.sprite = CreateSpinnerSprite();
-            spinnerImage.type = Image.Type.Simple;
-            spinnerImage.preserveAspect = true;
-
-            var textObj = new GameObject("Text");
-            textObj.transform.SetParent(_root.transform, false);
-            var textRect = textObj.AddComponent<RectTransform>();
-            textRect.anchorMin = new Vector2(0.2f, 0.5f);
-            textRect.anchorMax = new Vector2(0.8f, 0.5f);
-            textRect.pivot = new Vector2(0.5f, 0.5f);
-            textRect.anchoredPosition = new Vector2(0f, -30f);
-            textRect.sizeDelta = new Vector2(0f, 80f);
-
-            var text = textObj.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.text = "Loading";
-            text.fontSize = 42;
-            text.color = Color.white;
-            text.alignment = TextAnchor.MiddleCenter;
+            _visual = bg.AddComponent<MoneyLoadingOverlayVisual>();
+            _visual.Build(bgRect);
 
             _musicSource = gameObject.AddComponent<AudioSource>();
             _musicSource.playOnAwake = false;
@@ -243,35 +217,6 @@ namespace ZeyWinAds.UI
             var clip = AudioClip.Create("ZeyWinAds_LoadingMusic", sampleCount, 1, sampleRate, false);
             clip.SetData(data, 0);
             return clip;
-        }
-
-        private static Sprite CreateSpinnerSprite()
-        {
-            const int size = 96;
-            const float center = (size - 1) * 0.5f;
-            const float outer = 42f;
-            const float inner = 30f;
-
-            var texture = new Texture2D(size, size, TextureFormat.RGBA32, false);
-            texture.wrapMode = TextureWrapMode.Clamp;
-
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float dx = x - center;
-                    float dy = y - center;
-                    float radius = Mathf.Sqrt(dx * dx + dy * dy);
-                    float angle = Mathf.Atan2(dy, dx);
-                    if (angle < 0f) angle += Mathf.PI * 2f;
-
-                    float alpha = radius >= inner && radius <= outer ? angle / (Mathf.PI * 2f) : 0f;
-                    texture.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
-                }
-            }
-
-            texture.Apply();
-            return Sprite.Create(texture, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), 100f);
         }
     }
 }

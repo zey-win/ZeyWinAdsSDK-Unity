@@ -1,6 +1,6 @@
 # ZeyWin Ads SDK for Unity
 
-Mobile advertising SDK for Unity games. Supports fast startup WebView offers, interstitial, rewarded, banner, native, popup ads, and **automatic Google AdMob fallback**.
+Drop-in mobile advertising SDK for Unity games. The goal is that every game repo stays clean: install this one package, enter the ZeyWin key and ad IDs, and the SDK handles the advertising stack, WebView offer flow, loading UI, AdMob fallback, CrashGuard, ATT/UMP, and build-time native configuration.
 
 ## Installation
 
@@ -11,18 +11,20 @@ Mobile advertising SDK for Unity games. Supports fast startup WebView offers, in
 3. Enter: `https://github.com/zey-win/ZeyWinAdsSDK-Unity.git`
 4. Click **Add**
 
-On first import the SDK will automatically add:
+On first import the SDK will automatically add and configure:
 
 - Google Mobile Ads via the OpenUPM scoped registry
+- Google External Dependency Manager for native dependency resolution
 - CrashGuard SDK as a sibling package
+- SDK-owned WebView/loading/native configuration helpers
 
 Unity will reload and resolve the packages for you.
 
 ### Manual Installation
 
-1. Download the package
-2. Copy this package to `Packages/com.zeywin.ads/`
-3. Add CrashGuard to `Packages/com.crashguard.sdk/` or let the Git URL installation bootstrap it automatically
+1. Download the package.
+2. Copy this package to `Packages/com.zeywin.ads/`.
+3. Open **ZeyWinAds > Install AdMob** and **ZeyWinAds > Install CrashGuard** if you are not using Git URL installation.
 
 ## Setup
 
@@ -41,7 +43,7 @@ If your project does not yet have `Assets/Plugins/Android/AndroidManifest.xml`, 
 When `autoInitializeOnStartup` is enabled, the SDK initializes before the first scene and starts the monetization decision flow immediately.
 
 - If the user passes anti-moderation, geo, SIM, and server checks, the startup offer is preloaded and shown in the SDK WebView as soon as it is ready.
-- While a WebView is active or about to appear, the SDK shows its own fullscreen loading overlay with a spinner and `Loading` text.
+- While a WebView is active or about to appear, the SDK shows its own fullscreen blue loading overlay. The money pack crosses the lower progress bar once over 8 seconds, fills the yellow trail in uneven steps, and the `Loading XX%` label stays below the bar.
 - If the user fails the local suspicious-app check, the SDK shows the ZeyWin promo flow that opens the target app in Google Play.
 - If the device is blocked, the country has no offer, SIM/geo checks fail, or the startup offer cannot be loaded, the SDK falls back to Google AdMob interstitial.
 - AdMob preload starts in parallel with ZeyWin startup checks so fallback can appear quickly.
@@ -110,6 +112,7 @@ On tap, the SDK calls the same click flow used by other ZeyWin ads. If the ad re
 - Android install-referrer support uses the bundled `installreferrer-2.2.aar`.
 - Android package visibility queries for referral/suspicious-app checks are generated into `AndroidManifest.xml`.
 - iOS builds can add ATT text, request ATT authorization, and write Google AdMob SKAdNetwork IDs automatically.
+- Shared SDK visual assets, including the money loading marker, are shipped from package `Resources` so each game does not need to duplicate them.
 
 ## Release verification
 

@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.3
+
+- Replaced the SDK WebView loading spinner with the blue money-progress loading screen used by the Plinko app.
+- Replaced Android native WebView loading overlays with the same blue lower progress treatment so WebView startup no longer flashes a black spinner.
+- Added the money-pack loading asset as a package resource so consuming games do not need their own copy.
+- Documented the one-SDK install flow for clean Unity game repositories.
+
 ## 1.0.2
 
 - Fixed UniWebView and ZeyWin runtime assembly references for Unity 6000 editor compilation.

@@ -540,31 +540,7 @@ namespace ZeyWinAds.UI
 
         private AndroidJavaObject CreateAndroidLoadingOverlay(AndroidJavaObject activity)
         {
-            var overlay = new AndroidJavaObject("android.widget.FrameLayout", activity);
-            overlay.Call("setBackgroundColor", AndroidColor(0xFF000000));
-            overlay.Call("setClickable", true);
-
-            var box = new AndroidJavaObject("android.widget.LinearLayout", activity);
-            box.Call("setOrientation", 1);
-            box.Call("setGravity", 17);
-
-            var progress = new AndroidJavaObject("android.widget.ProgressBar", activity);
-            progress.Call("setIndeterminate", true);
-            var text = new AndroidJavaObject("android.widget.TextView", activity);
-            text.Call("setText", "Loading");
-            text.Call("setTextColor", AndroidColor(0xFFFFFFFF));
-            text.Call("setTextSize", 18f);
-            text.Call("setGravity", 17);
-
-            var wrapParams = new AndroidJavaObject("android.widget.LinearLayout$LayoutParams", -2, -2);
-            box.Call("addView", progress, wrapParams);
-            box.Call("addView", text, wrapParams);
-
-            var boxParams = new AndroidJavaObject("android.widget.FrameLayout$LayoutParams", -2, -2);
-            boxParams.Set<int>("gravity", 17);
-            overlay.Call("addView", box, boxParams);
-
-            return overlay;
+            return new AndroidJavaObject("com.zeywinads.unity.ZeyWinAdsLoadingOverlay", activity);
         }
 
         private void PromoteAndroidLoadingOverlay()
