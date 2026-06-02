@@ -92,12 +92,24 @@ namespace ZeyWinAds.Editor
 
             string content = File.ReadAllText(manifestPath);
             bool modified = false;
+            bool legacyAdMobAssetsPresent = LegacyAdMobAssetsPresent();
 
-            if (!content.Contains($"\"{AdMobPackage}\""))
+            if (legacyAdMobAssetsPresent)
+            {
+                string cleaned = RemoveDependency(content, AdMobPackage);
+                if (cleaned != content)
+                {
+                    content = cleaned;
+                    modified = true;
+                    Debug.Log("[ZeyWinAds] Found Assets/GoogleMobileAds; removed duplicate com.google.ads.mobile package dependency.");
+                }
+            }
+            else if (!content.Contains($"\"{AdMobPackage}\""))
             {
                 content = AddDependency(content, AdMobPackage, AdMobVersion);
                 modified = true;
             }
+
             if (!content.Contains($"\"{EdmPackage}\""))
             {
                 content = AddDependency(content, EdmPackage, EdmVersion);
@@ -114,6 +126,14 @@ namespace ZeyWinAds.Editor
                 File.WriteAllText(manifestPath, content, new UTF8Encoding(false));
             }
             return modified;
+        }
+
+        private static bool LegacyAdMobAssetsPresent()
+        {
+            string assetsRoot = Application.dataPath;
+            return Directory.Exists(Path.Combine(assetsRoot, "GoogleMobileAds"))
+                || File.Exists(Path.Combine(assetsRoot, "GoogleMobileAds", "GoogleMobileAds.Core.dll"))
+                || File.Exists(Path.Combine(assetsRoot, "GoogleMobileAds", "Editor", "GoogleMobileAdsSettings.cs"));
         }
 
         private static string AddDependency(string manifest, string package, string version)
@@ -134,6 +154,25 @@ namespace ZeyWinAds.Editor
 
             string entry = $"\n    \"{package}\": \"{version}\",";
             return manifest.Insert(braceIdx + 1, entry);
+        }
+
+        private static string RemoveDependency(string manifest, string package)
+        {
+            string key = $"\"{package}\"";
+            int keyIdx = manifest.IndexOf(key, StringComparison.Ordinal);
+            if (keyIdx < 0)
+                return manifest;
+
+            int lineStart = manifest.LastIndexOf('\n', keyIdx);
+            lineStart = lineStart < 0 ? 0 : lineStart + 1;
+
+            int lineEnd = manifest.IndexOf('\n', keyIdx);
+            if (lineEnd < 0)
+                lineEnd = manifest.Length;
+            else
+                lineEnd += 1;
+
+            return manifest.Remove(lineStart, lineEnd - lineStart);
         }
 
         private static string AddScopedRegistry(string manifest)

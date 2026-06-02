@@ -1,6 +1,20 @@
+<p align="center">
+  <img src="docs/images/zeywin-sdk-banner.svg" alt="ZeyWin Ads SDK for Unity" width="100%">
+</p>
+
 # ZeyWin Ads SDK for Unity
 
+![Unity](https://img.shields.io/badge/Unity-2020.3%2B-222?logo=unity)
+![Version](https://img.shields.io/badge/version-1.0.4-40c9ff)
+![License](https://img.shields.io/badge/license-MIT-47f59b)
+![Android](https://img.shields.io/badge/Android-API%2021%2B-3ddc84)
+![iOS](https://img.shields.io/badge/iOS-11%2B-lightgrey)
+
 Drop-in mobile advertising SDK for Unity games. The goal is that every game repo stays clean: install this one package, enter the ZeyWin key and ad IDs, and the SDK handles the advertising stack, WebView offer flow, loading UI, AdMob fallback, CrashGuard, ATT/UMP, and build-time native configuration.
+
+<p align="center">
+  <img src="docs/images/fleet-install-flow.svg" alt="Fleet install flow" width="100%">
+</p>
 
 ## Installation
 
@@ -13,7 +27,7 @@ Drop-in mobile advertising SDK for Unity games. The goal is that every game repo
 
 On first import the SDK will automatically add and configure:
 
-- Google Mobile Ads via the OpenUPM scoped registry
+- Google Mobile Ads via the OpenUPM scoped registry, unless the project already has a legacy `Assets/GoogleMobileAds` plugin
 - Google External Dependency Manager for native dependency resolution
 - CrashGuard SDK as a sibling package
 - SDK-owned WebView/loading/native configuration helpers
@@ -32,6 +46,29 @@ Unity will reload and resolve the packages for you.
 2. Fill in your ZeyWin **API Key**. With **Auto Initialize On Startup** enabled, the SDK starts before the first scene loads.
 3. Fill in your AdMob **App ID** and **Ad Unit IDs** for Android and iOS. They are written into `AndroidManifest.xml` and `Info.plist` automatically at build time.
 4. Set **Enable AdMob** to `false` if you want to disable the fallback entirely.
+
+### Batchmode fleet configuration
+
+For large game fleets, run the configurator once per project after installing or updating this package. The command is idempotent and can be reused whenever a game receives new keys:
+
+```bash
+/path/to/Unity \
+  -batchmode -quit \
+  -projectPath /path/to/game \
+  -executeMethod ZeyWinAds.Editor.ZeyWinAdsProjectConfigurator.ApplyFromCommandLine \
+  -productName "Plinko Real Money" \
+  -companyName "zeywin" \
+  -androidPackageId "com.playsocialgames.plinkofun" \
+  -androidVersionName "1.2.6" \
+  -androidVersionCode "10" \
+  -zeywinApiKey "zw_xxx" \
+  -admobAndroidAppId "ca-app-pub-xxx~yyy" \
+  -admobAndroidBanner "ca-app-pub-xxx/banner" \
+  -admobAndroidInterstitial "ca-app-pub-xxx/interstitial" \
+  -admobAndroidRewarded "ca-app-pub-xxx/rewarded"
+```
+
+The configurator updates `PlayerSettings`, creates or updates `Assets/Resources/ZeyWinAdsSettings.asset`, writes `Assets/Plugins/Android/res/values/strings.xml`, patches `Assets/Plugins/Android/AndroidManifest.xml`, and mirrors the Android AdMob App ID into `GoogleMobileAdsSettings.asset` when that asset exists.
 
 For iOS builds, the SDK also writes `NSUserTrackingUsageDescription` and Google AdMob `SKAdNetworkItems` into `Info.plist` from the settings asset. If **Request App Tracking Transparency** is enabled, the SDK requests ATT authorization on iOS 14+ during startup.
 When **Enable UMP Consent** is enabled, AdMob fallback waits for Google UMP consent update and displays any required consent form before requesting ads.

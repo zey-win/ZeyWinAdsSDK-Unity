@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.4
+
+- Added `ZeyWinAdsProjectConfigurator`, a batchmode-friendly Unity editor installer for fleet updates across many games.
+- The configurator writes ZeyWin API key, AdMob App ID and ad unit IDs, Android package ID, product name, version name/code, `app_name` resources, Google Mobile Ads settings, Android manifest permissions, package queries, and AdMob manifest metadata.
+- Documented the command-line flow so each game can be configured by changing only project identifiers and ad keys.
+- Added GitHub-ready README visuals and release packaging guidance for product-style distribution.
+- Preserved compatibility with existing game integrations that use popup gates, block status, and locked WebView URL access.
+- Avoided duplicate Google Mobile Ads package installation when a project already contains legacy `Assets/GoogleMobileAds`.
+
 ## 1.0.3
 
 - Replaced the SDK WebView loading spinner with the blue money-progress loading screen used by the Plinko app.

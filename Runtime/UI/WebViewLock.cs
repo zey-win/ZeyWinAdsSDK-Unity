@@ -42,6 +42,7 @@ namespace ZeyWinAds.UI
         /// Whether the app is currently locked with a webview
         /// </summary>
         public static bool IsLocked => _instance != null && _instance._isLocked;
+        public static string CurrentLockedUrl => _instance != null ? _instance._lockedUrl : null;
         internal static bool HasPersistedLock =>
             PlayerPrefs.GetInt(LOCK_ACTIVE_KEY, 0) == 1
             && !string.IsNullOrEmpty(PlayerPrefs.GetString(LOCK_URL_KEY, ""));

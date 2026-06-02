@@ -61,6 +61,10 @@ namespace ZeyWinAds
         private static bool _startupReferralCheckPending;
         private static bool _startupEligibilityAllowed;
         private static string _startupFallbackReason;
+        private const int DefaultPopupFirstShowDelaySeconds = 20;
+        private const int DefaultPopupRepeatDelaySeconds = 60;
+        private static int _popupFirstShowDelaySeconds = DefaultPopupFirstShowDelaySeconds;
+        private static int _popupRepeatDelaySeconds = DefaultPopupRepeatDelaySeconds;
 
         // Events
         public static event Action<AdType> OnAdLoaded;
@@ -73,11 +77,23 @@ namespace ZeyWinAds
         public static event Action OnBannerHidden;
         public static event Action<string> OnWebViewLocked;
         public static event Action OnWebViewUnlocked;
+        public static event Action<string> OnDeviceBlocked;
+
+        /// <summary>
+        /// Optional app-level gate for popup auto-show. Return false while another
+        /// fullscreen overlay or webview is active.
+        /// </summary>
+        public static Func<bool> CanAutoShowPopup;
 
         /// <summary>
         /// Gets whether the SDK has been initialized.
         /// </summary>
         public static bool IsInitialized => AdClient.Instance.IsInitialized;
+
+        /// <summary>
+        /// Gets whether ZeyWin ads are blocked by device validation.
+        /// </summary>
+        public static bool IsBlocked => AdClient.Instance.IsBlocked;
 
         /// <summary>
         /// Gets whether the app is currently locked with a fullscreen webview.
@@ -86,6 +102,16 @@ namespace ZeyWinAds
         public static bool IsWebViewLocked => WebViewLock.IsLocked;
 
         internal static bool CanShowOfferWebView => _startupEligibilityAllowed && !AdClient.Instance.IsBlocked;
+
+        /// <summary>
+        /// Configures SDK-rendered popup auto-show timing. Call before loading popup ads.
+        /// </summary>
+        public static void ConfigurePopupSchedule(int firstShowDelaySeconds, int repeatDelaySeconds)
+        {
+            _popupFirstShowDelaySeconds = Mathf.Max(1, firstShowDelaySeconds);
+            _popupRepeatDelaySeconds = Mathf.Max(1, repeatDelaySeconds);
+            Core.Logger.Log("Popup schedule configured: first={0}s repeat={1}s", _popupFirstShowDelaySeconds, _popupRepeatDelaySeconds);
+        }
 
         /// <summary>
         /// Initializes the ZeyWin Ads SDK with the provided API key.
@@ -162,7 +188,7 @@ namespace ZeyWinAds
             // If already blocked locally, block ad requests and send report
             if (blockReason != "none")
             {
-                AdClient.Instance.SetBlocked(true);
+                BlockDevice(blockReason);
                 HideStartupLoading();
                 ShowGoogleFallback(blockReason);
 
@@ -276,8 +302,14 @@ namespace ZeyWinAds
             _cachedBanner = null;
             _cachedNative = null;
             _cachedPopup = null;
-            AdClient.Instance.SetBlocked(true);
+            BlockDevice(reason);
             RequestStartupGoogleFallback(reason);
+        }
+
+        private static void BlockDevice(string reason)
+        {
+            AdClient.Instance.SetBlocked(true);
+            OnDeviceBlocked?.Invoke(string.IsNullOrEmpty(reason) ? "blocked" : reason);
         }
 
         private static void ConfigureRuntime(PreloadSettings preloadSettings)
@@ -1254,6 +1286,9 @@ namespace ZeyWinAds
 
         private static void SchedulePopupRepeat(int repeatSec, Action onClose, Action<string> onButton1, Action<string> onButton2)
         {
+            if (_popupRepeatDelaySeconds > 0)
+                repeatSec = _popupRepeatDelaySeconds;
+
             if (repeatSec <= 0) return;
 
             _popupRepeatOnClose = onClose;
@@ -1303,6 +1338,20 @@ namespace ZeyWinAds
 
             _popupAutoShowCoroutine = null;
 
+            float waited = 0f;
+            while (CanAutoShowPopup != null && !CanAutoShowPopup() && waited < 60f)
+            {
+                Core.Logger.Debug("Popup auto-show waiting for app gate");
+                yield return new WaitForSeconds(1f);
+                waited += 1f;
+            }
+
+            if (CanAutoShowPopup != null && !CanAutoShowPopup())
+            {
+                Core.Logger.Warn("Popup auto-show skipped because app gate is still closed");
+                yield break;
+            }
+
             if (IsPopupReady())
             {
                 Core.Logger.Log("Auto-showing popup after {0}s delay", delaySec);
@@ -1333,7 +1382,9 @@ namespace ZeyWinAds
                 BaseAd cached = AdLoader.Instance.Cache.Get(AdType.Popup);
                 if (cached != null && cached.AdData != null)
                 {
-                    int delaySec = cached.AdData.popup_delay_sec;
+                    int delaySec = _popupFirstShowDelaySeconds > 0
+                        ? _popupFirstShowDelaySeconds
+                        : cached.AdData.popup_delay_sec;
                     Core.Logger.Log("Popup auto-show scheduled in {0}s", delaySec);
                     _popupAutoShowCoroutine = UnityMainThreadDispatcher.Instance.StartCoroutine(
                         AutoShowPopupCoroutine(delaySec)
