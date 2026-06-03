@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.11
+
+- Added `ZeyWinAdsAndroidBuilder`, a shared Unity batchmode APK/AAB builder for fleet phone QA and release artifact checks.
+- The Android builder supports output path selection, version name/code overrides, ARM64/ARMv7 selection, and custom keystore signing through `ANDROID_KEYSTORE_*` environment variables.
+
 ## 1.0.10
 
 - Fixed TSV parsing in the fleet runner so empty optional columns are preserved and package/version fields cannot shift into the wrong Unity arguments.
