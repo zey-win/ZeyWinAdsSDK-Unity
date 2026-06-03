@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.13
+
+- Stopped writing `android:label` into the Unity library Android manifest during fleet configuration, preventing Unity 6 launcher manifest merge conflicts.
+
 ## 1.0.12
 
 - Made the fleet Android builder fall back to debug signing for phone QA when a project has a stale custom keystore path and no explicit signing environment is provided.

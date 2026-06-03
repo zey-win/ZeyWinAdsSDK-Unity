@@ -204,11 +204,8 @@ namespace ZeyWinAds.Editor
                 manifest.AppendChild(application);
             }
 
-            if (!TryGetAny(args, out string appName, "productName", "appName"))
-                appName = PlayerSettings.productName;
-
-            if (!string.IsNullOrEmpty(appName))
-                application.SetAttribute("label", AndroidNs, appName);
+            if (application.HasAttribute("label", AndroidNs))
+                application.RemoveAttribute("label", AndroidNs);
 
             application.SetAttribute("usesCleartextTraffic", AndroidNs, "true");
 
