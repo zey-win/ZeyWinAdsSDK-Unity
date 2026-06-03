@@ -97,6 +97,9 @@ namespace ZeyWinAds.Editor
             if (!string.IsNullOrEmpty(architectures))
                 ApplyArchitectures(architectures);
 
+            string optimizedFramePacing = GetAnyOrEnv(args, "false", "ANDROID_OPTIMIZED_FRAME_PACING", "androidOptimizedFramePacing", "optimizedFramePacing");
+            PlayerSettings.Android.optimizedFramePacing = ParseBool(optimizedFramePacing, false);
+
             ApplySigning(args);
         }
 

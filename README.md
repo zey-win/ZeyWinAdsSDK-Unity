@@ -5,7 +5,7 @@
 # ZeyWin Ads SDK for Unity
 
 ![Unity](https://img.shields.io/badge/Unity-2020.3%2B-222?logo=unity)
-![Version](https://img.shields.io/badge/version-1.0.13-40c9ff)
+![Version](https://img.shields.io/badge/version-1.0.14-40c9ff)
 ![License](https://img.shields.io/badge/license-MIT-47f59b)
 ![Android](https://img.shields.io/badge/Android-API%2021%2B-3ddc84)
 ![iOS](https://img.shields.io/badge/iOS-11%2B-lightgrey)
@@ -80,7 +80,7 @@ The repository includes `tools/zeywin-fleet-configure.sh`, a TSV-driven runner f
 tools/zeywin-fleet-configure.sh \
   --root /Volumes/Work/games \
   --config /path/to/fleet-config.tsv \
-  --sdk-ref v1.0.13 \
+  --sdk-ref v1.0.14 \
   --unity-path /Applications/Unity/Hub/Editor/6000.0.71f1/Unity.app/Contents/MacOS/Unity \
   --require-unity6
 ```
@@ -102,6 +102,7 @@ Fleet APK/AAB checks can use the package builder after configuration:
 ```
 
 For signed builds, pass `ANDROID_KEYSTORE_PATH`, `ANDROID_KEYSTORE_PASS`, `ANDROID_KEYALIAS_NAME`, and `ANDROID_KEYALIAS_PASS` through the environment.
+The builder disables Android optimized frame pacing by default for Unity 6 fleet APK checks; set `ANDROID_OPTIMIZED_FRAME_PACING=true` if a release build explicitly needs Swappy enabled.
 
 For iOS builds, the SDK also writes `NSUserTrackingUsageDescription` and Google AdMob `SKAdNetworkItems` into `Info.plist` from the settings asset. If **Request App Tracking Transparency** is enabled, the SDK requests ATT authorization on iOS 14+ during startup.
 When **Enable UMP Consent** is enabled, AdMob fallback waits for Google UMP consent update and displays any required consent form before requesting ads.
