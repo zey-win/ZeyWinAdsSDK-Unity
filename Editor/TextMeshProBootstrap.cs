@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace ZeyWinAds.Editor
 {
@@ -21,6 +22,14 @@ namespace ZeyWinAds.Editor
         private const string TmpSettingsPath = "Assets/TextMesh Pro/Resources/TMP Settings.asset";
         private const string TmpExamplesPath = "Assets/TextMesh Pro/Examples & Extras";
         private const int MinimumExamplesFileCount = 50;
+        private static readonly string[] RequiredTmpShaderNames =
+        {
+            "TextMeshPro/Mobile/Distance Field",
+            "TextMeshPro/Mobile/Distance Field Overlay",
+            "TextMeshPro/Mobile/Distance Field - Masking",
+            "TextMeshPro/Distance Field",
+            "TextMeshPro/Sprite"
+        };
 
         static TextMeshProBootstrap()
         {
@@ -64,6 +73,7 @@ namespace ZeyWinAds.Editor
             }
 
             ConfigureTextMeshProSettings();
+            ConfigureTextMeshProShaders();
             AssetDatabase.SaveAssets();
 
             bool ready = HasEssentialResources() && HasExamplesAndExtras();
@@ -190,6 +200,85 @@ namespace ZeyWinAds.Editor
 
             serialized.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(settings);
+        }
+
+        private static void ConfigureTextMeshProShaders()
+        {
+            Shader mobileDistanceField = Shader.Find("TextMeshPro/Mobile/Distance Field");
+            int materialsUpdated = 0;
+            if (mobileDistanceField != null)
+                materialsUpdated = RetargetTextMeshProMaterials(mobileDistanceField);
+
+            int shadersIncluded = EnsureAlwaysIncludedShaders();
+            if (materialsUpdated > 0 || shadersIncluded > 0)
+                Debug.Log($"[ZeyWinAds] TextMesh Pro shader configuration applied. materialsUpdated={materialsUpdated}, alwaysIncludedAdded={shadersIncluded}");
+        }
+
+        private static int RetargetTextMeshProMaterials(Shader targetShader)
+        {
+            int updated = 0;
+            foreach (string guid in AssetDatabase.FindAssets("t:Material"))
+            {
+                string path = AssetDatabase.GUIDToAssetPath(guid);
+                var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+                if (material == null || material.shader == null)
+                    continue;
+
+                if (!material.shader.name.StartsWith("TextMeshPro/", StringComparison.Ordinal))
+                    continue;
+
+                if (material.shader == targetShader)
+                    continue;
+
+                material.shader = targetShader;
+                EditorUtility.SetDirty(material);
+                updated++;
+            }
+
+            return updated;
+        }
+
+        private static int EnsureAlwaysIncludedShaders()
+        {
+            var graphicsSettings = GraphicsSettings.GetGraphicsSettings();
+            if (graphicsSettings == null)
+                return 0;
+
+            var serialized = new SerializedObject(graphicsSettings);
+            var shaders = serialized.FindProperty("m_AlwaysIncludedShaders");
+            if (shaders == null || !shaders.isArray)
+                return 0;
+
+            int added = 0;
+            foreach (string shaderName in RequiredTmpShaderNames)
+            {
+                Shader shader = Shader.Find(shaderName);
+                if (shader == null || ContainsObjectReference(shaders, shader))
+                    continue;
+
+                shaders.InsertArrayElementAtIndex(shaders.arraySize);
+                shaders.GetArrayElementAtIndex(shaders.arraySize - 1).objectReferenceValue = shader;
+                added++;
+            }
+
+            if (added > 0)
+            {
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(graphicsSettings);
+            }
+
+            return added;
+        }
+
+        private static bool ContainsObjectReference(SerializedProperty array, UnityEngine.Object value)
+        {
+            for (int i = 0; i < array.arraySize; i++)
+            {
+                if (array.GetArrayElementAtIndex(i).objectReferenceValue == value)
+                    return true;
+            }
+
+            return false;
         }
 
         private static UnityEngine.Object LoadFirstAsset(params string[] assetPaths)

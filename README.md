@@ -5,7 +5,7 @@
 # ZeyWin Ads SDK for Unity
 
 ![Unity](https://img.shields.io/badge/Unity-2020.3%2B-222?logo=unity)
-![Version](https://img.shields.io/badge/version-1.0.17-40c9ff)
+![Version](https://img.shields.io/badge/version-1.0.18-40c9ff)
 ![License](https://img.shields.io/badge/license-MIT-47f59b)
 ![Android](https://img.shields.io/badge/Android-API%2021%2B-3ddc84)
 ![iOS](https://img.shields.io/badge/iOS-11%2B-lightgrey)
@@ -31,6 +31,7 @@ On first import the SDK will automatically add and configure:
 - Google External Dependency Manager for native dependency resolution
 - Unity UI / TextMesh Pro project dependencies
 - TextMesh Pro Essential Resources and Examples & Extras in `Assets/TextMesh Pro`
+- TextMesh Pro shader/material build setup, including TMP shaders in Always Included Shaders
 - CrashGuard SDK as a sibling package
 - SDK-owned WebView/loading/native configuration helpers, including SafeArea-aware offer WebViews
 - Android autorotation, HTTP/browser queries, deeplink intent-filter, WebView camera/microphone permissions, and native notification permission prompt
@@ -84,7 +85,7 @@ The repository includes `tools/zeywin-fleet-configure.sh`, a TSV-driven runner f
 tools/zeywin-fleet-configure.sh \
   --root /Volumes/Work/games \
   --config /path/to/fleet-config.tsv \
-  --sdk-ref v1.0.17 \
+  --sdk-ref v1.0.18 \
   --unity-path /Applications/Unity/Hub/Editor/6000.0.71f1/Unity.app/Contents/MacOS/Unity \
   --require-unity6
 ```

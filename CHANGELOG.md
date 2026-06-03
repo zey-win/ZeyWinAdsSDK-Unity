@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.18
+
+- Added SDK-owned TextMesh Pro shader build setup so installing the SDK also keeps TMP mobile shaders in Always Included Shaders.
+- Made the TMP bootstrap retarget project TextMesh Pro material assets to the mobile distance field shader during configure/build.
+
 ## 1.0.17
 
 - Added SDK-owned Android autorotation, HTTP/browser query, deeplink, camera/microphone, notification permission, and optional camera/microphone feature configuration.
