@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.5
+
+- Disabled the full Unity splash screen from the fleet project configurator, not only the Unity logo, so Unity 6000 game installs keep `m_ShowUnitySplashScreen` and `m_ShowUnitySplashLogo` off.
+
 ## 1.0.4
 
 - Added `ZeyWinAdsProjectConfigurator`, a batchmode-friendly Unity editor installer for fleet updates across many games.

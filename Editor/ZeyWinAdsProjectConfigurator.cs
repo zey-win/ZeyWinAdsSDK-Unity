@@ -67,6 +67,7 @@ namespace ZeyWinAds.Editor
                 PlayerSettings.Android.bundleVersionCode = versionCode;
             }
 
+            PlayerSettings.SplashScreen.show = false;
             PlayerSettings.SplashScreen.showUnityLogo = false;
         }
 
