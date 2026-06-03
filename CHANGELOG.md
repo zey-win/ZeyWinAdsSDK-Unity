@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.9
+
+- Added explicit `--unity-path` and `--require-unity6` fleet runner flags so old and mixed-version game projects can be configured only through an approved Unity 6 editor.
+- Made the fleet runner skip rows with missing or invalid Unity editors instead of aborting the whole multi-game run.
+- Synced the legacy Google Mobile Ads androidlib manifest App ID during fleet configuration to prevent mixed AdMob App IDs in older Unity projects.
+
 ## 1.0.8
 
 - Added environment-variable fallbacks for fleet configuration secrets so API keys and AdMob IDs do not need to appear in Unity command-line logs.

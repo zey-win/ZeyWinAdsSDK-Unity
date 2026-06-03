@@ -3,8 +3,10 @@ set -euo pipefail
 
 ROOT="/Volumes/Work/games"
 CONFIG=""
-SDK_REF="v1.0.8"
+SDK_REF="v1.0.9"
 CRASHGUARD_REF="2b3947155206bc445e2d6088ac51cdf2760f921d"
+GLOBAL_UNITY_PATH=""
+REQUIRE_UNITY6=0
 DRY_RUN=0
 DISCOVER_ONLY=0
 SNAPSHOT_ROOT=""
@@ -12,7 +14,7 @@ SNAPSHOT_ROOT=""
 usage() {
   cat <<'USAGE'
 Usage:
-  tools/zeywin-fleet-configure.sh --config fleet.tsv [--root /path/to/games] [--sdk-ref v1.0.8] [--dry-run]
+  tools/zeywin-fleet-configure.sh --config fleet.tsv [--root /path/to/games] [--sdk-ref v1.0.9] [--unity-path /path/to/Unity] [--require-unity6] [--dry-run]
   tools/zeywin-fleet-configure.sh --discover [--root /path/to/games]
 
 TSV columns:
@@ -23,6 +25,10 @@ Optional columns:
 
 The five monetization values are exported through environment variables before
 Unity starts, so they do not appear in Unity command-line logs.
+
+Use --unity-path with --require-unity6 when upgrading older game projects
+through a Unity 6 editor instead of the editor version recorded in
+ProjectSettings/ProjectVersion.txt.
 USAGE
 }
 
@@ -43,6 +49,14 @@ while [[ $# -gt 0 ]]; do
     --crashguard-ref)
       CRASHGUARD_REF="$2"
       shift 2
+      ;;
+    --unity-path)
+      GLOBAL_UNITY_PATH="$2"
+      shift 2
+      ;;
+    --require-unity6)
+      REQUIRE_UNITY6=1
+      shift
       ;;
     --snapshot-root)
       SNAPSHOT_ROOT="$2"
@@ -83,12 +97,17 @@ unity_for_project() {
   local explicit="${2:-}"
 
   if [[ -n "$explicit" ]]; then
-    echo "$explicit"
+    validate_unity_path "$explicit" "$project" && echo "$explicit"
+    return
+  fi
+
+  if [[ -n "$GLOBAL_UNITY_PATH" ]]; then
+    validate_unity_path "$GLOBAL_UNITY_PATH" "$project" && echo "$GLOBAL_UNITY_PATH"
     return
   fi
 
   if [[ -n "${UNITY_PATH:-}" ]]; then
-    echo "$UNITY_PATH"
+    validate_unity_path "$UNITY_PATH" "$project" && echo "$UNITY_PATH"
     return
   fi
 
@@ -96,12 +115,27 @@ unity_for_project() {
   version=$(sed -n 's/^m_EditorVersion: //p' "$project/ProjectSettings/ProjectVersion.txt" | head -n 1)
   local candidate="/Applications/Unity/Hub/Editor/$version/Unity.app/Contents/MacOS/Unity"
   if [[ -x "$candidate" ]]; then
-    echo "$candidate"
+    validate_unity_path "$candidate" "$project" && echo "$candidate"
     return
   fi
 
   echo "Unity editor not found for $project version $version" >&2
   return 1
+}
+
+validate_unity_path() {
+  local unity_path="$1"
+  local project="$2"
+
+  if [[ ! -x "$unity_path" ]]; then
+    echo "Unity editor is not executable for $project: $unity_path" >&2
+    return 1
+  fi
+
+  if [[ "$REQUIRE_UNITY6" -eq 1 && "$unity_path" != *"/Editor/6000."* ]]; then
+    echo "Skipping $project: --require-unity6 needs a Unity 6 editor, got $unity_path" >&2
+    return 1
+  fi
 }
 
 pin_packages() {
@@ -194,7 +228,9 @@ run_row() {
     return 0
   fi
 
-  unity_path=$(unity_for_project "$project" "$unity_path")
+  if ! unity_path=$(unity_for_project "$project" "$unity_path"); then
+    return 0
+  fi
   mkdir -p "$project/Logs"
 
   echo "Configuring $project"

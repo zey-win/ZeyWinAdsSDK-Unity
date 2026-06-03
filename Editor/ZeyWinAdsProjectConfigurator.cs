@@ -17,6 +17,7 @@ namespace ZeyWinAds.Editor
     {
         private const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
         private const string GoogleMobileAdsSettingsPath = "Assets/GoogleMobileAds/Resources/GoogleMobileAdsSettings.asset";
+        private const string GoogleMobileAdsAndroidManifestPath = "Assets/Plugins/Android/GoogleMobileAdsPlugin.androidlib/AndroidManifest.xml";
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
         private const string ToolsNs = "http://schemas.android.com/tools";
         private const string AdMobMetaName = "com.google.android.gms.ads.APPLICATION_ID";
@@ -35,6 +36,7 @@ namespace ZeyWinAds.Editor
             ApplyPlayerSettings(args);
             ApplyZeyWinSettings(settings, args);
             PatchGoogleMobileAdsSettings(settings);
+            PatchGoogleMobileAdsAndroidManifest(settings);
             PatchAndroidManifest(settings, args);
 
             EditorUtility.SetDirty(settings);
@@ -118,6 +120,42 @@ namespace ZeyWinAds.Editor
 
             serialized.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(asset);
+        }
+
+        private static void PatchGoogleMobileAdsAndroidManifest(ZeyWinAdsSettings settings)
+        {
+            if (string.IsNullOrEmpty(settings.admobAppIdAndroid))
+                return;
+
+            string fullPath = Path.GetFullPath(GoogleMobileAdsAndroidManifestPath);
+            if (!File.Exists(fullPath))
+                return;
+
+            var doc = new XmlDocument();
+            doc.Load(fullPath);
+
+            var manifest = doc.DocumentElement;
+            if (manifest == null)
+                return;
+
+            EnsureNamespace(manifest, "android", AndroidNs);
+            var application = manifest.SelectSingleNode("application") as XmlElement;
+            if (application == null)
+            {
+                application = doc.CreateElement("application");
+                manifest.AppendChild(application);
+            }
+
+            var meta = FindMetaData(application, AdMobMetaName);
+            if (meta == null)
+            {
+                meta = doc.CreateElement("meta-data");
+                application.AppendChild(meta);
+            }
+
+            meta.SetAttribute("name", AndroidNs, AdMobMetaName);
+            meta.SetAttribute("value", AndroidNs, settings.admobAppIdAndroid);
+            SaveXml(doc, fullPath);
         }
 
         private static void PatchAndroidManifest(ZeyWinAdsSettings settings, IDictionary<string, string> args)
