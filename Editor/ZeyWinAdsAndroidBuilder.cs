@@ -118,17 +118,29 @@ namespace ZeyWinAds.Editor
 
         private static void ApplySigning(IDictionary<string, string> args)
         {
-            string keystorePath = GetAnyOrEnv(args, PlayerSettings.Android.keystoreName, "ANDROID_KEYSTORE_PATH", "androidKeystorePath", "keystorePath");
-            string keystorePass = GetAnyOrEnv(args, PlayerSettings.Android.keystorePass, "ANDROID_KEYSTORE_PASS", "androidKeystorePass", "keystorePass");
-            string keyAlias = GetAnyOrEnv(args, PlayerSettings.Android.keyaliasName, "ANDROID_KEYALIAS_NAME", "androidKeyaliasName", "keyAlias");
-            string keyAliasPass = GetAnyOrEnv(args, PlayerSettings.Android.keyaliasPass, "ANDROID_KEYALIAS_PASS", "androidKeyaliasPass", "keyAliasPass");
+            bool hasExplicitKeystore = TryGetAnyOrEnv(args, out string keystorePath, "ANDROID_KEYSTORE_PATH", "androidKeystorePath", "keystorePath");
+            if (!hasExplicitKeystore)
+            {
+                string existingPath = PlayerSettings.Android.keystoreName;
+                if (!PlayerSettings.Android.useCustomKeystore || string.IsNullOrEmpty(existingPath))
+                    return;
 
-            if (string.IsNullOrEmpty(keystorePath))
+                existingPath = ResolveProjectPath(existingPath);
+                if (File.Exists(existingPath))
+                    return;
+
+                Debug.LogWarning("[ZeyWinAds] Custom Android keystore is configured but missing; using debug signing for this build.");
+                PlayerSettings.Android.useCustomKeystore = false;
                 return;
+            }
 
             keystorePath = ResolveProjectPath(keystorePath);
             if (!File.Exists(keystorePath))
                 throw new FileNotFoundException("Android keystore not found: " + keystorePath, keystorePath);
+
+            string keystorePass = GetAnyOrEnv(args, PlayerSettings.Android.keystorePass, "ANDROID_KEYSTORE_PASS", "androidKeystorePass", "keystorePass");
+            string keyAlias = GetAnyOrEnv(args, PlayerSettings.Android.keyaliasName, "ANDROID_KEYALIAS_NAME", "androidKeyaliasName", "keyAlias");
+            string keyAliasPass = GetAnyOrEnv(args, PlayerSettings.Android.keyaliasPass, "ANDROID_KEYALIAS_PASS", "androidKeyaliasPass", "keyAliasPass");
 
             PlayerSettings.Android.useCustomKeystore = true;
             PlayerSettings.Android.keystoreName = keystorePath;
@@ -199,14 +211,29 @@ namespace ZeyWinAds.Editor
 
         private static string GetAnyOrEnv(IDictionary<string, string> args, string fallback, string envName, params string[] keys)
         {
+            if (TryGetAnyOrEnv(args, out string value, envName, keys))
+                return value;
+
+            return fallback;
+        }
+
+        private static bool TryGetAnyOrEnv(IDictionary<string, string> args, out string value, string envName, params string[] keys)
+        {
             foreach (string key in keys)
             {
-                if (args.TryGetValue(key, out string value) && !string.IsNullOrWhiteSpace(value))
-                    return value;
+                if (args.TryGetValue(key, out value) && !string.IsNullOrWhiteSpace(value))
+                    return true;
             }
 
             string envValue = Environment.GetEnvironmentVariable(envName);
-            return string.IsNullOrWhiteSpace(envValue) ? fallback : envValue;
+            if (!string.IsNullOrWhiteSpace(envValue))
+            {
+                value = envValue;
+                return true;
+            }
+
+            value = null;
+            return false;
         }
 
         private static bool ParseBool(string value, bool fallback)

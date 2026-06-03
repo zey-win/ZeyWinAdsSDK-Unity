@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.12
+
+- Made the fleet Android builder fall back to debug signing for phone QA when a project has a stale custom keystore path and no explicit signing environment is provided.
+
 ## 1.0.11
 
 - Added `ZeyWinAdsAndroidBuilder`, a shared Unity batchmode APK/AAB builder for fleet phone QA and release artifact checks.

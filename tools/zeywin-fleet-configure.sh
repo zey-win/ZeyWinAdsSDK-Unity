@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="/Volumes/Work/games"
 CONFIG=""
-SDK_REF="v1.0.11"
+SDK_REF="v1.0.12"
 CRASHGUARD_REF="2b3947155206bc445e2d6088ac51cdf2760f921d"
 GLOBAL_UNITY_PATH=""
 REQUIRE_UNITY6=0
@@ -14,7 +14,7 @@ SNAPSHOT_ROOT=""
 usage() {
   cat <<'USAGE'
 Usage:
-  tools/zeywin-fleet-configure.sh --config fleet.tsv [--root /path/to/games] [--sdk-ref v1.0.11] [--unity-path /path/to/Unity] [--require-unity6] [--dry-run]
+  tools/zeywin-fleet-configure.sh --config fleet.tsv [--root /path/to/games] [--sdk-ref v1.0.12] [--unity-path /path/to/Unity] [--require-unity6] [--dry-run]
   tools/zeywin-fleet-configure.sh --discover [--root /path/to/games]
 
 TSV columns:
