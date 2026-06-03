@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.7
+
+- Fixed the runtime `ZeyWinAdsConfig.SdkVersion` constant so ad requests report the published package version.
+
 ## 1.0.6
 
 - Added canonical fleet configurator argument names: `adMobAppId`, `bannerAdUnitId`, `interstitialAdUnitId`, and `rewardedAdUnitId`.
