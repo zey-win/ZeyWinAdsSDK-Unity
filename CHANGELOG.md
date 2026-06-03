@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.16
+
+- Added automatic TextMesh Pro dependency/resource bootstrap so SDK installation imports TMP Essential Resources and Examples & Extras into each game project.
+- Added build-time TMP resource verification before Android builds and fleet configuration.
+- Made SDK UniWebView offers and locked WebViews respect `Screen.safeArea` so offer pages avoid camera cutouts and notches automatically.
+
 ## 1.0.15
 
 - Fixed AdMob bootstrap detection so a generated `Assets/GoogleMobileAds` settings folder is not treated as a legacy Google Mobile Ads plugin.

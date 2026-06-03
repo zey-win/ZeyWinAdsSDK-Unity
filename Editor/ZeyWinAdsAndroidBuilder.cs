@@ -82,6 +82,8 @@ namespace ZeyWinAds.Editor
             EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Android, BuildTarget.Android);
             EditorUserBuildSettings.buildAppBundle = buildAppBundle;
 
+            TextMeshProBootstrap.EnsureInstalledAndConfigured();
+
             PlayerSettings.SplashScreen.show = false;
             PlayerSettings.SplashScreen.showUnityLogo = false;
 

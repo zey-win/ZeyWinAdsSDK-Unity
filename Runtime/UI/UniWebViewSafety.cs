@@ -49,7 +49,7 @@ namespace ZeyWinAds.UI
             UniWebView.SetAllowJavaScriptOpenWindow(true);
             UniWebView.SetAllowUniversalAccessFromFileURLs(true);
 
-            webView.Frame = new Rect(0, 0, Screen.width, Screen.height);
+            ApplySafeAreaFrame(webView);
             webView.BackgroundColor = Color.black;
             webView.SetShowToolbar(false);
             webView.SetBackButtonEnabled(!locked);
@@ -68,6 +68,19 @@ namespace ZeyWinAds.UI
             string host = GetHost(initialUrl);
             if (!string.IsNullOrEmpty(host))
                 webView.AddPermissionTrustDomain(host);
+        }
+
+        public static void ApplySafeAreaFrame(UniWebView webView)
+        {
+            if (webView == null)
+                return;
+
+            Rect safeArea = Screen.safeArea;
+            if (safeArea.width <= 0 || safeArea.height <= 0)
+                safeArea = new Rect(0, 0, Screen.width, Screen.height);
+
+            float yFromTop = Screen.height - (safeArea.y + safeArea.height);
+            webView.Frame = new Rect(safeArea.x, yFromTop, safeArea.width, safeArea.height);
         }
 
         public static bool ShouldHandleOfferRequest(UniWebViewChannelMethodHandleRequest request)

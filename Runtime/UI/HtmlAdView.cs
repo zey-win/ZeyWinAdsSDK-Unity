@@ -206,6 +206,14 @@ namespace ZeyWinAds.UI
             if (_instance == this) _instance = null;
         }
 
+        private void Update()
+        {
+#if !UNITY_EDITOR
+            if (_isShowing && _uniWebView != null)
+                UniWebViewSafety.ApplySafeAreaFrame(_uniWebView);
+#endif
+        }
+
         // ============================================================
         // UniWebView implementation
         // ============================================================

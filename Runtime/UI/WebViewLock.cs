@@ -645,6 +645,11 @@ namespace ZeyWinAds.UI
             if (!_isLocked)
                 return;
 
+#if !UNITY_EDITOR
+            if (_uniWebView != null)
+                UniWebViewSafety.ApplySafeAreaFrame(_uniWebView);
+#endif
+
 #if UNITY_ANDROID && !UNITY_EDITOR
             // Handle Android system back button for webview navigation
             if (Input.GetKeyDown(KeyCode.Escape) && _webView != null)

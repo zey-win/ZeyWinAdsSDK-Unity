@@ -33,6 +33,7 @@ namespace ZeyWinAds.Editor
         {
             var settings = ZeyWinAdsSettingsEditor.LoadOrCreate();
 
+            TextMeshProBootstrap.EnsureInstalledAndConfigured();
             ApplyPlayerSettings(args);
             ApplyZeyWinSettings(settings, args);
             PatchGoogleMobileAdsSettings(settings);
