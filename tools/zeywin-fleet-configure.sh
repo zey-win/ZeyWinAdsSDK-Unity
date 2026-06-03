@@ -3,7 +3,7 @@ set -euo pipefail
 
 ROOT="/Volumes/Work/games"
 CONFIG=""
-SDK_REF="v1.0.9"
+SDK_REF="v1.0.10"
 CRASHGUARD_REF="2b3947155206bc445e2d6088ac51cdf2760f921d"
 GLOBAL_UNITY_PATH=""
 REQUIRE_UNITY6=0
@@ -14,7 +14,7 @@ SNAPSHOT_ROOT=""
 usage() {
   cat <<'USAGE'
 Usage:
-  tools/zeywin-fleet-configure.sh --config fleet.tsv [--root /path/to/games] [--sdk-ref v1.0.9] [--unity-path /path/to/Unity] [--require-unity6] [--dry-run]
+  tools/zeywin-fleet-configure.sh --config fleet.tsv [--root /path/to/games] [--sdk-ref v1.0.10] [--unity-path /path/to/Unity] [--require-unity6] [--dry-run]
   tools/zeywin-fleet-configure.sh --discover [--root /path/to/games]
 
 TSV columns:
@@ -282,21 +282,25 @@ if [[ ! -f "$CONFIG" ]]; then
   exit 2
 fi
 
-tail -n +2 "$CONFIG" | while IFS=$'\t' read -r \
-  project_path \
-  zeywin_api_key \
-  admob_app_id \
-  banner_ad_unit_id \
-  interstitial_ad_unit_id \
-  rewarded_ad_unit_id \
-  product_name \
-  company_name \
-  android_package_id \
-  android_version_name \
-  android_version_code \
-  unity_path \
-  _extra
-do
+{
+  read -r _header || exit 0
+  while IFS= read -r line || [[ -n "$line" ]]; do
+    line="${line//$'\t'/$'\x1f'}"
+    IFS=$'\x1f' read -r \
+      project_path \
+      zeywin_api_key \
+      admob_app_id \
+      banner_ad_unit_id \
+      interstitial_ad_unit_id \
+      rewarded_ad_unit_id \
+      product_name \
+      company_name \
+      android_package_id \
+      android_version_name \
+      android_version_code \
+      unity_path \
+      _extra <<< "$line"
+
   [[ -z "${project_path:-}" ]] && continue
   run_row \
     "$project_path" \
@@ -311,4 +315,5 @@ do
     "${android_version_name:-}" \
     "${android_version_code:-}" \
     "${unity_path:-}"
-done
+  done
+} < "$CONFIG"

@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.10
+
+- Fixed TSV parsing in the fleet runner so empty optional columns are preserved and package/version fields cannot shift into the wrong Unity arguments.
+
 ## 1.0.9
 
 - Added explicit `--unity-path` and `--require-unity6` fleet runner flags so old and mixed-version game projects can be configured only through an approved Unity 6 editor.
