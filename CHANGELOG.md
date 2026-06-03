@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.6
+
+- Added canonical fleet configurator argument names: `adMobAppId`, `bannerAdUnitId`, `interstitialAdUnitId`, and `rewardedAdUnitId`.
+- Kept compatibility with existing `admobAndroid...` and `admob...` command-line aliases so older automation does not break.
+
 ## 1.0.5
 
 - Disabled the full Unity splash screen from the fleet project configurator, not only the Unity logo, so Unity 6000 game installs keep `m_ShowUnitySplashScreen` and `m_ShowUnitySplashLogo` off.

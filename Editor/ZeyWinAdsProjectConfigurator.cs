@@ -46,22 +46,22 @@ namespace ZeyWinAds.Editor
 
         private static void ApplyPlayerSettings(IDictionary<string, string> args)
         {
-            if (TryGet(args, "productName", out string productName))
+            if (TryGetAny(args, out string productName, "productName", "appName"))
                 PlayerSettings.productName = productName;
 
             if (TryGet(args, "companyName", out string companyName))
                 PlayerSettings.companyName = companyName;
 
-            if (TryGet(args, "androidPackageId", out string packageId))
+            if (TryGetAny(args, out string packageId, "androidPackageId", "packageId", "bundleId", "applicationId"))
             {
                 PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, packageId);
                 PlayerSettings.applicationIdentifier = packageId;
             }
 
-            if (TryGet(args, "androidVersionName", out string versionName))
+            if (TryGetAny(args, out string versionName, "androidVersionName", "versionName"))
                 PlayerSettings.bundleVersion = versionName;
 
-            if (TryGet(args, "androidVersionCode", out string codeText)
+            if (TryGetAny(args, out string codeText, "androidVersionCode", "versionCode")
                 && int.TryParse(codeText, NumberStyles.Integer, CultureInfo.InvariantCulture, out int versionCode))
             {
                 PlayerSettings.Android.bundleVersionCode = versionCode;
@@ -73,7 +73,7 @@ namespace ZeyWinAds.Editor
 
         private static void ApplyZeyWinSettings(ZeyWinAdsSettings settings, IDictionary<string, string> args)
         {
-            if (TryGet(args, "zeywinApiKey", out string apiKey) || TryGet(args, "apiKey", out apiKey))
+            if (TryGetAny(args, out string apiKey, "zeywinApiKey", "apiKey"))
                 settings.apiKey = apiKey;
 
             if (TryGet(args, "autoInitializeOnStartup", out string autoInit))
@@ -89,16 +89,16 @@ namespace ZeyWinAds.Editor
             if (TryGet(args, "enableUmpConsent", out string enableUmp))
                 settings.enableUmpConsent = ParseBool(enableUmp, settings.enableUmpConsent);
 
-            if (TryGet(args, "admobAndroidAppId", out string appId) || TryGet(args, "admobAppId", out appId))
+            if (TryGetAny(args, out string appId, "adMobAppId", "admobAppId", "admobAndroidAppId"))
                 settings.admobAppIdAndroid = appId;
 
-            if (TryGet(args, "admobAndroidBanner", out string banner) || TryGet(args, "admobBanner", out banner))
+            if (TryGetAny(args, out string banner, "bannerAdUnitId", "adMobBannerAdUnitId", "admobBanner", "admobAndroidBanner"))
                 settings.admobBannerAndroid = banner;
 
-            if (TryGet(args, "admobAndroidInterstitial", out string interstitial) || TryGet(args, "admobInterstitial", out interstitial))
+            if (TryGetAny(args, out string interstitial, "interstitialAdUnitId", "adMobInterstitialAdUnitId", "admobInterstitial", "admobAndroidInterstitial"))
                 settings.admobInterstitialAndroid = interstitial;
 
-            if (TryGet(args, "admobAndroidRewarded", out string rewarded) || TryGet(args, "admobRewarded", out rewarded))
+            if (TryGetAny(args, out string rewarded, "rewardedAdUnitId", "adMobRewardedAdUnitId", "admobRewarded", "admobAndroidRewarded"))
                 settings.admobRewardedAndroid = rewarded;
         }
 
@@ -136,13 +136,13 @@ namespace ZeyWinAds.Editor
             EnsureNamespace(manifest, "android", AndroidNs);
             EnsureNamespace(manifest, "tools", ToolsNs);
 
-            if (TryGet(args, "androidPackageId", out string packageId))
+            if (TryGetAny(args, out string packageId, "androidPackageId", "packageId", "bundleId", "applicationId"))
                 manifest.SetAttribute("package", packageId);
 
-            if (TryGet(args, "androidVersionName", out string versionName))
+            if (TryGetAny(args, out string versionName, "androidVersionName", "versionName"))
                 manifest.SetAttribute("versionName", AndroidNs, versionName);
 
-            if (TryGet(args, "androidVersionCode", out string versionCode))
+            if (TryGetAny(args, out string versionCode, "androidVersionCode", "versionCode"))
                 manifest.SetAttribute("versionCode", AndroidNs, versionCode);
 
             EnsurePermission(doc, manifest, "com.google.android.gms.permission.AD_ID");
@@ -166,7 +166,7 @@ namespace ZeyWinAds.Editor
                 manifest.AppendChild(application);
             }
 
-            if (!TryGet(args, "productName", out string appName))
+            if (!TryGetAny(args, out string appName, "productName", "appName"))
                 appName = PlayerSettings.productName;
 
             if (!string.IsNullOrEmpty(appName))
@@ -335,6 +335,18 @@ namespace ZeyWinAds.Editor
         {
             if (args.TryGetValue(key, out value))
                 return !string.IsNullOrWhiteSpace(value);
+
+            value = null;
+            return false;
+        }
+
+        private static bool TryGetAny(IDictionary<string, string> args, out string value, params string[] keys)
+        {
+            foreach (string key in keys)
+            {
+                if (TryGet(args, key, out value))
+                    return true;
+            }
 
             value = null;
             return false;
