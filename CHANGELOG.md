@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.20
+
+- Destroy AdMob banners while ZeyWin WebView, popup, or banner surfaces are active so hidden Google banners cannot render underneath or record impressions.
+- Suppress AdMob banner preload/show calls during active ZeyWin surfaces and restart banner preload only after the ZeyWin surface ends.
+
 ## 1.0.19
 
 - Switched Android locked offers and HTML WebView ads to SDK-owned native WebViews so old and new games render the offer layer consistently after package update.

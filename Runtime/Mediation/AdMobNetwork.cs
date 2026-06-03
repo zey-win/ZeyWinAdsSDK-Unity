@@ -259,7 +259,7 @@ namespace ZeyWinAds.Mediation
         public static bool IsBannerReady()
         {
 #if ZEYWIN_ADMOB
-            return _initialized && _banner != null && _bannerLoaded;
+            return _initialized && _banner != null && _bannerLoaded && !AdMediator.IsZeyWinSurfaceActive;
 #else
             return false;
 #endif
@@ -281,6 +281,13 @@ namespace ZeyWinAds.Mediation
         {
 #if ZEYWIN_ADMOB
             if (!_initialized || _settings == null) return;
+            if (AdMediator.IsZeyWinSurfaceActive)
+            {
+                DestroyBanner();
+                Core.Logger.Debug("[AdMob] Banner preload suppressed while ZeyWin surface is active");
+                return;
+            }
+
             string unitId = _settings.GetBannerUnitId();
             if (string.IsNullOrEmpty(unitId)) return;
 
@@ -294,6 +301,13 @@ namespace ZeyWinAds.Mediation
             _banner = new BannerView(unitId, AdSize.Banner, _currentBannerPosition);
             _banner.OnBannerAdLoaded += () =>
             {
+                if (AdMediator.IsZeyWinSurfaceActive)
+                {
+                    Core.Logger.Debug("[AdMob] Banner loaded while ZeyWin surface is active; destroying before display");
+                    DestroyBanner();
+                    return;
+                }
+
                 _bannerLoaded = true;
                 Core.Logger.Log("[AdMob] Banner loaded");
                 if (!_bannerVisible)
@@ -311,6 +325,13 @@ namespace ZeyWinAds.Mediation
         public static bool ShowBanner(BannerPosition position)
         {
 #if ZEYWIN_ADMOB
+            if (AdMediator.IsZeyWinSurfaceActive)
+            {
+                DestroyBanner();
+                Core.Logger.Debug("[AdMob] Banner show suppressed while ZeyWin surface is active");
+                return false;
+            }
+
             if (!IsBannerReady()) return false;
 
             AdPosition wanted = position == BannerPosition.Top ? AdPosition.Top : AdPosition.Bottom;

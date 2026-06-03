@@ -96,7 +96,7 @@ namespace ZeyWinAds.Mediation
         {
             if (IsZeyWinSurfaceActive)
             {
-                AdMobNetwork.HideBanner();
+                AdMobNetwork.DestroyBanner();
                 Logger.Debug("[Mediator] AdMob banner suppressed while ZeyWin surface is active");
                 return false;
             }
@@ -112,14 +112,15 @@ namespace ZeyWinAds.Mediation
         public static void OnZeyWinBannerShown()
         {
             ActiveBannerSource = BannerSource.ZeyWin;
-            // Make sure AdMob banner isn't lingering on screen.
-            AdMobNetwork.HideBanner();
+            // Make sure AdMob banner is not just hidden but fully detached, so
+            // Google cannot record an impression under a ZeyWin surface.
+            AdMobNetwork.DestroyBanner();
         }
 
         public static void BeginZeyWinSurface(string reason)
         {
             _zeyWinSurfaceDepth++;
-            AdMobNetwork.HideBanner();
+            AdMobNetwork.DestroyBanner();
             Logger.Debug("[Mediator] ZeyWin surface began: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
         }
 
@@ -129,6 +130,8 @@ namespace ZeyWinAds.Mediation
                 _zeyWinSurfaceDepth--;
 
             Logger.Debug("[Mediator] ZeyWin surface ended: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
+            if (!IsZeyWinSurfaceActive && _initialized)
+                AdMobNetwork.PreloadBanner();
         }
 
         public static void HideBanner()
