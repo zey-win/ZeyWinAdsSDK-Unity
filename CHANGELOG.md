@@ -2,7 +2,7 @@
 
 All notable changes to this package are documented in this file.
 
-## 1.0.23
+## 1.0.24
 
 - Added a session cooldown for terminal ZeyWin API app configuration errors such as inactive or unknown bundle IDs, preventing fleet games from repeatedly hitting the server every few seconds.
 - Added SDK-owned minimum intervals for automated fullscreen ads and legacy AdMob auto retries; rewarded button flows remain outside the fullscreen auto-show cooldown.

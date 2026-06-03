@@ -1,5 +1,6 @@
 using System;
-using UnityEngine;
+using Mathf = UnityEngine.Mathf;
+using Time = UnityEngine.Time;
 using ZeyWinAds.Core;
 
 namespace ZeyWinAds.Mediation
