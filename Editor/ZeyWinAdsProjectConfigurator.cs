@@ -39,6 +39,7 @@ namespace ZeyWinAds.Editor
             PatchGoogleMobileAdsSettings(settings);
             PatchGoogleMobileAdsAndroidManifest(settings);
             PatchAndroidManifest(settings, args);
+            LegacyAdMobProviderPatcher.Apply(logWhenNoChanges: false);
 
             EditorUtility.SetDirty(settings);
             AssetDatabase.SaveAssets();

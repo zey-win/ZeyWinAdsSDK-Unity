@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.21
+
+- Added an SDK-owned legacy `AdMobProvider.cs` patcher so older games suppress direct Google banner creation while ZeyWin WebViews, popups, or banners are active.
+- Wired the legacy banner guard into fleet project configuration so package updates apply the fix automatically alongside TMP, SafeArea, manifest, and AdMob setup.
+
 ## 1.0.20
 
 - Destroy AdMob banners while ZeyWin WebView, popup, or banner surfaces are active so hidden Google banners cannot render underneath or record impressions.
