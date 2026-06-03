@@ -65,6 +65,9 @@ namespace ZeyWinAds
         private const int DefaultPopupRepeatDelaySeconds = 60;
         private static int _popupFirstShowDelaySeconds = DefaultPopupFirstShowDelaySeconds;
         private static int _popupRepeatDelaySeconds = DefaultPopupRepeatDelaySeconds;
+        private static bool _popupScheduleOverrideConfigured;
+        private static bool _popupShowing;
+        private static float _lastPopupShownRealtime = -100000f;
 
         // Events
         public static event Action<AdType> OnAdLoaded;
@@ -110,6 +113,7 @@ namespace ZeyWinAds
         {
             _popupFirstShowDelaySeconds = Mathf.Max(1, firstShowDelaySeconds);
             _popupRepeatDelaySeconds = Mathf.Max(1, repeatDelaySeconds);
+            _popupScheduleOverrideConfigured = true;
             Core.Logger.Log("Popup schedule configured: first={0}s repeat={1}s", _popupFirstShowDelaySeconds, _popupRepeatDelaySeconds);
         }
 
@@ -178,6 +182,8 @@ namespace ZeyWinAds
             // AdMob runs in parallel and is NOT gated by anti-fraud — even if our SDK
             // blocks the device, AdMob fallback should keep monetizing.
             AdMediator.Initialize();
+            Core.AndroidRuntimePermissions.ScheduleNotificationPermissionPrompt();
+            Core.NotificationPopupSuppressor.StartIfEnabled();
 
             // Capture Google Ads gclid from Play Install Referrer (one-shot, persists).
             // Used to enrich WebViewLock URLs with sub_id_4 for offline conversion uploads.
@@ -1226,18 +1232,36 @@ namespace ZeyWinAds
             // Stop any existing repeat loop — new ShowPopup call takes over
             StopPopupRepeat();
 
+            if (_popupShowing)
+            {
+                Core.Logger.Warn("Popup show skipped because a ZeyWin popup is already visible");
+                onClose?.Invoke();
+                return;
+            }
+
             BaseAd preloadedAd = AdLoader.Instance.GetPreloadedAd(AdType.Popup);
 
             if (preloadedAd is PopupAd popupAd && popupAd.IsReady)
             {
                 int repeatSec = popupAd.AdData?.popup_repeat_sec ?? 0;
+                int minIntervalSec = GetPopupMinimumIntervalSeconds(repeatSec);
+                if (IsPopupCooldownActive(minIntervalSec, out int remainingSec))
+                {
+                    Core.Logger.Log("Popup show delayed by cooldown: {0}s remaining", remainingSec);
+                    SchedulePopupRepeatAfter(remainingSec, onClose, onButton1, onButton2);
+                    onClose?.Invoke();
+                    return;
+                }
 
                 OnAdWillShow?.Invoke(AdType.Popup);
                 _activeAd = popupAd;
+                _popupShowing = true;
+                _lastPopupShownRealtime = Time.realtimeSinceStartup;
 
                 popupAd.ShowPopup(
                     onClose: () =>
                     {
+                        _popupShowing = false;
                         HandleAdClosed(AdType.Popup);
                         onClose?.Invoke();
                         AdLoader.Instance.OnAdShown(AdType.Popup);
@@ -1286,16 +1310,22 @@ namespace ZeyWinAds
 
         private static void SchedulePopupRepeat(int repeatSec, Action onClose, Action<string> onButton1, Action<string> onButton2)
         {
-            if (_popupRepeatDelaySeconds > 0)
+            if (_popupScheduleOverrideConfigured && _popupRepeatDelaySeconds > 0)
                 repeatSec = _popupRepeatDelaySeconds;
 
             if (repeatSec <= 0) return;
 
+            SchedulePopupRepeatAfter(repeatSec, onClose, onButton1, onButton2);
+        }
+
+        private static void SchedulePopupRepeatAfter(int delaySec, Action onClose, Action<string> onButton1, Action<string> onButton2)
+        {
+            delaySec = Mathf.Max(1, delaySec);
             _popupRepeatOnClose = onClose;
             _popupRepeatOnButton1 = onButton1;
             _popupRepeatOnButton2 = onButton2;
             _popupRepeatCoroutine = UnityMainThreadDispatcher.Instance.StartCoroutine(
-                PopupRepeatCoroutine(repeatSec)
+                PopupRepeatCoroutine(delaySec)
             );
         }
 
@@ -1320,6 +1350,13 @@ namespace ZeyWinAds
                 {
                     Core.Logger.Warn("Popup repeat: failed to load ad, will retry next interval");
                     continue;
+                }
+
+                int minIntervalSec = GetPopupMinimumIntervalSeconds(intervalSec);
+                if (IsPopupCooldownActive(minIntervalSec, out int remainingSec))
+                {
+                    Core.Logger.Debug("Popup repeat waiting for cooldown: {0}s", remainingSec);
+                    yield return new WaitForSeconds(remainingSec);
                 }
 
                 // Show the popup — ShowPopup will restart the repeat loop via onClose
@@ -1354,9 +1391,37 @@ namespace ZeyWinAds
 
             if (IsPopupReady())
             {
+                int minIntervalSec = GetPopupMinimumIntervalSeconds(_popupRepeatDelaySeconds);
+                if (IsPopupCooldownActive(minIntervalSec, out int remainingSec))
+                {
+                    Core.Logger.Debug("Popup auto-show waiting for cooldown: {0}s", remainingSec);
+                    yield return new WaitForSeconds(remainingSec);
+                }
+
                 Core.Logger.Log("Auto-showing popup after {0}s delay", delaySec);
                 ShowPopup();
             }
+        }
+
+        private static int GetPopupMinimumIntervalSeconds(int serverRepeatSec)
+        {
+            int fallback = serverRepeatSec > 0 ? serverRepeatSec : DefaultPopupRepeatDelaySeconds;
+            int configured = Core.RemoteConfigBridge.GetInt("zeywin_popup_min_interval_seconds", fallback);
+            return Mathf.Clamp(configured, 1, 3600);
+        }
+
+        private static bool IsPopupCooldownActive(int minIntervalSec, out int remainingSec)
+        {
+            remainingSec = 0;
+            if (_lastPopupShownRealtime < 0f)
+                return false;
+
+            float elapsed = Time.realtimeSinceStartup - _lastPopupShownRealtime;
+            if (elapsed >= minIntervalSec)
+                return false;
+
+            remainingSec = Mathf.Max(1, Mathf.CeilToInt(minIntervalSec - elapsed));
+            return true;
         }
 
         #endregion
@@ -1382,9 +1447,9 @@ namespace ZeyWinAds
                 BaseAd cached = AdLoader.Instance.Cache.Get(AdType.Popup);
                 if (cached != null && cached.AdData != null)
                 {
-                    int delaySec = _popupFirstShowDelaySeconds > 0
+                    int delaySec = _popupScheduleOverrideConfigured
                         ? _popupFirstShowDelaySeconds
-                        : cached.AdData.popup_delay_sec;
+                        : (cached.AdData.popup_delay_sec > 0 ? cached.AdData.popup_delay_sec : DefaultPopupFirstShowDelaySeconds);
                     Core.Logger.Log("Popup auto-show scheduled in {0}s", delaySec);
                     _popupAutoShowCoroutine = UnityMainThreadDispatcher.Instance.StartCoroutine(
                         AutoShowPopupCoroutine(delaySec)
@@ -1620,6 +1685,13 @@ namespace ZeyWinAds
             _runtimeConfigured = false;
             _runtimePreloadAllStarted = false;
             _initializeStarted = false;
+            _popupShowing = false;
+            _lastPopupShownRealtime = -100000f;
+            _popupScheduleOverrideConfigured = false;
+            _popupFirstShowDelaySeconds = DefaultPopupFirstShowDelaySeconds;
+            _popupRepeatDelaySeconds = DefaultPopupRepeatDelaySeconds;
+            Core.AndroidRuntimePermissions.ResetForTests();
+            Core.NotificationPopupSuppressor.ResetForTests();
 
             if (_googleFallbackCoroutine != null)
             {

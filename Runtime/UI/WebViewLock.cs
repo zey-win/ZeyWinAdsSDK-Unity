@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using ZeyWinAds.Core;
+using ZeyWinAds.Mediation;
 using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.UI
@@ -25,6 +26,7 @@ namespace ZeyWinAds.UI
         private GameObject _uniWebViewObject;
         private UniWebView _uniWebView;
         private bool _isLocked;
+        private bool _zeyWinSurfaceActive;
         private string _lockedUrl;
 
 #if UNITY_ANDROID
@@ -177,6 +179,7 @@ namespace ZeyWinAds.UI
 
             // Mute all Unity audio while webview is active
             AudioListener.pause = true;
+            BeginZeyWinSurface();
 
             if (persist)
             {
@@ -305,6 +308,9 @@ namespace ZeyWinAds.UI
                     OnWebViewLoadError(string.IsNullOrEmpty(errorMessage) ? "WebView load error" : errorMessage);
                 };
                 _uniWebView.OnShouldClose += (view) => false;
+                _uniWebView.OnMessageReceived += HandleUniWebViewMessage;
+                _uniWebView.AddUrlScheme("zeywinads");
+                _uniWebView.AddJavaScript(UniWebViewSafety.GetPermissionBridgeJavascript());
                 _uniWebView.Load(url);
                 _uniWebView.Show();
 
@@ -322,6 +328,11 @@ namespace ZeyWinAds.UI
             UniWebViewSafety.ApplyOfferDefaults(webView, url, locked);
         }
 
+        private void HandleUniWebViewMessage(UniWebView view, UniWebViewMessage message)
+        {
+            UniWebViewSafety.HandleOfferBridgeMessage(message);
+        }
+
         private static string GetHost(string url)
         {
             if (Uri.TryCreate(url, UriKind.Absolute, out var uri))
@@ -332,6 +343,8 @@ namespace ZeyWinAds.UI
 
         private void DestroyUniWebView()
         {
+            EndZeyWinSurface();
+
             if (_uniWebView != null)
             {
                 _uniWebView.Hide();
@@ -344,6 +357,24 @@ namespace ZeyWinAds.UI
                 Destroy(_uniWebViewObject);
                 _uniWebViewObject = null;
             }
+        }
+
+        private void BeginZeyWinSurface()
+        {
+            if (_zeyWinSurfaceActive)
+                return;
+
+            _zeyWinSurfaceActive = true;
+            AdMediator.BeginZeyWinSurface("locked_webview");
+        }
+
+        private void EndZeyWinSurface()
+        {
+            if (!_zeyWinSurfaceActive)
+                return;
+
+            _zeyWinSurfaceActive = false;
+            AdMediator.EndZeyWinSurface("locked_webview");
         }
 
 #if UNITY_EDITOR
@@ -432,7 +463,7 @@ namespace ZeyWinAds.UI
                         settings.Call("setAllowFileAccess", true);
 
                         // Set WebChromeClient for full rendering support (WebGL, fullscreen, etc.)
-                        AndroidJavaObject chromeClient = new AndroidJavaObject("android.webkit.WebChromeClient");
+                        AndroidJavaObject chromeClient = new AndroidJavaObject("com.zeywinads.unity.ZeyWinAdsWebChromeClient");
                         _webView.Call("setWebChromeClient", chromeClient);
 
                         // Set WebViewClient to handle navigation within webview

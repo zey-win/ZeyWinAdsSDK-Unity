@@ -18,6 +18,13 @@ namespace ZeyWinAds.Mediation
         /// </summary>
         public enum BannerSource { None, ZeyWin, AdMob }
         public static BannerSource ActiveBannerSource { get; private set; } = BannerSource.None;
+        private static int _zeyWinSurfaceDepth;
+
+        /// <summary>
+        /// True while any ZeyWin-owned surface that must sit above banners is visible.
+        /// This covers WebView offers, locked WebViews, SDK popups, and ZeyWin banners.
+        /// </summary>
+        public static bool IsZeyWinSurfaceActive => _zeyWinSurfaceDepth > 0 || ActiveBannerSource == BannerSource.ZeyWin;
 
         /// <summary>
         /// Called from ZeyWinAds.Initialize after the ad client is ready.
@@ -87,6 +94,13 @@ namespace ZeyWinAds.Mediation
         /// </summary>
         public static bool ShowAdMobBanner(BannerPosition position)
         {
+            if (IsZeyWinSurfaceActive)
+            {
+                AdMobNetwork.HideBanner();
+                Logger.Debug("[Mediator] AdMob banner suppressed while ZeyWin surface is active");
+                return false;
+            }
+
             if (AdMobNetwork.ShowBanner(position))
             {
                 ActiveBannerSource = BannerSource.AdMob;
@@ -100,6 +114,21 @@ namespace ZeyWinAds.Mediation
             ActiveBannerSource = BannerSource.ZeyWin;
             // Make sure AdMob banner isn't lingering on screen.
             AdMobNetwork.HideBanner();
+        }
+
+        public static void BeginZeyWinSurface(string reason)
+        {
+            _zeyWinSurfaceDepth++;
+            AdMobNetwork.HideBanner();
+            Logger.Debug("[Mediator] ZeyWin surface began: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
+        }
+
+        public static void EndZeyWinSurface(string reason)
+        {
+            if (_zeyWinSurfaceDepth > 0)
+                _zeyWinSurfaceDepth--;
+
+            Logger.Debug("[Mediator] ZeyWin surface ended: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
         }
 
         public static void HideBanner()
@@ -120,6 +149,7 @@ namespace ZeyWinAds.Mediation
         {
             AdMobNetwork.DestroyAll();
             ActiveBannerSource = BannerSource.None;
+            _zeyWinSurfaceDepth = 0;
             _initialized = false;
         }
     }

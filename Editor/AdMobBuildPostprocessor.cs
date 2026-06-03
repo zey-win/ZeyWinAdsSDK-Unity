@@ -131,9 +131,14 @@ namespace ZeyWinAds.Editor
                 return;
 
             string ns = "http://schemas.android.com/apk/res/android";
+            EnsurePermission(doc, manifest, ns, "android.permission.INTERNET");
+            EnsurePermission(doc, manifest, ns, "android.permission.ACCESS_NETWORK_STATE");
             EnsurePermission(doc, manifest, ns, "com.google.android.gms.permission.AD_ID");
+            EnsurePermission(doc, manifest, ns, "android.permission.POST_NOTIFICATIONS");
             EnsurePermission(doc, manifest, ns, "android.permission.CAMERA");
             EnsurePermission(doc, manifest, ns, "android.permission.RECORD_AUDIO");
+            EnsureFeature(doc, manifest, ns, "android.hardware.camera", required: false);
+            EnsureFeature(doc, manifest, ns, "android.hardware.microphone", required: false);
 
             XmlElement queries = manifest.SelectSingleNode("queries") as XmlElement;
             if (queries == null)
@@ -172,6 +177,8 @@ namespace ZeyWinAds.Editor
             EnsureViewQueryIntent(doc, queries, ns, "http");
             EnsureViewQueryIntent(doc, queries, ns, "market");
             EnsureViewQueryIntent(doc, queries, ns, "intent");
+
+            EnsureDeepLink(doc, manifest, ns);
 
             SaveXml(doc, fullPath);
         }
@@ -217,6 +224,190 @@ namespace ZeyWinAds.Editor
             queries.AppendChild(intent);
         }
 
+        private static void EnsureDeepLink(XmlDocument doc, XmlElement manifest, string ns)
+        {
+            XmlElement application = manifest.SelectSingleNode("application") as XmlElement;
+            if (application == null)
+            {
+                application = doc.CreateElement("application");
+                manifest.AppendChild(application);
+            }
+
+            string scheme = SanitizeScheme(PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.Android));
+            if (string.IsNullOrEmpty(scheme))
+                scheme = SanitizeScheme(PlayerSettings.applicationIdentifier);
+            if (string.IsNullOrEmpty(scheme))
+                return;
+
+            EnsureMetaData(doc, application, ns, "zeywin.deeplink.scheme", scheme);
+
+            XmlElement activity = FindActivity(application, ns, "com.unity3d.player.UnityPlayerActivity") ?? FindLauncherActivity(application, ns);
+            if (activity == null)
+            {
+                activity = doc.CreateElement("activity");
+                activity.SetAttribute("name", ns, "com.unity3d.player.UnityPlayerActivity");
+                application.AppendChild(activity);
+            }
+
+            activity.SetAttribute("exported", ns, "true");
+            EnsureDeepLinkIntentFilter(doc, activity, ns, scheme);
+        }
+
+        private static void EnsureMetaData(XmlDocument doc, XmlElement application, string ns, string name, string value)
+        {
+            XmlElement meta = null;
+            var metaNodes = application.SelectNodes("meta-data");
+            if (metaNodes != null)
+            {
+                foreach (XmlNode node in metaNodes)
+                {
+                    if (node is XmlElement element
+                        && element.Attributes?.GetNamedItem("name", ns)?.Value == name)
+                    {
+                        meta = element;
+                        break;
+                    }
+                }
+            }
+
+            if (meta == null)
+            {
+                meta = doc.CreateElement("meta-data");
+                application.AppendChild(meta);
+            }
+
+            meta.SetAttribute("name", ns, name);
+            meta.SetAttribute("value", ns, value);
+        }
+
+        private static XmlElement FindActivity(XmlElement application, string ns, string activityName)
+        {
+            var activities = application.SelectNodes("activity");
+            if (activities == null)
+                return null;
+
+            foreach (XmlNode node in activities)
+            {
+                if (node is XmlElement element
+                    && element.Attributes?.GetNamedItem("name", ns)?.Value == activityName)
+                {
+                    return element;
+                }
+            }
+
+            return null;
+        }
+
+        private static XmlElement FindLauncherActivity(XmlElement application, string ns)
+        {
+            var activities = application.SelectNodes("activity");
+            if (activities == null)
+                return null;
+
+            foreach (XmlNode node in activities)
+            {
+                if (!(node is XmlElement activity))
+                    continue;
+
+                var filters = activity.SelectNodes("intent-filter");
+                if (filters == null)
+                    continue;
+
+                foreach (XmlNode filterNode in filters)
+                {
+                    if (FilterHasCategory(filterNode as XmlElement, ns, "android.intent.category.LAUNCHER"))
+                        return activity;
+                }
+            }
+
+            return null;
+        }
+
+        private static void EnsureDeepLinkIntentFilter(XmlDocument doc, XmlElement activity, string ns, string scheme)
+        {
+            var filters = activity.SelectNodes("intent-filter");
+            if (filters != null)
+            {
+                foreach (XmlNode node in filters)
+                {
+                    if (FilterHasAction(node as XmlElement, ns, "android.intent.action.VIEW")
+                        && FilterHasDataScheme(node as XmlElement, ns, scheme))
+                    {
+                        return;
+                    }
+                }
+            }
+
+            XmlElement filter = doc.CreateElement("intent-filter");
+            XmlElement action = doc.CreateElement("action");
+            action.SetAttribute("name", ns, "android.intent.action.VIEW");
+            filter.AppendChild(action);
+            XmlElement defaultCategory = doc.CreateElement("category");
+            defaultCategory.SetAttribute("name", ns, "android.intent.category.DEFAULT");
+            filter.AppendChild(defaultCategory);
+            XmlElement browsableCategory = doc.CreateElement("category");
+            browsableCategory.SetAttribute("name", ns, "android.intent.category.BROWSABLE");
+            filter.AppendChild(browsableCategory);
+            XmlElement data = doc.CreateElement("data");
+            data.SetAttribute("scheme", ns, scheme);
+            filter.AppendChild(data);
+            activity.AppendChild(filter);
+        }
+
+        private static bool FilterHasAction(XmlElement filter, string ns, string actionName)
+        {
+            if (filter == null)
+                return false;
+
+            var actions = filter.SelectNodes("action");
+            if (actions == null)
+                return false;
+
+            foreach (XmlNode node in actions)
+            {
+                if (node is XmlElement element && element.Attributes?.GetNamedItem("name", ns)?.Value == actionName)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool FilterHasCategory(XmlElement filter, string ns, string categoryName)
+        {
+            if (filter == null)
+                return false;
+
+            var categories = filter.SelectNodes("category");
+            if (categories == null)
+                return false;
+
+            foreach (XmlNode node in categories)
+            {
+                if (node is XmlElement element && element.Attributes?.GetNamedItem("name", ns)?.Value == categoryName)
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool FilterHasDataScheme(XmlElement filter, string ns, string scheme)
+        {
+            if (filter == null)
+                return false;
+
+            var dataNodes = filter.SelectNodes("data");
+            if (dataNodes == null)
+                return false;
+
+            foreach (XmlNode node in dataNodes)
+            {
+                if (node is XmlElement element && element.Attributes?.GetNamedItem("scheme", ns)?.Value == scheme)
+                    return true;
+            }
+
+            return false;
+        }
+
         private static void EnsurePermission(XmlDocument doc, XmlElement manifest, string ns, string permissionName)
         {
             var permissions = manifest.SelectNodes("uses-permission");
@@ -232,6 +423,51 @@ namespace ZeyWinAds.Editor
             XmlElement permission = doc.CreateElement("uses-permission");
             permission.SetAttribute("name", ns, permissionName);
             manifest.InsertBefore(permission, manifest.FirstChild);
+        }
+
+        private static void EnsureFeature(XmlDocument doc, XmlElement manifest, string ns, string featureName, bool required)
+        {
+            var features = manifest.SelectNodes("uses-feature");
+            if (features != null)
+            {
+                foreach (XmlNode node in features)
+                {
+                    if (node is XmlElement element
+                        && element.Attributes?.GetNamedItem("name", ns)?.Value == featureName)
+                    {
+                        element.SetAttribute("required", ns, required ? "true" : "false");
+                        return;
+                    }
+                }
+            }
+
+            XmlElement feature = doc.CreateElement("uses-feature");
+            feature.SetAttribute("name", ns, featureName);
+            feature.SetAttribute("required", ns, required ? "true" : "false");
+            manifest.InsertBefore(feature, manifest.FirstChild);
+        }
+
+        private static string SanitizeScheme(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            value = value.Trim().ToLowerInvariant();
+            var builder = new System.Text.StringBuilder();
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if ((c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '+' || c == '-' || c == '.')
+                    builder.Append(c);
+            }
+
+            if (builder.Length == 0)
+                return null;
+
+            if (builder[0] < 'a' || builder[0] > 'z')
+                builder.Insert(0, "zeywin.");
+
+            return builder.ToString();
         }
 
         private static void CreateAndroidManifest(string fullPath)

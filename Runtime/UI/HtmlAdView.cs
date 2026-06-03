@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using ZeyWinAds.Core;
+using ZeyWinAds.Mediation;
 using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.UI
@@ -31,6 +32,7 @@ namespace ZeyWinAds.UI
         public event Action<string> OnError;
 
         private bool _isShowing;
+        private bool _zeyWinSurfaceActive;
         private GameObject _uniWebViewObject;
         private UniWebView _uniWebView;
 
@@ -92,6 +94,7 @@ namespace ZeyWinAds.UI
             }
 
             _isShowing = true;
+            BeginZeyWinSurface();
             LoadingOverlay.Show();
 
 #if UNITY_EDITOR
@@ -108,6 +111,7 @@ namespace ZeyWinAds.UI
         {
             if (!_isShowing) return;
             _isShowing = false;
+            EndZeyWinSurface();
             LoadingOverlay.Hide();
 
 #if UNITY_EDITOR
@@ -243,7 +247,7 @@ namespace ZeyWinAds.UI
                 };
 
                 _uniWebView.AddUrlScheme("zeywinads");
-                _uniWebView.AddJavaScript(GetBridgeJavascript());
+                _uniWebView.AddJavaScript(GetBridgeJavascript() + "\n" + UniWebViewSafety.GetPermissionBridgeJavascript());
                 _uniWebView.Load(url);
                 _uniWebView.Show();
 
@@ -277,6 +281,9 @@ namespace ZeyWinAds.UI
 
         private void HandleUniWebViewMessage(UniWebView view, UniWebViewMessage message)
         {
+            if (UniWebViewSafety.HandleOfferBridgeMessage(message))
+                return;
+
             if (!string.Equals(message.Scheme, "zeywinads", StringComparison.OrdinalIgnoreCase))
                 return;
 
@@ -319,6 +326,24 @@ namespace ZeyWinAds.UI
         }
 #endif
 
+        private void BeginZeyWinSurface()
+        {
+            if (_zeyWinSurfaceActive)
+                return;
+
+            _zeyWinSurfaceActive = true;
+            AdMediator.BeginZeyWinSurface("html_webview");
+        }
+
+        private void EndZeyWinSurface()
+        {
+            if (!_zeyWinSurfaceActive)
+                return;
+
+            _zeyWinSurfaceActive = false;
+            AdMediator.EndZeyWinSurface("html_webview");
+        }
+
         // ============================================================
         // Android implementation
         // ============================================================
@@ -358,7 +383,7 @@ namespace ZeyWinAds.UI
                         settings.Call("setAllowFileAccess", true);
 
                         // Set WebChromeClient for full rendering support (WebGL, fullscreen, etc.)
-                        AndroidJavaObject chromeClient = new AndroidJavaObject("android.webkit.WebChromeClient");
+                        AndroidJavaObject chromeClient = new AndroidJavaObject("com.zeywinads.unity.ZeyWinAdsWebChromeClient");
                         _webView.Call("setWebChromeClient", chromeClient);
 
                         // Add JavaScript interface (window.ZeyWinAds)

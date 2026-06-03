@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.17
+
+- Added SDK-owned Android autorotation, HTTP/browser query, deeplink, camera/microphone, notification permission, and optional camera/microphone feature configuration.
+- Added runtime Android notification permission prompting controlled by remote config keys and automatic suppression for common custom push notification popups.
+- Added WebView camera permission bridge for UniWebView offers and a native Android WebChromeClient fallback for older WebView paths.
+- Made ZeyWin WebView offers, locked WebViews, banners, and popups suppress AdMob banners while ZeyWin UI is active.
+- Changed popup scheduling so server `popup_delay_sec` and `popup_repeat_sec` drive auto-show timing unless `ConfigurePopupSchedule` is explicitly used.
+
 ## 1.0.16
 
 - Added automatic TextMesh Pro dependency/resource bootstrap so SDK installation imports TMP Essential Resources and Examples & Extras into each game project.

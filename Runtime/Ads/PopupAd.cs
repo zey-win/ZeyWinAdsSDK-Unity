@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
 using ZeyWinAds.Core;
+using ZeyWinAds.Mediation;
 using ZeyWinAds.UI;
 using Logger = ZeyWinAds.Core.Logger;
 
@@ -20,6 +21,7 @@ namespace ZeyWinAds.Ads
         private GameObject _overlay;
         private GameObject _card;
         private bool _isVisible;
+        private bool _zeyWinSurfaceActive;
         private Coroutine _animCoroutine;
 
         // Colors matching the screenshot
@@ -108,9 +110,10 @@ namespace ZeyWinAds.Ads
         {
             Logger.Debug("Showing popup ad");
             _isVisible = true;
+            BeginZeyWinSurface();
 
             _canvas = AdCanvas.Create("PopupAdCanvas");
-            _canvas.SetSortingOrder(1002);
+            _canvas.SetSortingOrder(32000);
 
             CreateOverlay();
             CreateCard();
@@ -512,6 +515,8 @@ namespace ZeyWinAds.Ads
 
         public override void Destroy()
         {
+            EndZeyWinSurface();
+
             if (_canvas != null)
             {
                 if (_animCoroutine != null)
@@ -530,5 +535,23 @@ namespace ZeyWinAds.Ads
         }
 
         protected override void OnDestroy() { }
+
+        private void BeginZeyWinSurface()
+        {
+            if (_zeyWinSurfaceActive)
+                return;
+
+            _zeyWinSurfaceActive = true;
+            AdMediator.BeginZeyWinSurface("popup");
+        }
+
+        private void EndZeyWinSurface()
+        {
+            if (!_zeyWinSurfaceActive)
+                return;
+
+            _zeyWinSurfaceActive = false;
+            AdMediator.EndZeyWinSurface("popup");
+        }
     }
 }

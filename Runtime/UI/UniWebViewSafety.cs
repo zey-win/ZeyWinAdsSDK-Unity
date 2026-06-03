@@ -99,6 +99,57 @@ namespace ZeyWinAds.UI
             return true;
         }
 
+        public static bool HandleOfferBridgeMessage(UniWebViewMessage message)
+        {
+            if (!string.Equals(message.Scheme, "zeywinads", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            string path = (message.Path ?? "").Trim('/').ToLowerInvariant();
+            if (path == "camerapermission" || path == "camera" || path == "media")
+            {
+                Core.AndroidRuntimePermissions.RequestCameraForWebView();
+                return true;
+            }
+
+            return false;
+        }
+
+        public static string GetPermissionBridgeJavascript()
+        {
+            return @"(function() {
+                if (window.__zeywinPermissionBridge) return;
+                window.__zeywinPermissionBridge = true;
+                function requestCamera() {
+                    try { window.location.href = 'zeywinads://cameraPermission'; } catch (e) {}
+                }
+                document.addEventListener('click', function(event) {
+                    var node = event && event.target;
+                    while (node && node !== document) {
+                        var tag = (node.tagName || '').toLowerCase();
+                        if (tag === 'input') {
+                            var type = (node.getAttribute('type') || '').toLowerCase();
+                            var accept = (node.getAttribute('accept') || '').toLowerCase();
+                            var capture = node.hasAttribute && node.hasAttribute('capture');
+                            if (type === 'file' && (capture || accept.indexOf('image') >= 0 || accept.indexOf('video') >= 0)) {
+                                requestCamera();
+                                break;
+                            }
+                        }
+                        node = node.parentElement;
+                    }
+                }, true);
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia && !navigator.mediaDevices.getUserMedia.__zeywinWrapped) {
+                    var originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+                    var wrappedGetUserMedia = function(constraints) {
+                        requestCamera();
+                        return originalGetUserMedia(constraints);
+                    };
+                    wrappedGetUserMedia.__zeywinWrapped = true;
+                    navigator.mediaDevices.getUserMedia = wrappedGetUserMedia;
+                }
+            })();";
+        }
+
         public static bool LooksLikeDownload(string url)
         {
             if (string.IsNullOrEmpty(url))
