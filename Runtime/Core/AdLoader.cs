@@ -236,6 +236,15 @@ namespace ZeyWinAds.Core
                 return;
             }
 
+            if (AdClient.Instance.IsAdRequestSuspended(out float remainingSeconds, out string reason))
+            {
+                Logger.Debug("{0} preload skipped; ZeyWin ad requests suspended for {1}s: {2}",
+                    type,
+                    Mathf.CeilToInt(remainingSeconds),
+                    string.IsNullOrWhiteSpace(reason) ? "unknown" : reason);
+                return;
+            }
+
             _loadingTypes.Add(type);
             StartCoroutine(PreloadAdCoroutine(type));
         }
@@ -381,6 +390,16 @@ namespace ZeyWinAds.Core
 
         private void HandlePreloadFailure(AdType type)
         {
+            if (AdClient.Instance.IsAdRequestSuspended(out float remainingSeconds, out string reason))
+            {
+                Logger.Warn("Preload stopped for {0}; ZeyWin ad requests suspended for {1}s: {2}",
+                    type,
+                    Mathf.CeilToInt(remainingSeconds),
+                    string.IsNullOrWhiteSpace(reason) ? "unknown" : reason);
+                OnPreloadFailed?.Invoke(type, reason ?? "ZeyWin ad requests suspended");
+                return;
+            }
+
             if (!_retryCounts.ContainsKey(type))
             {
                 _retryCounts[type] = 0;

@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 using ZeyWinAds.Core;
 
 namespace ZeyWinAds.Mediation
@@ -19,12 +20,49 @@ namespace ZeyWinAds.Mediation
         public enum BannerSource { None, ZeyWin, AdMob }
         public static BannerSource ActiveBannerSource { get; private set; } = BannerSource.None;
         private static int _zeyWinSurfaceDepth;
+        private static float _lastAutoFullscreenShownAt = -999999f;
 
         /// <summary>
         /// True while any ZeyWin-owned surface that must sit above banners is visible.
         /// This covers WebView offers, locked WebViews, SDK popups, and ZeyWin banners.
         /// </summary>
         public static bool IsZeyWinSurfaceActive => _zeyWinSurfaceDepth > 0 || ActiveBannerSource == BannerSource.ZeyWin;
+
+        public static int AutoFullscreenMinimumIntervalSeconds
+        {
+            get
+            {
+                int configured = RemoteConfigBridge.GetInt("zeywin_auto_fullscreen_min_interval_seconds", 60);
+                return Mathf.Clamp(configured, 0, 3600);
+            }
+        }
+
+        public static float MinimumAdMobAutoRetrySeconds
+        {
+            get
+            {
+                int configured = RemoteConfigBridge.GetInt("zeywin_admob_auto_retry_min_seconds", 60);
+                return Mathf.Clamp(configured, 5, 300);
+            }
+        }
+
+        public static bool CanShowAutoFullscreen(out float remainingSeconds)
+        {
+            int minInterval = AutoFullscreenMinimumIntervalSeconds;
+            if (minInterval <= 0)
+            {
+                remainingSeconds = 0f;
+                return true;
+            }
+
+            remainingSeconds = Mathf.Max(0f, minInterval - (Time.realtimeSinceStartup - _lastAutoFullscreenShownAt));
+            return remainingSeconds <= 0f;
+        }
+
+        public static void RecordAutoFullscreenShown()
+        {
+            _lastAutoFullscreenShownAt = Time.realtimeSinceStartup;
+        }
 
         /// <summary>
         /// Called from ZeyWinAds.Initialize after the ad client is ready.
@@ -153,6 +191,7 @@ namespace ZeyWinAds.Mediation
             AdMobNetwork.DestroyAll();
             ActiveBannerSource = BannerSource.None;
             _zeyWinSurfaceDepth = 0;
+            _lastAutoFullscreenShownAt = -999999f;
             _initialized = false;
         }
     }

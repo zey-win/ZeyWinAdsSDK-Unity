@@ -72,6 +72,8 @@ namespace ZeyWinAds.Editor
 
             text = PatchBannerReady(text, ref guardCount);
             text = InsertHelper(text, ref guardCount);
+            text = PatchAutoRetryDelays(text, ref guardCount);
+            text = PatchInterstitialAutoShowCooldown(text, ref guardCount);
             text = ReplaceOnce(text,
                 "        _bannerVisible = show;\n\n        if (_bannerView != null",
                 "        _bannerVisible = show;\n\n        if (SuppressBannerForZeyWinSurface(\"load\"))\n            return;\n\n        if (_bannerView != null",
@@ -156,6 +158,35 @@ namespace ZeyWinAds.Editor
 
             guardCount++;
             return text.Insert(index, helper);
+        }
+
+        private static string PatchAutoRetryDelays(string text, ref int guardCount)
+        {
+            text = ReplaceOnce(text,
+                "        var delay = Mathf.Min(60f, Mathf.Pow(2f, _interstitialLoadAttempt));",
+                "        var delay = Mathf.Min(300f, Mathf.Max(AdMediator.MinimumAdMobAutoRetrySeconds, Mathf.Pow(2f, _interstitialLoadAttempt)));",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "        var delay = Mathf.Min(60f, Mathf.Pow(2f, _bannerLoadAttempt));",
+                "        var delay = Mathf.Min(300f, Mathf.Max(AdMediator.MinimumAdMobAutoRetrySeconds, Mathf.Pow(2f, _bannerLoadAttempt)));",
+                ref guardCount);
+            return text;
+        }
+
+        private static string PatchInterstitialAutoShowCooldown(string text, ref int guardCount)
+        {
+            if (text.Contains("Interstitial auto-show skipped by cooldown"))
+                return text;
+
+            text = ReplaceOnce(text,
+                "        _interstitialIsShowing = true;\n\n        var adToShow = _interstitialAd;",
+                "        if (!AdMediator.CanShowAutoFullscreen(out float remainingSeconds))\n        {\n            Debug.Log($\"[AdMob] Interstitial auto-show skipped by cooldown ({remainingSeconds:0}s remaining).\");\n            onClosed?.Invoke();\n            return;\n        }\n\n        _interstitialIsShowing = true;\n\n        var adToShow = _interstitialAd;",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "        _pendingInterstitialClosed = onClosed;\n\n        adToShow.Show();",
+                "        _pendingInterstitialClosed = onClosed;\n\n        AdMediator.RecordAutoFullscreenShown();\n        adToShow.Show();",
+                ref guardCount);
+            return text;
         }
 
         private static string ReplaceOnce(string text, string search, string replacement, ref int guardCount)

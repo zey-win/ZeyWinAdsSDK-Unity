@@ -20,6 +20,9 @@ namespace ZeyWinAds.Core
         private string _bundleId;
         private bool _isInitialized;
         private bool _isBlocked;
+        private float _adRequestSuspendedUntilRealtime;
+        private string _adRequestSuspendedReason;
+        private float _lastAdRequestSuspensionLogRealtime = -999f;
 
         /// <summary>
         /// Gets the singleton instance, creating it if necessary
@@ -47,6 +50,17 @@ namespace ZeyWinAds.Core
         /// Whether the device is blocked from showing ads
         /// </summary>
         public bool IsBlocked => _isBlocked;
+
+        /// <summary>
+        /// Returns true while SDK-owned ZeyWin ad requests are temporarily
+        /// suspended after a terminal app configuration response from the API.
+        /// </summary>
+        public bool IsAdRequestSuspended(out float remainingSeconds, out string reason)
+        {
+            remainingSeconds = Mathf.Max(0f, _adRequestSuspendedUntilRealtime - Time.realtimeSinceStartup);
+            reason = _adRequestSuspendedReason;
+            return remainingSeconds > 0f;
+        }
 
         /// <summary>
         /// Sets the blocked state. When blocked, all ad requests are rejected.
@@ -91,6 +105,9 @@ namespace ZeyWinAds.Core
             _apiKey = apiKey;
             _bundleId = Application.identifier;
             _isInitialized = true;
+            _adRequestSuspendedUntilRealtime = 0f;
+            _adRequestSuspendedReason = null;
+            _lastAdRequestSuspensionLogRealtime = -999f;
 
             Logger.Log("Initialized with bundle ID: {0}", _bundleId);
         }
@@ -109,6 +126,13 @@ namespace ZeyWinAds.Core
             if (_isBlocked)
             {
                 onError?.Invoke("Device is blocked from showing ads.");
+                return;
+            }
+
+            if (IsAdRequestSuspended(out float remainingSeconds, out string suspendedReason))
+            {
+                MaybeLogAdRequestSuspension(remainingSeconds, suspendedReason);
+                onError?.Invoke($"ZeyWin ad requests suspended for {Mathf.CeilToInt(remainingSeconds)}s: {suspendedReason}");
                 return;
             }
 
@@ -203,6 +227,8 @@ namespace ZeyWinAds.Core
                         {
                             string errorMsg = apiResponse.error ?? "Unknown error";
                             Logger.Warn("Server error: {0}", errorMsg);
+                            if (IsTerminalAppConfigurationError(errorMsg))
+                                SuspendAdRequests(errorMsg);
                             onError?.Invoke(errorMsg);
                         }
                     }
@@ -228,6 +254,39 @@ namespace ZeyWinAds.Core
                     }
                 }
             }
+        }
+
+        private void SuspendAdRequests(string reason)
+        {
+            int configured = RemoteConfigBridge.GetInt("zeywin_inactive_bundle_cooldown_seconds", 300);
+            int cooldownSeconds = Mathf.Clamp(configured, 60, 86400);
+            _adRequestSuspendedReason = string.IsNullOrWhiteSpace(reason) ? "app configuration inactive" : reason;
+            _adRequestSuspendedUntilRealtime = Time.realtimeSinceStartup + cooldownSeconds;
+            _lastAdRequestSuspensionLogRealtime = Time.realtimeSinceStartup;
+            Logger.Warn("Suspending ZeyWin ad requests for {0}s: {1}", cooldownSeconds, _adRequestSuspendedReason);
+        }
+
+        private void MaybeLogAdRequestSuspension(float remainingSeconds, string reason)
+        {
+            if (Time.realtimeSinceStartup - _lastAdRequestSuspensionLogRealtime < 30f)
+                return;
+
+            _lastAdRequestSuspensionLogRealtime = Time.realtimeSinceStartup;
+            Logger.Warn("ZeyWin ad request skipped; suspended for {0}s more: {1}",
+                Mathf.CeilToInt(remainingSeconds),
+                string.IsNullOrWhiteSpace(reason) ? "unknown" : reason);
+        }
+
+        private static bool IsTerminalAppConfigurationError(string error)
+        {
+            if (string.IsNullOrWhiteSpace(error))
+                return false;
+
+            return error.IndexOf("invalid bundle", StringComparison.OrdinalIgnoreCase) >= 0
+                || error.IndexOf("invalid bundle_id", StringComparison.OrdinalIgnoreCase) >= 0
+                || error.IndexOf("app is not active", StringComparison.OrdinalIgnoreCase) >= 0
+                || error.IndexOf("app inactive", StringComparison.OrdinalIgnoreCase) >= 0
+                || error.IndexOf("bundle is not active", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         private IEnumerator TrackEventCoroutine(string trackingUrl, Action onSuccess, Action<string> onError)

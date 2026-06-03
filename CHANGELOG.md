@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.23
+
+- Added a session cooldown for terminal ZeyWin API app configuration errors such as inactive or unknown bundle IDs, preventing fleet games from repeatedly hitting the server every few seconds.
+- Added SDK-owned minimum intervals for automated fullscreen ads and legacy AdMob auto retries; rewarded button flows remain outside the fullscreen auto-show cooldown.
+- Extended the legacy `AdMobProvider.cs` patcher to apply the AdMob interstitial cooldown and longer banner/interstitial retry delays automatically when the package is installed or updated.
+
 ## 1.0.22
 
 - Made the legacy `AdMobProvider.cs` patcher repair partially patched providers and older variants that only import `GoogleMobileAds.Api`.

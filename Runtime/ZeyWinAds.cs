@@ -410,9 +410,16 @@ namespace ZeyWinAds
 
         private static void ShowGoogleFallback(string reason)
         {
+            if (!AdMediator.CanShowAutoFullscreen(out float remainingSeconds))
+            {
+                Core.Logger.Log("Google fallback skipped by auto-show cooldown: {0}s remaining", Mathf.CeilToInt(remainingSeconds));
+                return;
+            }
+
             Core.Logger.Log("Showing Google fallback: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
             if (AdMediator.IsAdMobInterstitialReady())
             {
+                AdMediator.RecordAutoFullscreenShown();
                 AdMediator.ShowAdMobInterstitial(null);
                 return;
             }
@@ -435,6 +442,14 @@ namespace ZeyWinAds
             {
                 if (AdMediator.IsAdMobInterstitialReady())
                 {
+                    if (!AdMediator.CanShowAutoFullscreen(out float remainingSeconds))
+                    {
+                        Core.Logger.Log("Google fallback skipped by auto-show cooldown: {0}s remaining", Mathf.CeilToInt(remainingSeconds));
+                        _googleFallbackCoroutine = null;
+                        yield break;
+                    }
+
+                    AdMediator.RecordAutoFullscreenShown();
                     AdMediator.ShowAdMobInterstitial(null);
                     _googleFallbackCoroutine = null;
                     yield break;
@@ -549,12 +564,20 @@ namespace ZeyWinAds
         /// <param name="onClose">Callback invoked when the ad is closed</param>
         public static void ShowInterstitial(Action onClose = null)
         {
+            if (!AdMediator.CanShowAutoFullscreen(out float remainingSeconds))
+            {
+                Core.Logger.Log("Interstitial auto-show skipped by cooldown: {0}s remaining", Mathf.CeilToInt(remainingSeconds));
+                onClose?.Invoke();
+                return;
+            }
+
             // Try to get from preloader first
             BaseAd preloadedAd = AdLoader.Instance.GetPreloadedAd(AdType.Interstitial);
 
             if (preloadedAd != null && preloadedAd.IsReady)
             {
                 OnAdWillShow?.Invoke(AdType.Interstitial);
+                AdMediator.RecordAutoFullscreenShown();
                 _onInterstitialClose = onClose;
                 _activeAd = preloadedAd;
 
@@ -573,6 +596,7 @@ namespace ZeyWinAds
             if (_cachedInterstitial != null)
             {
                 OnAdWillShow?.Invoke(AdType.Interstitial);
+                AdMediator.RecordAutoFullscreenShown();
                 _onInterstitialClose = onClose;
                 ShowAd(_cachedInterstitial, AdType.Interstitial);
                 _cachedInterstitial = null;
@@ -584,6 +608,7 @@ namespace ZeyWinAds
             if (AdMediator.IsAdMobInterstitialReady())
             {
                 OnAdWillShow?.Invoke(AdType.Interstitial);
+                AdMediator.RecordAutoFullscreenShown();
                 AdMediator.ShowAdMobInterstitial(() =>
                 {
                     OnAdClosed?.Invoke(AdType.Interstitial);
