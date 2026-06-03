@@ -68,7 +68,7 @@ For large game fleets, run the configurator once per project after installing or
   -admobAndroidRewarded "ca-app-pub-xxx/rewarded"
 ```
 
-The configurator updates `PlayerSettings`, creates or updates `Assets/Resources/ZeyWinAdsSettings.asset`, writes `Assets/Plugins/Android/res/values/strings.xml`, patches `Assets/Plugins/Android/AndroidManifest.xml`, and mirrors the Android AdMob App ID into `GoogleMobileAdsSettings.asset` when that asset exists.
+The configurator updates `PlayerSettings`, creates or updates `Assets/Resources/ZeyWinAdsSettings.asset`, patches `Assets/Plugins/Android/AndroidManifest.xml` with the app label and AdMob metadata, and mirrors the Android AdMob App ID into `GoogleMobileAdsSettings.asset` when that asset exists.
 
 For iOS builds, the SDK also writes `NSUserTrackingUsageDescription` and Google AdMob `SKAdNetworkItems` into `Info.plist` from the settings asset. If **Request App Tracking Transparency** is enabled, the SDK requests ATT authorization on iOS 14+ during startup.
 When **Enable UMP Consent** is enabled, AdMob fallback waits for Google UMP consent update and displays any required consent form before requesting ads.

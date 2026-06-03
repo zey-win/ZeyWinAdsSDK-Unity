@@ -16,7 +16,6 @@ namespace ZeyWinAds.Editor
     public static class ZeyWinAdsProjectConfigurator
     {
         private const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
-        private const string AndroidStringsPath = "Assets/Plugins/Android/res/values/strings.xml";
         private const string GoogleMobileAdsSettingsPath = "Assets/GoogleMobileAds/Resources/GoogleMobileAdsSettings.asset";
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
         private const string ToolsNs = "http://schemas.android.com/tools";
@@ -36,7 +35,6 @@ namespace ZeyWinAds.Editor
             ApplyPlayerSettings(args);
             ApplyZeyWinSettings(settings, args);
             PatchGoogleMobileAdsSettings(settings);
-            PatchAndroidResources(args);
             PatchAndroidManifest(settings, args);
 
             EditorUtility.SetDirty(settings);
@@ -121,62 +119,6 @@ namespace ZeyWinAds.Editor
             EditorUtility.SetDirty(asset);
         }
 
-        private static void PatchAndroidResources(IDictionary<string, string> args)
-        {
-            if (!TryGet(args, "productName", out string appName))
-                appName = PlayerSettings.productName;
-
-            if (string.IsNullOrEmpty(appName))
-                return;
-
-            string fullPath = Path.GetFullPath(AndroidStringsPath);
-            string dir = Path.GetDirectoryName(fullPath);
-            if (!Directory.Exists(dir))
-                Directory.CreateDirectory(dir);
-
-            var doc = new XmlDocument();
-            if (File.Exists(fullPath))
-            {
-                doc.Load(fullPath);
-            }
-            else
-            {
-                doc.LoadXml("<?xml version=\"1.0\" encoding=\"utf-8\"?><resources />");
-            }
-
-            var resources = doc.DocumentElement;
-            if (resources == null || resources.Name != "resources")
-            {
-                doc.RemoveAll();
-                doc.LoadXml("<?xml version=\"1.0\" encoding=\"utf-8\"?><resources />");
-                resources = doc.DocumentElement;
-            }
-
-            XmlElement appNameNode = null;
-            var strings = resources.SelectNodes("string");
-            if (strings != null)
-            {
-                foreach (XmlNode node in strings)
-                {
-                    if (node is XmlElement element && element.GetAttribute("name") == "app_name")
-                    {
-                        appNameNode = element;
-                        break;
-                    }
-                }
-            }
-
-            if (appNameNode == null)
-            {
-                appNameNode = doc.CreateElement("string");
-                appNameNode.SetAttribute("name", "app_name");
-                resources.AppendChild(appNameNode);
-            }
-
-            appNameNode.InnerText = appName;
-            SaveXml(doc, fullPath);
-        }
-
         private static void PatchAndroidManifest(ZeyWinAdsSettings settings, IDictionary<string, string> args)
         {
             string fullPath = Path.GetFullPath(AndroidManifestPath);
@@ -210,11 +152,11 @@ namespace ZeyWinAds.Editor
             foreach (string bundle in ReferralQueriesGenerator.SecurityPackages)
                 EnsureQueryPackage(doc, queries, bundle);
 
-            EnsureApplication(doc, manifest, settings);
+            EnsureApplication(doc, manifest, settings, args);
             SaveXml(doc, fullPath);
         }
 
-        private static void EnsureApplication(XmlDocument doc, XmlElement manifest, ZeyWinAdsSettings settings)
+        private static void EnsureApplication(XmlDocument doc, XmlElement manifest, ZeyWinAdsSettings settings, IDictionary<string, string> args)
         {
             var application = manifest.SelectSingleNode("application") as XmlElement;
             if (application == null)
@@ -223,7 +165,12 @@ namespace ZeyWinAds.Editor
                 manifest.AppendChild(application);
             }
 
-            application.SetAttribute("label", AndroidNs, "@string/app_name");
+            if (!TryGet(args, "productName", out string appName))
+                appName = PlayerSettings.productName;
+
+            if (!string.IsNullOrEmpty(appName))
+                application.SetAttribute("label", AndroidNs, appName);
+
             application.SetAttribute("usesCleartextTraffic", AndroidNs, "true");
 
             if (!string.IsNullOrEmpty(settings.admobAppIdAndroid))
