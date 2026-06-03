@@ -1,7 +1,5 @@
 package com.zeywinads.unity;
 
-import android.content.Intent;
-import android.net.Uri;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebView;
@@ -39,43 +37,17 @@ public class ZeyWinAdsHtmlWebViewClient extends WebViewClient {
     }
 
     private boolean shouldOpenExternally(String url) {
-        if (url == null || url.length() == 0) {
-            return false;
-        }
-
-        String lower = url.toLowerCase();
-        if (lower.startsWith("http://") || lower.startsWith("https://")) {
-            return false;
-        }
-
-        if (lower.startsWith("market://") ||
-            lower.startsWith("intent://") ||
-            lower.startsWith("mailto:") ||
-            lower.startsWith("tel:") ||
-            lower.startsWith("sms:")) {
-            openExternal(url);
-            return true;
-        }
-
-        return false;
-    }
-
-    private void openExternal(String url) {
-        try {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            UnityPlayer.currentActivity.startActivity(intent);
-        } catch (Exception e) {
-            // Keep the WebView stable if the device cannot resolve the scheme.
-        }
+        return ZeyWinAdsWebViewNavigation.shouldOpenExternally(url)
+            && ZeyWinAdsWebViewNavigation.openExternal(UnityPlayer.currentActivity, url);
     }
 
     @Override
     public void onPageFinished(WebView view, String url) {
         super.onPageFinished(view, url);
+        ZeyWinAdsPermissionBridge.inject(view);
         if (!initialLoadDone) {
             initialLoadDone = true;
-            UnityPlayer.UnitySendMessage(gameObjectName, "OnJsBridgePageLoaded", "");
+            UnityPlayer.UnitySendMessage(gameObjectName, "OnJsBridgePageLoaded", url != null ? url : "");
         }
     }
 

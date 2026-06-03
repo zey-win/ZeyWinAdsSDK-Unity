@@ -6,24 +6,34 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.os.Build;
 import android.view.Gravity;
+import android.view.DisplayCutout;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.WindowInsets;
 import android.widget.FrameLayout;
 
 public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
     private final MoneyProgressView progressView;
+    private final int baseBottomMargin;
+    private int bottomInset;
+    private boolean fadingOut;
 
     public ZeyWinAdsLoadingOverlay(Context context) {
         super(context);
         setBackgroundColor(Color.rgb(15, 33, 158));
         setClickable(true);
         setFocusable(true);
+        setAlpha(1f);
+        setElevation(100000f);
+        setTranslationZ(100000f);
 
         progressView = new MoneyProgressView(context);
+        baseBottomMargin = dp(58);
         LayoutParams params = new LayoutParams(dp(360), dp(150));
         params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        params.bottomMargin = dp(58);
+        params.bottomMargin = baseBottomMargin;
         addView(progressView, params);
         progressView.start();
     }
@@ -31,6 +41,10 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
+        bringToFront();
+        if (Build.VERSION.SDK_INT >= 20) {
+            requestApplyInsets();
+        }
         progressView.start();
     }
 
@@ -38,6 +52,62 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
     protected void onDetachedFromWindow() {
         progressView.stop();
         super.onDetachedFromWindow();
+    }
+
+    @Override
+    public WindowInsets onApplyWindowInsets(WindowInsets insets) {
+        if (Build.VERSION.SDK_INT >= 20 && insets != null) {
+            int bottom = insets.getSystemWindowInsetBottom();
+            if (Build.VERSION.SDK_INT >= 28) {
+                DisplayCutout cutout = insets.getDisplayCutout();
+                if (cutout != null) {
+                    bottom = Math.max(bottom, cutout.getSafeInsetBottom());
+                }
+            }
+            bottomInset = bottom;
+            updateProgressMargin();
+        }
+
+        return super.onApplyWindowInsets(insets);
+    }
+
+    public void fadeOutAndDetach() {
+        if (fadingOut) {
+            return;
+        }
+
+        fadingOut = true;
+        bringToFront();
+        animate().cancel();
+        animate()
+            .alpha(0f)
+            .setDuration(3000L)
+            .withEndAction(new Runnable() {
+                @Override
+                public void run() {
+                    progressView.stop();
+                    setVisibility(View.GONE);
+                    ViewGroup parent = (ViewGroup) getParent();
+                    if (parent != null) {
+                        parent.removeView(ZeyWinAdsLoadingOverlay.this);
+                    }
+                }
+            })
+            .start();
+    }
+
+    private void updateProgressMargin() {
+        ViewGroup.LayoutParams rawParams = progressView.getLayoutParams();
+        if (!(rawParams instanceof LayoutParams)) {
+            return;
+        }
+
+        LayoutParams params = (LayoutParams) rawParams;
+        int margin = baseBottomMargin + Math.max(0, bottomInset);
+        if (params.bottomMargin != margin) {
+            params.bottomMargin = margin;
+            progressView.setLayoutParams(params);
+        }
     }
 
     private int dp(int value) {

@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.19
+
+- Switched Android locked offers and HTML WebView ads to SDK-owned native WebViews so old and new games render the offer layer consistently after package update.
+- Added an Android SafeArea WebView container for display cutouts, notches, punch-hole cameras, and system bars.
+- Made the Java loading overlay stay above WebView and game UI, then fade out over 3 seconds after the page is ready.
+- Added a delayed WebView camera permission bridge so Android asks for camera access only after web content requests camera/media capture.
+- Added shared WebView navigation handling for popup windows and external schemes used by Google, Apple, Telegram, market, and intent-based login flows.
+
 ## 1.0.18
 
 - Added SDK-owned TextMesh Pro shader build setup so installing the SDK also keeps TMP mobile shaders in Always Included Shaders.

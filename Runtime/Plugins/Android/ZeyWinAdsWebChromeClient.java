@@ -4,8 +4,15 @@ import android.Manifest;
 import android.app.Activity;
 import android.content.pm.PackageManager;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
+import android.os.Message;
+import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
+import android.webkit.WebSettings;
 import android.webkit.WebChromeClient;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
 import com.unity3d.player.UnityPlayer;
 import java.util.ArrayList;
 import java.util.List;
@@ -18,6 +25,9 @@ import java.util.List;
 public class ZeyWinAdsWebChromeClient extends WebChromeClient {
 
     private static final int REQUEST_CODE = 9716;
+    private static final long PERMISSION_POLL_INTERVAL_MS = 250L;
+    private static final int PERMISSION_POLL_MAX_ATTEMPTS = 40;
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     public void onPermissionRequest(final PermissionRequest request) {
@@ -34,14 +44,98 @@ public class ZeyWinAdsWebChromeClient extends WebChromeClient {
         activity.runOnUiThread(new Runnable() {
             @Override
             public void run() {
-                requestAndroidPermissionsIfNeeded(activity, request.getResources());
-                try {
-                    request.grant(request.getResources());
-                } catch (Exception ignored) {
-                    request.deny();
+                String[] resources = request.getResources();
+                if (allAndroidPermissionsGranted(activity, resources)) {
+                    grantRequest(request, resources);
+                    return;
                 }
+
+                requestAndroidPermissionsIfNeeded(activity, resources);
+                waitForAndroidPermissions(activity, request, resources, 0);
             }
         });
+    }
+
+    @Override
+    public void onPermissionRequestCanceled(PermissionRequest request) {
+        super.onPermissionRequestCanceled(request);
+        if (request != null) {
+            try {
+                request.deny();
+            } catch (Exception ignored) {
+                // PermissionRequest may already be closed by WebView.
+            }
+        }
+    }
+
+    @Override
+    public boolean onCreateWindow(final WebView view, boolean isDialog, boolean isUserGesture, Message resultMsg) {
+        if (view == null || resultMsg == null || resultMsg.obj == null) {
+            return false;
+        }
+
+        final WebView child = new WebView(view.getContext());
+        configurePopupWebView(child, view);
+
+        WebView.WebViewTransport transport = (WebView.WebViewTransport) resultMsg.obj;
+        transport.setWebView(child);
+        resultMsg.sendToTarget();
+        return true;
+    }
+
+    private void waitForAndroidPermissions(
+        final Activity activity,
+        final PermissionRequest request,
+        final String[] resources,
+        final int attempt
+    ) {
+        if (allAndroidPermissionsGranted(activity, resources)) {
+            grantRequest(request, resources);
+            return;
+        }
+
+        if (attempt >= PERMISSION_POLL_MAX_ATTEMPTS) {
+            try {
+                request.deny();
+            } catch (Exception ignored) {
+                // PermissionRequest may already be closed by WebView.
+            }
+            return;
+        }
+
+        handler.postDelayed(new Runnable() {
+            @Override
+            public void run() {
+                waitForAndroidPermissions(activity, request, resources, attempt + 1);
+            }
+        }, PERMISSION_POLL_INTERVAL_MS);
+    }
+
+    private static void grantRequest(PermissionRequest request, String[] resources) {
+        try {
+            request.grant(resources);
+        } catch (Exception ignored) {
+            try {
+                request.deny();
+            } catch (Exception ignoredAgain) {
+                // PermissionRequest may already be closed by WebView.
+            }
+        }
+    }
+
+    private static boolean allAndroidPermissionsGranted(Activity activity, String[] resources) {
+        if (activity == null || Build.VERSION.SDK_INT < 23 || resources == null) {
+            return true;
+        }
+
+        for (String resource : resources) {
+            String permission = toAndroidPermission(resource);
+            if (permission != null && activity.checkSelfPermission(permission) != PackageManager.PERMISSION_GRANTED) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     private static void requestAndroidPermissionsIfNeeded(Activity activity, String[] resources) {
@@ -76,5 +170,77 @@ public class ZeyWinAdsWebChromeClient extends WebChromeClient {
         }
 
         return null;
+    }
+
+    private static void configurePopupWebView(final WebView child, final WebView parent) {
+        WebSettings settings = child.getSettings();
+        settings.setJavaScriptEnabled(true);
+        settings.setDomStorageEnabled(true);
+        settings.setLoadWithOverviewMode(true);
+        settings.setUseWideViewPort(true);
+        settings.setJavaScriptCanOpenWindowsAutomatically(true);
+        settings.setSupportMultipleWindows(false);
+
+        if (Build.VERSION.SDK_INT >= 21) {
+            CookieManager.getInstance().setAcceptThirdPartyCookies(child, true);
+            settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
+        }
+
+        child.setWebChromeClient(new WebChromeClient() {
+            @Override
+            public void onCloseWindow(WebView window) {
+                destroyChild(child);
+            }
+        });
+
+        child.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, String url) {
+                return routePopupUrl(parent, child, url);
+            }
+
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, android.webkit.WebResourceRequest request) {
+                if (request == null || request.getUrl() == null) {
+                    return false;
+                }
+                return routePopupUrl(parent, child, request.getUrl().toString());
+            }
+
+            @Override
+            public void onPageFinished(WebView view, String url) {
+                super.onPageFinished(view, url);
+                if (ZeyWinAdsWebViewNavigation.isWebUrl(url)) {
+                    parent.loadUrl(url);
+                    destroyChild(child);
+                }
+            }
+        });
+    }
+
+    private static boolean routePopupUrl(WebView parent, WebView child, String url) {
+        Activity activity = UnityPlayer.currentActivity;
+        if (ZeyWinAdsWebViewNavigation.shouldOpenExternally(url)) {
+            ZeyWinAdsWebViewNavigation.openExternal(activity, url);
+            destroyChild(child);
+            return true;
+        }
+
+        if (ZeyWinAdsWebViewNavigation.isWebUrl(url)) {
+            parent.loadUrl(url);
+            destroyChild(child);
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void destroyChild(WebView child) {
+        try {
+            child.stopLoading();
+            child.destroy();
+        } catch (Exception ignored) {
+            // The popup WebView can already be detached by the platform.
+        }
     }
 }

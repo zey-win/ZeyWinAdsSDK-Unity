@@ -21,20 +21,30 @@ public class ZeyWinAdsLockWebViewClient extends WebViewClient {
 
     @Override
     public boolean shouldOverrideUrlLoading(WebView view, String url) {
+        if (ZeyWinAdsWebViewNavigation.shouldOpenExternally(url)) {
+            return ZeyWinAdsWebViewNavigation.openExternal(UnityPlayer.currentActivity, url);
+        }
         return false;
     }
 
     @Override
     public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+        if (request != null && request.getUrl() != null) {
+            String url = request.getUrl().toString();
+            if (ZeyWinAdsWebViewNavigation.shouldOpenExternally(url)) {
+                return ZeyWinAdsWebViewNavigation.openExternal(UnityPlayer.currentActivity, url);
+            }
+        }
         return false;
     }
 
     @Override
     public void onPageFinished(WebView view, String url) {
         super.onPageFinished(view, url);
+        ZeyWinAdsPermissionBridge.inject(view);
         if (!initialLoadDone) {
             initialLoadDone = true;
-            UnityPlayer.UnitySendMessage(gameObjectName, "OnWebViewPageLoaded", "");
+            UnityPlayer.UnitySendMessage(gameObjectName, "OnWebViewPageLoaded", url != null ? url : "");
         }
     }
 

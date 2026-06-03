@@ -39,7 +39,9 @@ namespace ZeyWinAds.UI
 #if UNITY_ANDROID && !UNITY_EDITOR
         private AndroidJavaObject _webView;
         private AndroidJavaObject _nativeContainer;
+        private AndroidJavaObject _nativeSafeAreaContainer;
         private AndroidJavaObject _nativeLoadingOverlay;
+        private AndroidJavaObject _permissionBridge;
 #endif
 
 #if UNITY_IOS && !UNITY_EDITOR
@@ -99,6 +101,10 @@ namespace ZeyWinAds.UI
 
 #if UNITY_EDITOR
             ShowEditorPlaceholder(url);
+#elif UNITY_ANDROID
+            ShowAndroid(url);
+#elif UNITY_IOS
+            ShowiOS(url);
 #else
             ShowUniWebView(url);
 #endif
@@ -116,6 +122,10 @@ namespace ZeyWinAds.UI
 
 #if UNITY_EDITOR
             DestroyEditorPlaceholder();
+#elif UNITY_ANDROID
+            DestroyAndroid();
+#elif UNITY_IOS
+            DestroyiOS();
 #else
             DestroyUniWebView();
 #endif
@@ -365,6 +375,8 @@ namespace ZeyWinAds.UI
                 {
                     try
                     {
+                        DestroyAndroid();
+
                         // Create WebView
                         _webView = new AndroidJavaObject("android.webkit.WebView", activity);
                         _webView.Call("setBackgroundColor", unchecked((int)0xFF000000));
@@ -381,10 +393,24 @@ namespace ZeyWinAds.UI
                         settings.Call("setUseWideViewPort", true);
                         settings.Call("setMediaPlaybackRequiresUserGesture", false);
                         settings.Call("setAllowFileAccess", true);
+                        settings.Call("setJavaScriptCanOpenWindowsAutomatically", true);
+                        settings.Call("setSupportMultipleWindows", true);
+                        if (GetAndroidSdkInt() >= 21)
+                        {
+                            settings.Call("setMixedContentMode", 0); // MIXED_CONTENT_ALWAYS_ALLOW
+                            using (var cookieManager = new AndroidJavaClass("android.webkit.CookieManager")
+                                .CallStatic<AndroidJavaObject>("getInstance"))
+                            {
+                                cookieManager.Call("setAcceptCookie", true);
+                                cookieManager.Call("setAcceptThirdPartyCookies", _webView, true);
+                            }
+                        }
 
                         // Set WebChromeClient for full rendering support (WebGL, fullscreen, etc.)
                         AndroidJavaObject chromeClient = new AndroidJavaObject("com.zeywinads.unity.ZeyWinAdsWebChromeClient");
                         _webView.Call("setWebChromeClient", chromeClient);
+                        _permissionBridge = new AndroidJavaObject("com.zeywinads.unity.ZeyWinAdsPermissionBridge");
+                        _webView.Call("addJavascriptInterface", _permissionBridge, "ZeyWinAdsPermissions");
 
                         // Add JavaScript interface (window.ZeyWinAds)
                         AndroidJavaObject bridge = new AndroidJavaObject(
@@ -410,7 +436,16 @@ namespace ZeyWinAds.UI
 
                         _nativeContainer = new AndroidJavaObject("android.widget.FrameLayout", activity);
                         _nativeContainer.Call("setBackgroundColor", AndroidColor(0xFF000000));
-                        _nativeContainer.Call("addView", _webView, layoutParams);
+                        _nativeContainer.Call("setClickable", true);
+                        _nativeContainer.Call("setFocusable", true);
+                        _nativeContainer.Call("setElevation", 99999f);
+                        _nativeContainer.Call("setTranslationZ", 99999f);
+
+                        _nativeSafeAreaContainer = new AndroidJavaObject("com.zeywinads.unity.ZeyWinAdsSafeAreaFrameLayout", activity);
+                        _nativeSafeAreaContainer.Call("setBackgroundColor", AndroidColor(0xFF000000));
+                        _nativeSafeAreaContainer.Call("addView", _webView, layoutParams);
+                        _nativeContainer.Call("addView", _nativeSafeAreaContainer, layoutParams);
+
                         _nativeLoadingOverlay = CreateAndroidLoadingOverlay(activity);
                         _nativeContainer.Call("addView", _nativeLoadingOverlay, layoutParams);
 
@@ -422,6 +457,7 @@ namespace ZeyWinAds.UI
                             new AndroidJavaClass("android.R$id").GetStatic<int>("content"));
 
                         contentView.Call("addView", _nativeContainer, layoutParams);
+                        _nativeContainer.Call("bringToFront");
                         PromoteAndroidLoadingOverlay();
 
                         // Load URL
@@ -454,11 +490,15 @@ namespace ZeyWinAds.UI
                 AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
 
                 var containerRef = _nativeContainer;
+                var safeAreaRef = _nativeSafeAreaContainer;
                 var webViewRef = _webView;
                 var loadingRef = _nativeLoadingOverlay;
+                var permissionBridgeRef = _permissionBridge;
                 _nativeContainer = null;
+                _nativeSafeAreaContainer = null;
                 _webView = null;
                 _nativeLoadingOverlay = null;
+                _permissionBridge = null;
 
                 activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
                 {
@@ -478,7 +518,9 @@ namespace ZeyWinAds.UI
                             webViewRef.Call("destroy");
                             webViewRef.Dispose();
                         }
+                        permissionBridgeRef?.Dispose();
                         loadingRef?.Dispose();
+                        safeAreaRef?.Dispose();
                         containerRef?.Dispose();
 
                         Logger.Debug("Android HTML WebView destroyed");
@@ -512,6 +554,7 @@ namespace ZeyWinAds.UI
                 _nativeLoadingOverlay.Call("setElevation", 100000f);
                 _nativeLoadingOverlay.Call("setTranslationZ", 100000f);
                 _nativeLoadingOverlay.Call("invalidate");
+                _nativeContainer?.Call("bringToFront");
                 _nativeContainer?.Call("invalidate");
             }
             catch (Exception e)
@@ -535,7 +578,7 @@ namespace ZeyWinAds.UI
                 {
                     try
                     {
-                        overlay.Call("setVisibility", 8);
+                        overlay.Call("fadeOutAndDetach");
                         overlay.Dispose();
                     }
                     catch (Exception e)
@@ -547,6 +590,19 @@ namespace ZeyWinAds.UI
             catch (Exception e)
             {
                 Logger.Warn("Failed to schedule Android HTML loading overlay hide: {0}", e.Message);
+            }
+        }
+
+        private static int GetAndroidSdkInt()
+        {
+            try
+            {
+                using (var version = new AndroidJavaClass("android.os.Build$VERSION"))
+                    return version.GetStatic<int>("SDK_INT");
+            }
+            catch
+            {
+                return 0;
             }
         }
 #else
