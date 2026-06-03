@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.15
+
+- Fixed AdMob bootstrap detection so a generated `Assets/GoogleMobileAds` settings folder is not treated as a legacy Google Mobile Ads plugin.
+- Added scoped registry repair for existing OpenUPM manifests that are missing the `com.google.ads.mobile` scope.
+
 ## 1.0.14
 
 - Disabled Android optimized frame pacing by default in the fleet Android builder to avoid Unity 6 `games-frame-pacing/swappy` static STL Gradle failures during QA APK builds.

@@ -115,9 +115,10 @@ namespace ZeyWinAds.Editor
                 content = AddDependency(content, EdmPackage, EdmVersion);
                 modified = true;
             }
-            if (!content.Contains($"\"{RegistryUrl}\""))
+            string scoped = EnsureScopedRegistry(content);
+            if (scoped != content)
             {
-                content = AddScopedRegistry(content);
+                content = scoped;
                 modified = true;
             }
 
@@ -131,8 +132,7 @@ namespace ZeyWinAds.Editor
         private static bool LegacyAdMobAssetsPresent()
         {
             string assetsRoot = Application.dataPath;
-            return Directory.Exists(Path.Combine(assetsRoot, "GoogleMobileAds"))
-                || File.Exists(Path.Combine(assetsRoot, "GoogleMobileAds", "GoogleMobileAds.Core.dll"))
+            return File.Exists(Path.Combine(assetsRoot, "GoogleMobileAds", "GoogleMobileAds.Core.dll"))
                 || File.Exists(Path.Combine(assetsRoot, "GoogleMobileAds", "Editor", "GoogleMobileAdsSettings.cs"));
         }
 
@@ -175,6 +175,16 @@ namespace ZeyWinAds.Editor
             return manifest.Remove(lineStart, lineEnd - lineStart);
         }
 
+        private static string EnsureScopedRegistry(string manifest)
+        {
+            if (!manifest.Contains($"\"{RegistryUrl}\""))
+                return AddScopedRegistry(manifest);
+
+            string updated = AddScopeToExistingRegistry(manifest, AdMobPackage);
+            updated = AddScopeToExistingRegistry(updated, EdmPackage);
+            return updated;
+        }
+
         private static string AddScopedRegistry(string manifest)
         {
             string registryBlock =
@@ -207,6 +217,31 @@ namespace ZeyWinAds.Editor
             // Find the indentation start
             int insertAt = manifest.LastIndexOf('\n', depsIdx) + 1;
             return manifest.Insert(insertAt, registryBlock.TrimStart('\n') + "\n  ");
+        }
+
+        private static string AddScopeToExistingRegistry(string manifest, string scope)
+        {
+            int registryIdx = manifest.IndexOf($"\"{RegistryUrl}\"", StringComparison.Ordinal);
+            if (registryIdx < 0)
+                return manifest;
+
+            int scopesIdx = manifest.IndexOf("\"scopes\"", registryIdx, StringComparison.Ordinal);
+            if (scopesIdx < 0)
+                return manifest;
+
+            int arrayStart = manifest.IndexOf('[', scopesIdx);
+            if (arrayStart < 0)
+                return manifest;
+
+            int arrayEnd = manifest.IndexOf(']', arrayStart);
+            if (arrayEnd < 0)
+                return manifest;
+
+            string scopesBlock = manifest.Substring(arrayStart, arrayEnd - arrayStart);
+            if (scopesBlock.Contains($"\"{scope}\""))
+                return manifest;
+
+            return manifest.Insert(arrayStart + 1, $"\n        \"{scope}\",");
         }
     }
 }
