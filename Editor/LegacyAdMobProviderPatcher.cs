@@ -55,29 +55,30 @@ namespace ZeyWinAds.Editor
         private static bool PatchProvider(string fullPath)
         {
             string text = File.ReadAllText(fullPath);
-            if (text.Contains(Marker))
-                return false;
-
             if (!text.Contains("class AdMobProvider") || !text.Contains("GoogleMobileAds.Api") || !text.Contains("BannerView"))
                 return false;
 
-            if (text.Contains("SuppressBannerForZeyWinSurface"))
-            {
-                Debug.Log($"[ZeyWinAds] Legacy AdMobProvider already has banner suppression in {ToAssetPath(fullPath)}.");
-                return false;
-            }
-
+            bool hadHelper = text.Contains("SuppressBannerForZeyWinSurface");
             string original = text;
             int guardCount = 0;
 
             if (!text.Contains("using ZeyWinAds.Mediation;"))
-                text = text.Replace("using GoogleMobileAds.Common;\n", "using GoogleMobileAds.Common;\nusing ZeyWinAds.Mediation;\n");
+            {
+                if (text.Contains("using GoogleMobileAds.Common;\n"))
+                    text = text.Replace("using GoogleMobileAds.Common;\n", "using GoogleMobileAds.Common;\nusing ZeyWinAds.Mediation;\n");
+                else
+                    text = text.Replace("using GoogleMobileAds.Api;\n", "using GoogleMobileAds.Api;\nusing ZeyWinAds.Mediation;\n");
+            }
 
             text = PatchBannerReady(text, ref guardCount);
             text = InsertHelper(text, ref guardCount);
             text = ReplaceOnce(text,
                 "        _bannerVisible = show;\n\n        if (_bannerView != null",
                 "        _bannerVisible = show;\n\n        if (SuppressBannerForZeyWinSurface(\"load\"))\n            return;\n\n        if (_bannerView != null",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "        _bannerVisible = show;\n\n        //",
+                "        _bannerVisible = show;\n\n        if (SuppressBannerForZeyWinSurface(\"load\"))\n            return;\n\n        //",
                 ref guardCount);
             text = ReplaceOnce(text,
                 "        _bannerVisible = true;\n\n        if (NoAdsManager.IsOwned)",
@@ -96,6 +97,10 @@ namespace ZeyWinAds.Editor
                 "                _bannerIsLoading = false;\n\n                if (SuppressBannerForZeyWinSurface(\"late load callback\"))\n                    return;\n\n                _bannerLoaded = true;",
                 ref guardCount);
             text = ReplaceOnce(text,
+                "            _bannerIsLoading = false;\n            _bannerLoaded = true;",
+                "            _bannerIsLoading = false;\n\n            if (SuppressBannerForZeyWinSurface(\"late load callback\"))\n                return;\n\n            _bannerLoaded = true;",
+                ref guardCount);
+            text = ReplaceOnce(text,
                 "        _bannerRetryCoroutine = null;\n\n        if (_bannerVisible && !NoAdsManager.IsOwned)",
                 "        _bannerRetryCoroutine = null;\n\n        if (SuppressBannerForZeyWinSurface(\"retry\"))\n            yield break;\n\n        if (_bannerVisible && !NoAdsManager.IsOwned)",
                 ref guardCount);
@@ -104,7 +109,7 @@ namespace ZeyWinAds.Editor
                 "        if (!_initialized) return;\n        if (_bannerIsLoading) return;\n        if (NoAdsManager.IsOwned) return;\n        if (SuppressBannerForZeyWinSurface(\"preload\"))\n            return;\n\n        if (_bannerView != null && _bannerLoaded)",
                 ref guardCount);
 
-            if (guardCount < 5)
+            if (!hadHelper && guardCount < 5)
             {
                 Debug.LogWarning($"[ZeyWinAds] Legacy AdMobProvider patch skipped for {ToAssetPath(fullPath)}; unsupported provider shape.");
                 return false;

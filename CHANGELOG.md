@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.22
+
+- Made the legacy `AdMobProvider.cs` patcher repair partially patched providers and older variants that only import `GoogleMobileAds.Api`.
+- Added banner-load and late-load-callback suppression patterns for older direct AdMob providers so they cannot record banner impressions under active ZeyWin surfaces.
+
 ## 1.0.21
 
 - Added an SDK-owned legacy `AdMobProvider.cs` patcher so older games suppress direct Google banner creation while ZeyWin WebViews, popups, or banners are active.
