@@ -5,7 +5,7 @@
 # ZeyWin Ads SDK for Unity
 
 ![Unity](https://img.shields.io/badge/Unity-2020.3%2B-222?logo=unity)
-![Version](https://img.shields.io/badge/version-1.0.6-40c9ff)
+![Version](https://img.shields.io/badge/version-1.0.8-40c9ff)
 ![License](https://img.shields.io/badge/license-MIT-47f59b)
 ![Android](https://img.shields.io/badge/Android-API%2021%2B-3ddc84)
 ![iOS](https://img.shields.io/badge/iOS-11%2B-lightgrey)
@@ -70,6 +70,20 @@ For large game fleets, run the configurator once per project after installing or
 
 The configurator updates `PlayerSettings`, creates or updates `Assets/Resources/ZeyWinAdsSettings.asset`, patches `Assets/Plugins/Android/AndroidManifest.xml` with the app label and AdMob metadata, and mirrors the Android AdMob App ID into `GoogleMobileAdsSettings.asset` when that asset exists.
 For bulk installs, the only required monetization values are `zeywinApiKey`, `adMobAppId`, `bannerAdUnitId`, `interstitialAdUnitId`, and `rewardedAdUnitId`; older `admobAndroid...` argument names remain supported for existing automation.
+For unattended fleet runs, pass those same values through `ZEYWIN_API_KEY`, `ADMOB_APP_ID`, `ADMOB_BANNER_AD_UNIT_ID`, `ADMOB_INTERSTITIAL_AD_UNIT_ID`, and `ADMOB_REWARDED_AD_UNIT_ID` so they do not appear in Unity command-line logs.
+
+### Fleet runner
+
+The repository includes `tools/zeywin-fleet-configure.sh`, a TSV-driven runner for many games. It discovers Unity projects by `ProjectSettings/ProjectVersion.txt`, snapshots non-git projects before mutation, pins `com.zeywin.ads` and `com.crashguard.sdk`, then invokes the configurator.
+
+```bash
+tools/zeywin-fleet-configure.sh \
+  --root /Volumes/Work/games \
+  --config /path/to/fleet-config.tsv \
+  --sdk-ref v1.0.8
+```
+
+Each TSV row needs `projectPath`, `zeywinApiKey`, `adMobAppId`, `bannerAdUnitId`, `interstitialAdUnitId`, and `rewardedAdUnitId`. Optional columns can set `productName`, `companyName`, `androidPackageId`, `androidVersionName`, `androidVersionCode`, and `unityPath`.
 
 For iOS builds, the SDK also writes `NSUserTrackingUsageDescription` and Google AdMob `SKAdNetworkItems` into `Info.plist` from the settings asset. If **Request App Tracking Transparency** is enabled, the SDK requests ATT authorization on iOS 14+ during startup.
 When **Enable UMP Consent** is enabled, AdMob fallback waits for Google UMP consent update and displays any required consent form before requesting ads.

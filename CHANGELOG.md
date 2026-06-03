@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.8
+
+- Added environment-variable fallbacks for fleet configuration secrets so API keys and AdMob IDs do not need to appear in Unity command-line logs.
+- Added a TSV-driven fleet runner for discovering Unity projects, snapshotting non-git projects, pinning SDK packages, and invoking the configurator.
+
 ## 1.0.7
 
 - Fixed the runtime `ZeyWinAdsConfig.SdkVersion` constant so ad requests report the published package version.

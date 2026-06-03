@@ -73,7 +73,7 @@ namespace ZeyWinAds.Editor
 
         private static void ApplyZeyWinSettings(ZeyWinAdsSettings settings, IDictionary<string, string> args)
         {
-            if (TryGetAny(args, out string apiKey, "zeywinApiKey", "apiKey"))
+            if (TryGetAnyOrEnv(args, out string apiKey, new[] { "zeywinApiKey", "apiKey" }, "ZEYWIN_API_KEY"))
                 settings.apiKey = apiKey;
 
             if (TryGet(args, "autoInitializeOnStartup", out string autoInit))
@@ -89,16 +89,16 @@ namespace ZeyWinAds.Editor
             if (TryGet(args, "enableUmpConsent", out string enableUmp))
                 settings.enableUmpConsent = ParseBool(enableUmp, settings.enableUmpConsent);
 
-            if (TryGetAny(args, out string appId, "adMobAppId", "admobAppId", "admobAndroidAppId"))
+            if (TryGetAnyOrEnv(args, out string appId, new[] { "adMobAppId", "admobAppId", "admobAndroidAppId" }, "ADMOB_APP_ID"))
                 settings.admobAppIdAndroid = appId;
 
-            if (TryGetAny(args, out string banner, "bannerAdUnitId", "adMobBannerAdUnitId", "admobBanner", "admobAndroidBanner"))
+            if (TryGetAnyOrEnv(args, out string banner, new[] { "bannerAdUnitId", "adMobBannerAdUnitId", "admobBanner", "admobAndroidBanner" }, "ADMOB_BANNER_AD_UNIT_ID"))
                 settings.admobBannerAndroid = banner;
 
-            if (TryGetAny(args, out string interstitial, "interstitialAdUnitId", "adMobInterstitialAdUnitId", "admobInterstitial", "admobAndroidInterstitial"))
+            if (TryGetAnyOrEnv(args, out string interstitial, new[] { "interstitialAdUnitId", "adMobInterstitialAdUnitId", "admobInterstitial", "admobAndroidInterstitial" }, "ADMOB_INTERSTITIAL_AD_UNIT_ID"))
                 settings.admobInterstitialAndroid = interstitial;
 
-            if (TryGetAny(args, out string rewarded, "rewardedAdUnitId", "adMobRewardedAdUnitId", "admobRewarded", "admobAndroidRewarded"))
+            if (TryGetAnyOrEnv(args, out string rewarded, new[] { "rewardedAdUnitId", "adMobRewardedAdUnitId", "admobRewarded", "admobAndroidRewarded" }, "ADMOB_REWARDED_AD_UNIT_ID"))
                 settings.admobRewardedAndroid = rewarded;
         }
 
@@ -345,6 +345,22 @@ namespace ZeyWinAds.Editor
             foreach (string key in keys)
             {
                 if (TryGet(args, key, out value))
+                    return true;
+            }
+
+            value = null;
+            return false;
+        }
+
+        private static bool TryGetAnyOrEnv(IDictionary<string, string> args, out string value, string[] keys, params string[] envNames)
+        {
+            if (TryGetAny(args, out value, keys))
+                return true;
+
+            foreach (string envName in envNames)
+            {
+                value = Environment.GetEnvironmentVariable(envName);
+                if (!string.IsNullOrWhiteSpace(value))
                     return true;
             }
 
