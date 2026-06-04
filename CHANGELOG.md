@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.1.1
+
+- Extended the legacy AdMobProvider patcher for games that use `_banner`, `PreloadBannerAd()`, `ShowBanner()`, and `DestroyBanner()`, preventing AdMob banner loading/showing while a ZeyWin offer WebView is active.
+
 ## 1.1.0
 
 - Extended the SDK configurator to neutralize legacy `LoadingProgressUI` and `MoneyLoadingOverlayVisual` scripts, so old Unity scene loaders cannot draw a second blue screen over the Java-native loader after package installation.

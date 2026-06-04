@@ -74,6 +74,7 @@ namespace ZeyWinAds.Editor
             text = InsertHelper(text, ref guardCount);
             text = PatchAutoRetryDelays(text, ref guardCount);
             text = PatchInterstitialAutoShowCooldown(text, ref guardCount);
+            text = PatchSimpleAdMobProvider(text, ref guardCount);
             text = ReplaceOnce(text,
                 "        _bannerVisible = show;\n\n        if (_bannerView != null",
                 "        _bannerVisible = show;\n\n        if (SuppressBannerForZeyWinSurface(\"load\"))\n            return;\n\n        if (_bannerView != null",
@@ -129,7 +130,12 @@ namespace ZeyWinAds.Editor
         {
             const string oldLine = "    public bool BannerIsReady => _bannerView != null && _bannerLoaded && !_bannerIsLoading;";
             const string newLine = "    public bool BannerIsReady => _bannerView != null && _bannerLoaded && !_bannerIsLoading && !AdMediator.IsZeyWinSurfaceActive;";
-            return ReplaceOnce(text, oldLine, newLine, ref guardCount);
+            text = ReplaceOnce(text, oldLine, newLine, ref guardCount);
+            text = ReplaceOnce(text,
+                "    public bool BannerIsReady => _initialized && _banner != null && _bannerLoaded;",
+                "    public bool BannerIsReady => _initialized && _banner != null && _bannerLoaded && !AdMediator.IsZeyWinSurfaceActive;",
+                ref guardCount);
+            return text;
         }
 
         private static string InsertHelper(string text, ref int guardCount)
@@ -137,12 +143,24 @@ namespace ZeyWinAds.Editor
             if (text.Contains("SuppressBannerForZeyWinSurface"))
                 return text;
 
-            const string anchor = "    public void LoadBannerAd(bool show = true)\n";
+            string anchor = text.Contains("    public void LoadBannerAd(bool show = true)\n")
+                ? "    public void LoadBannerAd(bool show = true)\n"
+                : "    public void PreloadBannerAd()\n";
             int index = text.IndexOf(anchor, StringComparison.Ordinal);
             if (index < 0)
                 return text;
 
-            string helper =
+            string helper = text.Contains("_bannerLoading") && text.Contains("DestroyBanner()")
+                ? BuildSimpleProviderHelper()
+                : BuildLegacyProviderHelper();
+
+            guardCount++;
+            return text.Insert(index, helper);
+        }
+
+        private static string BuildLegacyProviderHelper()
+        {
+            return
                 "    // " + Marker + "\n" +
                 "    private bool SuppressBannerForZeyWinSurface(string source)\n" +
                 "    {\n" +
@@ -155,9 +173,48 @@ namespace ZeyWinAds.Editor
                 "        Debug.Log($\"[AdMob] Banner {source} suppressed while ZeyWin surface is active.\");\n" +
                 "        return true;\n" +
                 "    }\n\n";
+        }
 
-            guardCount++;
-            return text.Insert(index, helper);
+        private static string BuildSimpleProviderHelper()
+        {
+            return
+                "    // " + Marker + "\n" +
+                "    private bool SuppressBannerForZeyWinSurface(string source)\n" +
+                "    {\n" +
+                "        if (!AdMediator.IsZeyWinSurfaceActive)\n" +
+                "            return false;\n\n" +
+                "        _bannerLoading = false;\n" +
+                "        _bannerLoaded = false;\n" +
+                "        if (_bannerRetry != null)\n" +
+                "        {\n" +
+                "            StopCoroutine(_bannerRetry);\n" +
+                "            _bannerRetry = null;\n" +
+                "        }\n" +
+                "        DestroyBanner();\n" +
+                "        Debug.Log($\"[AdMobProvider] Banner {source} suppressed while ZeyWin surface is active.\");\n" +
+                "        return true;\n" +
+                "    }\n\n";
+        }
+
+        private static string PatchSimpleAdMobProvider(string text, ref int guardCount)
+        {
+            text = ReplaceOnce(text,
+                "        if (!_initialized || !_adsEnabled || _bannerLoading || string.IsNullOrEmpty(_bannerId))\n            return;\n\n        if (BannerIsReady)",
+                "        if (!_initialized || !_adsEnabled || _bannerLoading || string.IsNullOrEmpty(_bannerId))\n            return;\n\n        if (SuppressBannerForZeyWinSurface(\"preload\"))\n            return;\n\n        if (BannerIsReady)",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "            _bannerLoading = false;\n            _bannerLoaded = true;",
+                "            _bannerLoading = false;\n\n            if (SuppressBannerForZeyWinSurface(\"late load callback\"))\n                return;\n\n            _bannerLoaded = true;",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "        if (!_adsEnabled)\n            return;\n\n        if (BannerIsReady)",
+                "        if (!_adsEnabled)\n            return;\n\n        if (SuppressBannerForZeyWinSurface(\"show\"))\n            return;\n\n        if (BannerIsReady)",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "        if (_bannerRetry == null && _adsEnabled)\n            _bannerRetry = StartCoroutine(RetryRoutine(() =>",
+                "        if (SuppressBannerForZeyWinSurface(\"retry\"))\n            return;\n\n        if (_bannerRetry == null && _adsEnabled)\n            _bannerRetry = StartCoroutine(RetryRoutine(() =>",
+                ref guardCount);
+            return text;
         }
 
         private static string PatchAutoRetryDelays(string text, ref int guardCount)
