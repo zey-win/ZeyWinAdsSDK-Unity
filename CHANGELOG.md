@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.7.8
+
+- Rotated the Java-native loader money pack 90 degrees, enlarged it, and disabled clipping so it protrudes strongly outside the progress bar without being cut off.
+- Hardened sticky offer URL persistence with a backup key, explicit restore logs, and persistent WebView lock URL writes on both new locks and restored locks.
+
 ## 3.7.7
 
 - Released the SDK-side loader, sticky offer URL, WebView layering, and legacy AdMobProvider banner suppression fixes under the production `3.7.7` version.

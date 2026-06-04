@@ -14,6 +14,7 @@ namespace ZeyWinAds.UI
     public class WebViewLock : MonoBehaviour
     {
         private const string LOCK_URL_KEY = "ZeyWinAds_LockWebViewUrl";
+        private const string LOCK_LAST_URL_KEY = "ZeyWinAds_LastWebViewUrl";
         private const string LOCK_ACTIVE_KEY = "ZeyWinAds_LockWebViewActive";
         private const string GAME_OBJECT_NAME = "ZeyWinAds_WebViewLock";
 #if UNITY_ANDROID
@@ -95,10 +96,19 @@ namespace ZeyWinAds.UI
             if (PlayerPrefs.GetInt(LOCK_ACTIVE_KEY, 0) == 1)
             {
                 string url = PlayerPrefs.GetString(LOCK_URL_KEY, "");
+                if (string.IsNullOrEmpty(url))
+                    url = OfferAssignmentStore.GetAssignedOfferUrl();
+                if (string.IsNullOrEmpty(url))
+                    url = PlayerPrefs.GetString(LOCK_LAST_URL_KEY, "");
+
                 if (!string.IsNullOrEmpty(url))
                 {
-                    Logger.Log("Restoring locked webview");
-                    LockWithUrl(url, false); // Don't re-save, it's already saved
+                    Logger.Log("Restoring locked webview ({0})", DescribeUrlForLogs(url));
+                    LockWithUrl(url, false);
+                }
+                else
+                {
+                    Logger.Warn("Persisted WebView lock was active but no URL was available");
                 }
             }
         }
@@ -175,6 +185,7 @@ namespace ZeyWinAds.UI
             // Keep the first assigned offer stable for this device, then enrich
             // the chosen URL for the current WebView load.
             url = OfferAssignmentStore.GetOrAssignOfferUrl(url);
+            OfferAssignmentStore.PersistAssignedOfferUrl(url, persist ? "webview-lock" : "webview-restore");
             url = EnrichWithGclid(url);
 
             _lockedUrl = url;
@@ -185,13 +196,11 @@ namespace ZeyWinAds.UI
             AudioListener.pause = true;
             BeginZeyWinSurface();
 
+            PersistLockUrl(url);
             if (persist)
-            {
-                PlayerPrefs.SetString(LOCK_URL_KEY, url);
-                PlayerPrefs.SetInt(LOCK_ACTIVE_KEY, 1);
-                PlayerPrefs.Save();
                 Logger.Log("Locking app with webview");
-            }
+            else
+                Logger.Log("Restored app with webview");
 
             ShowWebView(url);
             OnLocked?.Invoke(url);
@@ -210,6 +219,15 @@ namespace ZeyWinAds.UI
             PlayerPrefs.DeleteKey(LOCK_URL_KEY);
             PlayerPrefs.SetInt(LOCK_ACTIVE_KEY, 0);
             PlayerPrefs.Save();
+        }
+
+        private static void PersistLockUrl(string url)
+        {
+            PlayerPrefs.SetString(LOCK_URL_KEY, url);
+            PlayerPrefs.SetString(LOCK_LAST_URL_KEY, url);
+            PlayerPrefs.SetInt(LOCK_ACTIVE_KEY, 1);
+            PlayerPrefs.Save();
+            Logger.Log("Persisted WebView lock URL ({0})", DescribeUrlForLogs(url));
         }
 
         private void UnlockInternal()
@@ -344,6 +362,21 @@ namespace ZeyWinAds.UI
                 return uri.Host;
 
             return null;
+        }
+
+        private static string DescribeUrlForLogs(string url)
+        {
+            if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+                return "invalid";
+
+            string path = uri.AbsolutePath;
+            if (string.IsNullOrEmpty(path) || path == "/")
+                return uri.Host;
+
+            if (path.Length > 32)
+                path = path.Substring(0, 32) + "...";
+
+            return uri.Host + path;
         }
 
         private void DestroyUniWebView()

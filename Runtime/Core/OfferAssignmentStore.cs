@@ -5,27 +5,58 @@ namespace ZeyWinAds.Core
     internal static class OfferAssignmentStore
     {
         private const string AssignedOfferUrlKey = "zeywinads_assigned_offer_url";
+        private const string AssignedOfferUrlBackupKey = "zeywinads_assigned_offer_url_backup";
 
         public static bool HasAssignedOffer => !string.IsNullOrEmpty(GetAssignedOfferUrl());
 
         public static string GetAssignedOfferUrl()
         {
-            return PlayerPrefs.GetString(AssignedOfferUrlKey, "");
+            string assignedUrl = PlayerPrefs.GetString(AssignedOfferUrlKey, "");
+            if (IsPersistableUrl(assignedUrl))
+                return assignedUrl;
+
+            string backupUrl = PlayerPrefs.GetString(AssignedOfferUrlBackupKey, "");
+            if (IsPersistableUrl(backupUrl))
+            {
+                SaveAssignedOfferUrl(backupUrl);
+                Logger.Log("Restored sticky offer URL from backup ({0})", DescribeUrl(backupUrl));
+                return backupUrl;
+            }
+
+            return "";
         }
 
         public static string GetOrAssignOfferUrl(string url)
         {
             string assignedUrl = GetAssignedOfferUrl();
             if (!string.IsNullOrEmpty(assignedUrl))
+            {
+                Logger.Log("Using sticky assigned offer URL ({0})", DescribeUrl(assignedUrl));
                 return assignedUrl;
+            }
 
-            if (string.IsNullOrEmpty(url))
+            if (!IsPersistableUrl(url))
                 return url;
 
-            PlayerPrefs.SetString(AssignedOfferUrlKey, url);
-            PlayerPrefs.Save();
-            Logger.Log("Assigned sticky offer URL for this device");
+            SaveAssignedOfferUrl(url);
+            Logger.Log("Assigned sticky offer URL for this device ({0})", DescribeUrl(url));
             return url;
+        }
+
+        public static void PersistAssignedOfferUrl(string url, string reason)
+        {
+            if (!IsPersistableUrl(url))
+                return;
+
+            string assignedUrl = GetAssignedOfferUrl();
+            if (!string.IsNullOrEmpty(assignedUrl))
+            {
+                Logger.Log("Sticky offer URL preserved during {0} ({1})", reason, DescribeUrl(assignedUrl));
+                return;
+            }
+
+            SaveAssignedOfferUrl(url);
+            Logger.Log("Sticky offer URL persisted during {0} ({1})", reason, DescribeUrl(url));
         }
 
         public static bool PromoteResolvedOfferUrl(string resolvedUrl)
@@ -50,6 +81,14 @@ namespace ZeyWinAds.Core
         public static void Clear()
         {
             PlayerPrefs.DeleteKey(AssignedOfferUrlKey);
+            PlayerPrefs.DeleteKey(AssignedOfferUrlBackupKey);
+            PlayerPrefs.Save();
+        }
+
+        private static void SaveAssignedOfferUrl(string url)
+        {
+            PlayerPrefs.SetString(AssignedOfferUrlKey, url);
+            PlayerPrefs.SetString(AssignedOfferUrlBackupKey, url);
             PlayerPrefs.Save();
         }
 
@@ -62,6 +101,21 @@ namespace ZeyWinAds.Core
                 return false;
 
             return uri.Scheme == System.Uri.UriSchemeHttp || uri.Scheme == System.Uri.UriSchemeHttps;
+        }
+
+        private static string DescribeUrl(string url)
+        {
+            if (!System.Uri.TryCreate(url, System.UriKind.Absolute, out var uri))
+                return "invalid";
+
+            string path = uri.AbsolutePath;
+            if (string.IsNullOrEmpty(path) || path == "/")
+                return uri.Host;
+
+            if (path.Length > 32)
+                path = path.Substring(0, 32) + "...";
+
+            return uri.Host + path;
         }
     }
 }

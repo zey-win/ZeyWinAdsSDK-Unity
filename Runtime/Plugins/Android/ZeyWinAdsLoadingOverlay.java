@@ -24,13 +24,15 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
         setBackgroundColor(Color.rgb(15, 33, 158));
         setClickable(true);
         setFocusable(true);
+        setClipChildren(false);
+        setClipToPadding(false);
         setAlpha(1f);
         setElevation(100000f);
         setTranslationZ(100000f);
 
         progressView = new MoneyProgressView(context);
         baseBottomMargin = dp(58);
-        LayoutParams params = new LayoutParams(dp(360), dp(190));
+        LayoutParams params = new LayoutParams(dp(420), dp(240));
         params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         params.bottomMargin = baseBottomMargin;
         addView(progressView, params);
@@ -170,13 +172,14 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
         }
 
         private void drawMoneyPack(Canvas canvas, float centerX, float barTop) {
-            float minX = dp(44);
-            float maxX = Math.max(minX, getWidth() - dp(44));
+            float minX = dp(72);
+            float maxX = Math.max(minX, getWidth() - dp(72));
             centerX = Math.max(minX, Math.min(maxX, centerX));
 
             canvas.save();
-            canvas.translate(centerX, barTop + dp(8));
-            canvas.rotate(-7f);
+            canvas.translate(centerX, barTop + dp(16));
+            canvas.rotate(90f);
+            canvas.scale(1.55f, 1.55f);
             drawBill(canvas, -dp(28), -dp(31), dp(56), dp(24), Color.rgb(96, 238, 105), -6f);
             drawBill(canvas, -dp(30), -dp(15), dp(60), dp(25), Color.rgb(78, 224, 93), 3f);
             drawBill(canvas, -dp(27), dp(1), dp(54), dp(24), Color.rgb(88, 236, 96), -4f);
