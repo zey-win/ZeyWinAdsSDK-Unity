@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.36
+
+- Fixed the Android startup overlay dismiss bootstrap so it compiles cleanly and still hands off to the first Unity scene without a duplicate blue loading screen.
+
 ## 1.0.35
 
 - Dismiss the Android startup overlay after the first Unity scene loads so fleet games keep their own boot loader visible without a second blue money-progress screen.

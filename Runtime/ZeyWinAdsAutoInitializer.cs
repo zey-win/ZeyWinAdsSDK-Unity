@@ -37,7 +37,7 @@ namespace ZeyWinAds
             _startupOverlayDismissScheduled = true;
 
             var runner = new GameObject("ZeyWinAds Startup Overlay Dismisser");
-            Object.DontDestroyOnLoad(runner);
+            UnityEngine.Object.DontDestroyOnLoad(runner);
             runner.hideFlags = HideFlags.HideAndDontSave;
             runner.AddComponent<StartupOverlayDismissRunner>();
 #endif
