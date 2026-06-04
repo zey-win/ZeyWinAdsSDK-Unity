@@ -186,20 +186,35 @@ public sealed class LoadingProgressUI : MonoBehaviour
 {
     private void Awake()
     {
-        gameObject.SetActive(false);
+        HideLegacyLoaderHierarchy();
     }
 
     private void OnEnable()
     {
-        gameObject.SetActive(false);
+        HideLegacyLoaderHierarchy();
     }
 
     public void Show()
     {
+        HideLegacyLoaderHierarchy();
     }
 
     public void Hide()
     {
+        HideLegacyLoaderHierarchy();
+    }
+
+    private void HideLegacyLoaderHierarchy()
+    {
+        var canvas = GetComponentInParent<Canvas>(true);
+        if (canvas != null && canvas.gameObject.activeSelf)
+        {
+            canvas.gameObject.SetActive(false);
+            return;
+        }
+
+        if (gameObject.activeSelf)
+            gameObject.SetActive(false);
     }
 }
 ";
