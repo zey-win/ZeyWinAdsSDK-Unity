@@ -401,6 +401,7 @@ namespace ZeyWinAds
             if (_startupReferralCheckPending)
             {
                 _startupFallbackReason = reason;
+                HideStartupLoading();
                 return;
             }
 

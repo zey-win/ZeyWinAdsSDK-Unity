@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.26
+
+- Hide the SDK startup loading overlay immediately when startup offer loading falls back to Google ads while referral checks are still pending.
+- This prevents games from remaining on `Loading 100%` behind an AdMob fullscreen or banner fallback.
+
 ## 1.0.25
 
 - Added an SDK-owned runtime TextMesh Pro material guard so older games with imported TMP text objects missing material sources do not throw on Android.
