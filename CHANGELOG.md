@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.29
+
+- Moved SDK-owned Android launch theme resources into `Assets/Plugins/Android/ZeyWinAds.androidlib/res` so Unity 6 builds no longer fail on obsolete root `Assets/Plugins/Android/res` resources.
+- The project configurator now removes older SDK-generated root Android launch resources when updating existing fleet games.
+
 ## 1.0.28
 
 - Added an Android startup ContentProvider that installs the SDK blue native loading overlay before Unity finishes creating its first frame, removing the dark launch gap on fleet games.

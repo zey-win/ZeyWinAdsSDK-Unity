@@ -16,9 +16,14 @@ namespace ZeyWinAds.Editor
     public static class ZeyWinAdsProjectConfigurator
     {
         private const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
-        private const string AndroidColorsPath = "Assets/Plugins/Android/res/values/colors.xml";
-        private const string AndroidStylesPath = "Assets/Plugins/Android/res/values/styles.xml";
-        private const string AndroidStylesV31Path = "Assets/Plugins/Android/res/values-v31/styles.xml";
+        private const string AndroidLibraryPath = "Assets/Plugins/Android/ZeyWinAds.androidlib";
+        private const string AndroidLibraryManifestPath = AndroidLibraryPath + "/AndroidManifest.xml";
+        private const string AndroidColorsPath = AndroidLibraryPath + "/res/values/colors.xml";
+        private const string AndroidStylesPath = AndroidLibraryPath + "/res/values/styles.xml";
+        private const string AndroidStylesV31Path = AndroidLibraryPath + "/res/values-v31/styles.xml";
+        private const string ObsoleteAndroidRootColorsPath = "Assets/Plugins/Android/res/values/colors.xml";
+        private const string ObsoleteAndroidRootStylesPath = "Assets/Plugins/Android/res/values/styles.xml";
+        private const string ObsoleteAndroidRootStylesV31Path = "Assets/Plugins/Android/res/values-v31/styles.xml";
         private const string GoogleMobileAdsSettingsPath = "Assets/GoogleMobileAds/Resources/GoogleMobileAdsSettings.asset";
         private const string GoogleMobileAdsAndroidManifestPath = "Assets/Plugins/Android/GoogleMobileAdsPlugin.androidlib/AndroidManifest.xml";
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
@@ -267,9 +272,108 @@ namespace ZeyWinAds.Editor
 
         private static void PatchAndroidLaunchThemeResources()
         {
+            EnsureAndroidLibraryManifest();
             UpsertAndroidColor(AndroidColorsPath, "zeywin_ads_launch_background", LaunchBackgroundColor);
             UpsertAndroidLaunchStyle(AndroidStylesPath, includeAndroid12SplashAttributes: false);
             UpsertAndroidLaunchStyle(AndroidStylesV31Path, includeAndroid12SplashAttributes: true);
+            RemoveObsoleteAndroidRootResources();
+        }
+
+        private static void EnsureAndroidLibraryManifest()
+        {
+            string fullPath = Path.GetFullPath(AndroidLibraryManifestPath);
+            string dir = Path.GetDirectoryName(fullPath);
+            if (!Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            if (File.Exists(fullPath))
+                return;
+
+            var doc = new XmlDocument();
+            doc.LoadXml(
+                "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+                "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"com.zeywinads.unity.resources\">\n" +
+                "  <application />\n" +
+                "</manifest>");
+            SaveXml(doc, fullPath);
+        }
+
+        private static void RemoveObsoleteAndroidRootResources()
+        {
+            RemoveAndroidResourceElement(ObsoleteAndroidRootColorsPath, "color", "zeywin_ads_launch_background");
+            RemoveAndroidResourceElement(ObsoleteAndroidRootStylesPath, "style", LaunchThemeName);
+            RemoveAndroidResourceElement(ObsoleteAndroidRootStylesV31Path, "style", LaunchThemeName);
+            DeleteDirectoryIfEmpty("Assets/Plugins/Android/res/values-v31");
+            DeleteDirectoryIfEmpty("Assets/Plugins/Android/res/values");
+            DeleteDirectoryIfEmpty("Assets/Plugins/Android/res");
+        }
+
+        private static void RemoveAndroidResourceElement(string assetPath, string elementName, string resourceName)
+        {
+            string fullPath = Path.GetFullPath(assetPath);
+            if (!File.Exists(fullPath))
+                return;
+
+            var doc = new XmlDocument();
+            doc.Load(fullPath);
+            var resources = doc.DocumentElement;
+            if (resources == null || resources.Name != "resources")
+                return;
+
+            bool changed = false;
+            var nodes = resources.SelectNodes(elementName);
+            if (nodes != null)
+            {
+                for (int i = nodes.Count - 1; i >= 0; i--)
+                {
+                    if (nodes[i] is XmlElement element && element.GetAttribute("name") == resourceName)
+                    {
+                        resources.RemoveChild(element);
+                        changed = true;
+                    }
+                }
+            }
+
+            if (!changed)
+                return;
+
+            bool hasElements = false;
+            foreach (XmlNode child in resources.ChildNodes)
+            {
+                if (child is XmlElement)
+                {
+                    hasElements = true;
+                    break;
+                }
+            }
+
+            if (hasElements)
+                SaveXml(doc, fullPath);
+            else
+                DeleteFileAndMeta(fullPath);
+        }
+
+        private static void DeleteFileAndMeta(string fullPath)
+        {
+            File.Delete(fullPath);
+            string metaPath = fullPath + ".meta";
+            if (File.Exists(metaPath))
+                File.Delete(metaPath);
+        }
+
+        private static void DeleteDirectoryIfEmpty(string assetPath)
+        {
+            string fullPath = Path.GetFullPath(assetPath);
+            if (!Directory.Exists(fullPath))
+                return;
+
+            if (Directory.GetFileSystemEntries(fullPath).Length > 0)
+                return;
+
+            Directory.Delete(fullPath);
+            string metaPath = fullPath + ".meta";
+            if (File.Exists(metaPath))
+                File.Delete(metaPath);
         }
 
         private static void ApplyLaunchThemeToActivity(XmlElement application)
