@@ -60,9 +60,12 @@ namespace ZeyWinAds
         private static bool _startupInterstitialOpening;
         private static bool _startupReferralCheckPending;
         private static bool _startupEligibilityAllowed;
+        private static Coroutine _startupLoadingTimeoutCoroutine;
+        private static int _startupLoadingGeneration;
         private static string _startupFallbackReason;
         private const int DefaultPopupFirstShowDelaySeconds = 20;
         private const int DefaultPopupRepeatDelaySeconds = 60;
+        private const float StartupLoadingMaxVisibleSeconds = 8f;
         private static int _popupFirstShowDelaySeconds = DefaultPopupFirstShowDelaySeconds;
         private static int _popupRepeatDelaySeconds = DefaultPopupRepeatDelaySeconds;
         private static bool _popupScheduleOverrideConfigured;
@@ -384,7 +387,11 @@ namespace ZeyWinAds
                 return;
 
             _startupLoadingVisible = true;
+            _startupLoadingGeneration++;
             LoadingOverlay.Show();
+            _startupLoadingTimeoutCoroutine = UnityMainThreadDispatcher.Instance.StartCoroutine(
+                StartupLoadingTimeoutRoutine(_startupLoadingGeneration)
+            );
         }
 
         private static void HideStartupLoading()
@@ -393,7 +400,30 @@ namespace ZeyWinAds
                 return;
 
             _startupLoadingVisible = false;
-            LoadingOverlay.Hide();
+            _startupLoadingGeneration++;
+            _startupLoadingTimeoutCoroutine = null;
+            LoadingOverlay.ForceHide();
+        }
+
+        private static System.Collections.IEnumerator StartupLoadingTimeoutRoutine(int generation)
+        {
+            yield return new WaitForSecondsRealtime(StartupLoadingMaxVisibleSeconds);
+
+            if (!_startupLoadingVisible || generation != _startupLoadingGeneration)
+            {
+                if (generation == _startupLoadingGeneration)
+                    _startupLoadingTimeoutCoroutine = null;
+                yield break;
+            }
+
+            Core.Logger.Warn("Startup loading force-hidden after {0:0.#}s timeout", StartupLoadingMaxVisibleSeconds);
+            _startupOfferPending = false;
+            _startupInterstitialOpening = false;
+            _startupFallbackReason = null;
+            _startupLoadingVisible = false;
+            _startupLoadingGeneration++;
+            _startupLoadingTimeoutCoroutine = null;
+            LoadingOverlay.ForceHide();
         }
 
         private static void RequestStartupGoogleFallback(string reason)
@@ -1709,6 +1739,8 @@ namespace ZeyWinAds
             _activeNative = null;
             _startupOfferPending = false;
             _startupLoadingVisible = false;
+            _startupLoadingGeneration++;
+            _startupLoadingTimeoutCoroutine = null;
             _startupInterstitialWarmupStarted = false;
             _startupInterstitialOpening = false;
             _startupReferralCheckPending = false;

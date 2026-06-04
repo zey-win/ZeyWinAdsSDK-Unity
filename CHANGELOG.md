@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.32
+
+- Added an 8 second SDK startup loading timeout and made startup loading hide forcefully so delayed or skipped Google fallback ads cannot leave games stuck on `Loading 100%`.
+
 ## 1.0.31
 
 - Prevented SDK-owned automatic fullscreen fallback ads from opening during the first 60 seconds of app runtime by starting the auto-fullscreen cooldown at launch.
