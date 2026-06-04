@@ -11,6 +11,7 @@ import java.lang.ref.WeakReference;
  */
 public final class ZeyWinAdsStartupOverlay {
     private static final long AutoDismissDelayMs = 15000L;
+    private static final float OverlayElevation = 300000f;
     private static final Object Lock = new Object();
     private static WeakReference<Activity> currentActivity = new WeakReference<Activity>(null);
     private static ZeyWinAdsLoadingOverlay overlay;
@@ -42,14 +43,14 @@ public final class ZeyWinAdsStartupOverlay {
     }
 
     public static void dismissWhenUnityReady() {
-        dismiss();
+        dismissImmediately();
     }
 
     public static void setLoadingOverlayVisible(boolean visible) {
         if (visible) {
             show();
         } else {
-            dismiss();
+            dismissImmediately();
         }
     }
 
@@ -68,6 +69,14 @@ public final class ZeyWinAdsStartupOverlay {
     }
 
     public static void dismiss() {
+        dismissImmediately();
+    }
+
+    public static void dismissImmediately() {
+        dismissInternal();
+    }
+
+    private static void dismissInternal() {
         final Activity activity;
         synchronized (Lock) {
             dismissed = true;
@@ -90,7 +99,7 @@ public final class ZeyWinAdsStartupOverlay {
                 }
 
                 if (overlayToDismiss != null) {
-                    overlayToDismiss.fadeOutAndDetach();
+                    overlayToDismiss.detachImmediately();
                 }
             }
         });
@@ -133,8 +142,8 @@ public final class ZeyWinAdsStartupOverlay {
 
         startupOverlay.setVisibility(android.view.View.VISIBLE);
         startupOverlay.bringToFront();
-        startupOverlay.setElevation(100000f);
-        startupOverlay.setTranslationZ(100000f);
+        startupOverlay.setElevation(OverlayElevation);
+        startupOverlay.setTranslationZ(OverlayElevation);
 
         scheduleAutoDismiss(activity);
     }

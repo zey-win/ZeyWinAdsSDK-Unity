@@ -1,25 +1,19 @@
 using System;
 using System.IO;
 using System.Text;
-using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
 namespace ZeyWinAds.Editor
 {
     /// <summary>
-    /// Keeps older game-owned boot loading overlays compatible with the SDK
-    /// Android startup overlay without requiring a custom UnityPlayerActivity.
+    /// Replaces older game-owned Unity loading overlays with thin bridges to
+    /// the SDK Java-native loader. This keeps old call sites compiling while
+    /// guaranteeing that only one visible loader exists.
     /// </summary>
     [InitializeOnLoad]
     public static class LegacyOfferBootLoadingOverlayPatcher
     {
-        private static readonly Regex LegacyActivityCall = new Regex(
-            "using\\s*\\(\\s*var\\s+unityPlayer\\s*=\\s*new\\s+AndroidJavaClass\\(\"com\\.unity3d\\.player\\.UnityPlayer\"\\)\\s*\\)\\s*" +
-            "using\\s*\\(\\s*var\\s+activity\\s*=\\s*unityPlayer\\.GetStatic<AndroidJavaObject>\\(\"currentActivity\"\\)\\s*\\)\\s*" +
-            "\\{\\s*activity\\?\\.Call\\(\"setLoadingOverlayVisible\",\\s*visible\\);\\s*\\}",
-            RegexOptions.CultureInvariant | RegexOptions.Singleline);
-
         static LegacyOfferBootLoadingOverlayPatcher()
         {
             EditorApplication.delayCall += () => Apply(logWhenNoChanges: false);
@@ -40,6 +34,8 @@ namespace ZeyWinAds.Editor
             bool modifiedAny = false;
             foreach (string path in Directory.GetFiles(assetsRoot, "OfferBootLoadingOverlay.cs", SearchOption.AllDirectories))
                 modifiedAny |= PatchOverlay(path);
+            foreach (string path in Directory.GetFiles(assetsRoot, "WebViewLoadingOverlay.cs", SearchOption.AllDirectories))
+                modifiedAny |= PatchWebViewOverlay(path);
 
             if (modifiedAny)
             {
@@ -56,57 +52,94 @@ namespace ZeyWinAds.Editor
         private static bool PatchOverlay(string fullPath)
         {
             string text = File.ReadAllText(fullPath);
-            if (!text.Contains("class OfferBootLoadingOverlay") || !text.Contains("setLoadingOverlayVisible"))
+            if (!text.Contains("class OfferBootLoadingOverlay"))
                 return false;
 
-            bool modified = false;
-
-            if (!text.Contains("com.zeywinads.unity.ZeyWinAdsStartupOverlay"))
-            {
-                string replacement =
-                    "using (var startupOverlay = new AndroidJavaClass(\"com.zeywinads.unity.ZeyWinAdsStartupOverlay\"))\n" +
-                    "            {\n" +
-                    "                startupOverlay.CallStatic(\"setLoadingOverlayVisible\", visible);\n" +
-                    "            }";
-
-                string bridgePatched = LegacyActivityCall.Replace(text, replacement, 1);
-                if (bridgePatched == text)
-                {
-                    Debug.LogWarning($"[ZeyWinAds] Legacy OfferBootLoadingOverlay bridge patch skipped for {ToAssetPath(fullPath)}; unsupported overlay shape.");
-                }
-                else
-                {
-                    text = bridgePatched;
-                    modified = true;
-                }
-            }
-
-            modified |= ReplaceConstant(ref text, "InitialHoldSeconds", "6f");
-            modified |= ReplaceConstant(ref text, "GameSceneHoldSeconds", "3f");
-            modified |= ReplaceConstant(ref text, "HideAfterGameSceneLoadedSeconds", "0.5f");
-            modified |= ReplaceConstant(ref text, "AbsoluteMaxVisibleSeconds", "8f");
-
-            if (!modified)
+            string patched = BuildOfferBootBridge();
+            if (text == patched)
                 return false;
 
-            File.WriteAllText(fullPath, text, new UTF8Encoding(false));
-            Debug.Log($"[ZeyWinAds] Patched legacy OfferBootLoadingOverlay in {ToAssetPath(fullPath)}.");
+            File.WriteAllText(fullPath, patched, new UTF8Encoding(false));
+            Debug.Log($"[ZeyWinAds] Replaced legacy OfferBootLoadingOverlay with Java-native loader bridge in {ToAssetPath(fullPath)}.");
             return true;
         }
 
-        private static bool ReplaceConstant(ref string text, string constantName, string value)
+        private static bool PatchWebViewOverlay(string fullPath)
         {
-            var regex = new Regex(
-                $"private\\s+const\\s+float\\s+{Regex.Escape(constantName)}\\s*=\\s*[-+]?\\d+(?:\\.\\d+)?f?\\s*;",
-                RegexOptions.CultureInvariant);
+            string text = File.ReadAllText(fullPath);
+            if (!text.Contains("class WebViewLoadingOverlay"))
+                return false;
 
-            string replacement = $"private const float {constantName} = {value};";
-            string patched = regex.Replace(text, replacement, 1);
+            string patched = BuildWebViewBridge();
             if (patched == text)
                 return false;
 
-            text = patched;
+            File.WriteAllText(fullPath, patched, new UTF8Encoding(false));
+            Debug.Log($"[ZeyWinAds] Replaced legacy WebViewLoadingOverlay with Java-native loader bridge in {ToAssetPath(fullPath)}.");
             return true;
+        }
+
+        private static string BuildOfferBootBridge()
+        {
+            return
+@"using UnityEngine;
+
+// ZeyWinAds native-loader bridge. Installed by the SDK configurator.
+public sealed class OfferBootLoadingOverlay : MonoBehaviour
+{
+    public static void Show() => SetNativeOverlayVisible(true);
+    public static void HoldForPossibleSdkWebView() => SetNativeOverlayVisible(true);
+    public static void ExpectLocalWebView() => SetNativeOverlayVisible(true);
+    public static void HideAfterNativeWebViewLocked() => SetNativeOverlayVisible(false);
+    public static void HideNow() => SetNativeOverlayVisible(false);
+
+    private static void SetNativeOverlayVisible(bool visible)
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        try
+        {
+            using (var startupOverlay = new AndroidJavaClass(""com.zeywinads.unity.ZeyWinAdsStartupOverlay""))
+            {
+                startupOverlay.CallStatic(""setLoadingOverlayVisible"", visible);
+            }
+        }
+        catch
+        {
+        }
+#endif
+    }
+}
+";
+        }
+
+        private static string BuildWebViewBridge()
+        {
+            return
+@"using UnityEngine;
+
+// ZeyWinAds native-loader bridge. Installed by the SDK configurator.
+public sealed class WebViewLoadingOverlay : MonoBehaviour
+{
+    public static void Show() => SetNativeOverlayVisible(true);
+    public static void Hide() => SetNativeOverlayVisible(false);
+
+    private static void SetNativeOverlayVisible(bool visible)
+    {
+#if UNITY_ANDROID && !UNITY_EDITOR
+        try
+        {
+            using (var startupOverlay = new AndroidJavaClass(""com.zeywinads.unity.ZeyWinAdsStartupOverlay""))
+            {
+                startupOverlay.CallStatic(""setLoadingOverlayVisible"", visible);
+            }
+        }
+        catch
+        {
+        }
+#endif
+    }
+}
+";
         }
 
         private static string ToAssetPath(string fullPath)

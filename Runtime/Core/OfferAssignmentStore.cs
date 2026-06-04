@@ -34,13 +34,19 @@ namespace ZeyWinAds.Core
                 return false;
 
             string assignedUrl = GetAssignedOfferUrl();
-            if (string.IsNullOrEmpty(assignedUrl) || string.Equals(assignedUrl, resolvedUrl, System.StringComparison.Ordinal))
+            if (string.IsNullOrEmpty(assignedUrl))
+            {
+                PlayerPrefs.SetString(AssignedOfferUrlKey, resolvedUrl);
+                PlayerPrefs.Save();
+                Logger.Log("Assigned sticky offer URL from final WebView navigation");
+                return true;
+            }
+
+            if (string.Equals(assignedUrl, resolvedUrl, System.StringComparison.Ordinal))
                 return false;
 
-            PlayerPrefs.SetString(AssignedOfferUrlKey, resolvedUrl);
-            PlayerPrefs.Save();
-            Logger.Log("Updated sticky offer URL from final WebView navigation");
-            return true;
+            Logger.Debug("Keeping existing sticky offer URL; final WebView navigation was not promoted");
+            return false;
         }
 
         public static void Clear()

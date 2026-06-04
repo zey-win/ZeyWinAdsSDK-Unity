@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.37
+
+- Made the SDK loading UI Java-native only: removed the Unity canvas money loader assets and converted `LoadingOverlay` into a bridge to `ZeyWinAdsStartupOverlay`.
+- Replaced legacy game-owned `OfferBootLoadingOverlay` and `WebViewLoadingOverlay` scripts with Java-native loader bridges during SDK configuration, preventing duplicate blue loading screens.
+- Removed the 3 second native loader fade-out and made loader dismissal immediate before/after WebView display.
+- Kept locked offer and HTML WebView surfaces above AdMob/native ad views with a higher Android elevation.
+- Kept the first assigned offer URL sticky and stopped final WebView redirects from replacing the cached offer URL.
+
 ## 1.0.36
 
 - Fixed the Android startup overlay dismiss bootstrap so it compiles cleanly and still hands off to the first Unity scene without a duplicate blue loading screen.

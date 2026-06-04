@@ -16,6 +16,9 @@ namespace ZeyWinAds.UI
         private const string LOCK_URL_KEY = "ZeyWinAds_LockWebViewUrl";
         private const string LOCK_ACTIVE_KEY = "ZeyWinAds_LockWebViewActive";
         private const string GAME_OBJECT_NAME = "ZeyWinAds_WebViewLock";
+#if UNITY_ANDROID
+        private const float AndroidOfferSurfaceElevation = 200000f;
+#endif
 
         private static WebViewLock _instance;
         public static WebViewLock Instance => _instance;
@@ -34,7 +37,6 @@ namespace ZeyWinAds.UI
         private AndroidJavaObject _webViewClient;
         private AndroidJavaObject _nativeWebViewContainer;
         private AndroidJavaObject _nativeSafeAreaContainer;
-        private AndroidJavaObject _nativeLoadingOverlay;
         private AndroidJavaObject _permissionBridge;
 #endif
 
@@ -228,14 +230,16 @@ namespace ZeyWinAds.UI
         {
             Logger.Debug("Locked WebView page loaded");
             HideNativeLoadingOverlay();
-            LoadingOverlay.Hide();
+            PromoteAndroidOfferSurface();
+            LoadingOverlay.ForceHide();
         }
 
         public void OnWebViewLoadError(string error)
         {
             Logger.Warn("Locked WebView load error: {0}", error);
             HideNativeLoadingOverlay();
-            LoadingOverlay.Hide();
+            PromoteAndroidOfferSurface();
+            LoadingOverlay.ForceHide();
         }
 
         private void HideLoadingAfterShowFailure()
@@ -507,27 +511,21 @@ namespace ZeyWinAds.UI
                         _nativeWebViewContainer.Call("setBackgroundColor", AndroidColor(0xFF000000));
                         _nativeWebViewContainer.Call("setClickable", true);
                         _nativeWebViewContainer.Call("setFocusable", true);
-                        _nativeWebViewContainer.Call("setElevation", 99999f);
-                        _nativeWebViewContainer.Call("setTranslationZ", 99999f);
+                        _nativeWebViewContainer.Call("setElevation", AndroidOfferSurfaceElevation);
+                        _nativeWebViewContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
 
                         _nativeSafeAreaContainer = new AndroidJavaObject("com.zeywinads.unity.ZeyWinAdsSafeAreaFrameLayout", activity);
                         _nativeSafeAreaContainer.Call("setBackgroundColor", AndroidColor(0xFF000000));
                         _nativeSafeAreaContainer.Call("addView", _webView, layoutParams);
                         _nativeWebViewContainer.Call("addView", _nativeSafeAreaContainer, layoutParams);
 
-                        _nativeLoadingOverlay = CreateAndroidLoadingOverlay(activity);
-                        _nativeWebViewContainer.Call("addView", _nativeLoadingOverlay, layoutParams);
-
-                        // Add to activity's content view. The native loading overlay is
-                        // inside the same hierarchy as the WebView, so it stays above it.
                         AndroidJavaObject decorView = activity.Call<AndroidJavaObject>("getWindow")
                             .Call<AndroidJavaObject>("getDecorView");
                         AndroidJavaObject contentView = decorView.Call<AndroidJavaObject>("findViewById",
                             new AndroidJavaClass("android.R$id").GetStatic<int>("content"));
 
                         contentView.Call("addView", _nativeWebViewContainer, layoutParams);
-                        _nativeWebViewContainer.Call("bringToFront");
-                        PromoteAndroidLoadingOverlay();
+                        PromoteAndroidOfferSurface();
 
                         // Load URL
                         _webView.Call("loadUrl", url);
@@ -562,13 +560,11 @@ namespace ZeyWinAds.UI
                 var safeAreaRef = _nativeSafeAreaContainer;
                 var webViewRef = _webView;
                 var webViewClientRef = _webViewClient;
-                var loadingRef = _nativeLoadingOverlay;
                 var permissionBridgeRef = _permissionBridge;
                 _nativeWebViewContainer = null;
                 _nativeSafeAreaContainer = null;
                 _webView = null;
                 _webViewClient = null;
-                _nativeLoadingOverlay = null;
                 _permissionBridge = null;
 
                 activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
@@ -591,7 +587,6 @@ namespace ZeyWinAds.UI
                         }
                         webViewClientRef?.Dispose();
                         permissionBridgeRef?.Dispose();
-                        loadingRef?.Dispose();
                         safeAreaRef?.Dispose();
                         containerRef?.Dispose();
 
@@ -609,60 +604,42 @@ namespace ZeyWinAds.UI
             }
         }
 
-        private AndroidJavaObject CreateAndroidLoadingOverlay(AndroidJavaObject activity)
+        private void PromoteAndroidOfferSurface()
         {
-            return new AndroidJavaObject("com.zeywinads.unity.ZeyWinAdsLoadingOverlay", activity);
-        }
-
-        private void PromoteAndroidLoadingOverlay()
-        {
-            if (_nativeLoadingOverlay == null)
-                return;
-
-            try
-            {
-                _nativeLoadingOverlay.Call("setVisibility", 0);
-                _nativeLoadingOverlay.Call("bringToFront");
-                _nativeLoadingOverlay.Call("setElevation", 100000f);
-                _nativeLoadingOverlay.Call("setTranslationZ", 100000f);
-                _nativeLoadingOverlay.Call("invalidate");
-                _nativeWebViewContainer?.Call("bringToFront");
-                _nativeWebViewContainer?.Call("invalidate");
-            }
-            catch (Exception e)
-            {
-                Logger.Warn("Failed to promote Android locked WebView loading overlay: {0}", e.Message);
-            }
-        }
-
-        private void HideNativeLoadingOverlay()
-        {
-            if (_nativeLoadingOverlay == null)
+            if (_nativeWebViewContainer == null)
                 return;
 
             try
             {
                 AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
                 AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
-                var overlay = _nativeLoadingOverlay;
-                _nativeLoadingOverlay = null;
                 activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
                 {
                     try
                     {
-                        overlay.Call("fadeOutAndDetach");
-                        overlay.Dispose();
+                        if (_nativeWebViewContainer == null)
+                            return;
+
+                        _nativeWebViewContainer.Call("bringToFront");
+                        _nativeWebViewContainer.Call("setElevation", AndroidOfferSurfaceElevation);
+                        _nativeWebViewContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                        _nativeWebViewContainer.Call("invalidate");
                     }
                     catch (Exception e)
                     {
-                        Logger.Warn("Failed to hide Android locked WebView loading overlay: {0}", e.Message);
+                        Logger.Warn("Failed to promote Android locked WebView surface: {0}", e.Message);
                     }
                 }));
             }
             catch (Exception e)
             {
-                Logger.Warn("Failed to schedule Android locked WebView loading overlay hide: {0}", e.Message);
+                Logger.Warn("Failed to promote Android locked WebView surface: {0}", e.Message);
             }
+        }
+
+        private void HideNativeLoadingOverlay()
+        {
+            LoadingOverlay.ForceHide();
         }
 
         private static int GetAndroidSdkInt()
@@ -678,6 +655,7 @@ namespace ZeyWinAds.UI
             }
         }
 #else
+        private void PromoteAndroidOfferSurface() {}
         private void HideNativeLoadingOverlay() {}
 #endif
 
@@ -772,7 +750,6 @@ namespace ZeyWinAds.UI
                     if (_nativeWebViewContainer != null)
                     {
                         _nativeWebViewContainer.Call("bringToFront");
-                        PromoteAndroidLoadingOverlay();
                     }
                 }));
 #endif

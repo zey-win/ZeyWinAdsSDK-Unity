@@ -31,7 +31,7 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
 
         progressView = new MoneyProgressView(context);
         baseBottomMargin = dp(58);
-        LayoutParams params = new LayoutParams(dp(360), dp(150));
+        LayoutParams params = new LayoutParams(dp(360), dp(190));
         params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         params.bottomMargin = baseBottomMargin;
         addView(progressView, params);
@@ -71,29 +71,17 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
         return super.onApplyWindowInsets(insets);
     }
 
-    public void fadeOutAndDetach() {
-        if (fadingOut) {
-            return;
-        }
-
+    public void detachImmediately() {
         fadingOut = true;
-        bringToFront();
         animate().cancel();
-        animate()
-            .alpha(0f)
-            .setDuration(3000L)
-            .withEndAction(new Runnable() {
-                @Override
-                public void run() {
-                    progressView.stop();
-                    setVisibility(View.GONE);
-                    ViewGroup parent = (ViewGroup) getParent();
-                    if (parent != null) {
-                        parent.removeView(ZeyWinAdsLoadingOverlay.this);
-                    }
-                }
-            })
-            .start();
+        progressView.stop();
+        setAlpha(0f);
+        setVisibility(View.GONE);
+
+        ViewGroup parent = (ViewGroup) getParent();
+        if (parent != null) {
+            parent.removeView(this);
+        }
     }
 
     private void updateProgressMargin() {
@@ -156,8 +144,8 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
             float width = getWidth();
             float barLeft = dp(8);
             float barRight = width - dp(8);
-            float barTop = dp(24);
-            float barBottom = dp(54);
+            float barTop = dp(64);
+            float barBottom = dp(94);
             float radius = (barBottom - barTop) * 0.5f;
             float moneyX = barLeft + radius + (barRight - barLeft - radius * 2f) * progress;
 
@@ -175,7 +163,7 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
             canvas.drawRoundRect(rect, radius, radius, paint);
 
             canvas.save();
-            canvas.translate(moneyX, barTop - dp(10));
+            canvas.translate(moneyX, barTop + dp(2));
             canvas.rotate(-9f);
             drawMoneyPack(canvas);
             canvas.restore();
@@ -184,14 +172,15 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
             paint.setTextAlign(Paint.Align.CENTER);
             paint.setFakeBoldText(true);
             paint.setTextSize(dp(25));
-            canvas.drawText("Loading " + Math.round(progress * 100f) + "%", width * 0.5f, dp(112), paint);
+            canvas.drawText("Loading " + Math.round(progress * 100f) + "%", width * 0.5f, dp(150), paint);
             paint.setFakeBoldText(false);
         }
 
         private void drawMoneyPack(Canvas canvas) {
-            drawBill(canvas, -dp(27), -dp(28), dp(54), dp(26), Color.rgb(72, 235, 84), 0f);
-            drawBand(canvas, -dp(15), -dp(20), dp(30), dp(9));
-            drawBill(canvas, -dp(27), -dp(2), dp(54), dp(26), Color.rgb(72, 235, 84), 0f);
+            drawBill(canvas, -dp(31), -dp(44), dp(62), dp(30), Color.rgb(96, 238, 105), -8f);
+            drawBill(canvas, -dp(33), -dp(24), dp(66), dp(32), Color.rgb(78, 224, 93), 4f);
+            drawBill(canvas, -dp(30), -dp(4), dp(60), dp(30), Color.rgb(88, 236, 96), -5f);
+            drawBand(canvas, -dp(16), -dp(30), dp(32), dp(42));
         }
 
         private void drawBill(Canvas canvas, float x, float y, float width, float height, int color, float slant) {
