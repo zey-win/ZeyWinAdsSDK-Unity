@@ -52,6 +52,7 @@ namespace ZeyWinAds.Editor
             PatchGoogleMobileAdsAndroidManifest(settings);
             PatchAndroidLaunchThemeResources();
             PatchAndroidManifest(settings, args);
+            LegacyOfferBootLoadingOverlayPatcher.Apply(logWhenNoChanges: false);
             LegacyAdMobProviderPatcher.Apply(logWhenNoChanges: false);
 
             EditorUtility.SetDirty(settings);

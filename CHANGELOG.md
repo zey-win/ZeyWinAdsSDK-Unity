@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.30
+
+- Added a compatible Android startup overlay bridge for older game-owned `OfferBootLoadingOverlay` scripts that previously called `setLoadingOverlayVisible` on `UnityPlayerActivity`.
+- The project configurator now patches legacy `OfferBootLoadingOverlay.cs` files to call the SDK-owned `ZeyWinAdsStartupOverlay` static bridge, preventing native overlay disable logs without requiring a custom activity.
+
 ## 1.0.29
 
 - Moved SDK-owned Android launch theme resources into `Assets/Plugins/Android/ZeyWinAds.androidlib/res` so Unity 6 builds no longer fail on obsolete root `Assets/Plugins/Android/res` resources.

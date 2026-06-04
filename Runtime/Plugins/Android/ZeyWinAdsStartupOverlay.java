@@ -16,6 +16,7 @@ public final class ZeyWinAdsStartupOverlay {
     private static ZeyWinAdsLoadingOverlay overlay;
     private static boolean dismissed;
     private static boolean autoDismissScheduled;
+    private static int showGeneration;
 
     private ZeyWinAdsStartupOverlay() {
     }
@@ -44,10 +45,34 @@ public final class ZeyWinAdsStartupOverlay {
         dismiss();
     }
 
+    public static void setLoadingOverlayVisible(boolean visible) {
+        if (visible) {
+            show();
+        } else {
+            dismiss();
+        }
+    }
+
+    public static void show() {
+        final Activity activity;
+        synchronized (Lock) {
+            dismissed = false;
+            autoDismissScheduled = false;
+            showGeneration++;
+            activity = currentActivity.get();
+        }
+
+        if (activity != null) {
+            installFor(activity);
+        }
+    }
+
     public static void dismiss() {
         final Activity activity;
         synchronized (Lock) {
             dismissed = true;
+            autoDismissScheduled = false;
+            showGeneration++;
             activity = currentActivity.get();
         }
 
@@ -115,16 +140,25 @@ public final class ZeyWinAdsStartupOverlay {
     }
 
     private static void scheduleAutoDismiss(Activity activity) {
+        final int scheduledGeneration;
         synchronized (Lock) {
             if (autoDismissScheduled) {
                 return;
             }
             autoDismissScheduled = true;
+            scheduledGeneration = showGeneration;
         }
 
         activity.getWindow().getDecorView().postDelayed(new Runnable() {
             @Override
             public void run() {
+                synchronized (Lock) {
+                    if (scheduledGeneration != showGeneration) {
+                        return;
+                    }
+                    autoDismissScheduled = false;
+                }
+
                 dismiss();
             }
         }, AutoDismissDelayMs);
