@@ -140,7 +140,6 @@ namespace ZeyWinAds
                 return;
             }
             _initializeStarted = true;
-            ShowStartupLoading();
 
             // Always initialize client first (needed for report sending)
             SubscribeToWebViewEvents();

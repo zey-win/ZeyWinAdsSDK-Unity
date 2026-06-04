@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.33
+
+- Stopped showing the SDK startup loading overlay immediately during `Initialize()` so fleet games keep their own boot loader clean and do not display duplicate `Loading` bars before the SDK actually opens an offer or WebView.
+
 ## 1.0.32
 
 - Added an 8 second SDK startup loading timeout and made startup loading hide forcefully so delayed or skipped Google fallback ads cannot leave games stuck on `Loading 100%`.
