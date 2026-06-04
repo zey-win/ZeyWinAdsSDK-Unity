@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.27
+
+- Added SDK-owned Android launch theme installation so games show the blue ZeyWin loading background immediately from the Android launch preview window.
+- The configurator now writes launch color/style resources, Android 12+ splash background attributes, and assigns the theme to the Unity launcher activity.
+
 ## 1.0.26
 
 - Hide the SDK startup loading overlay immediately when startup offer loading falls back to Google ads while referral checks are still pending.

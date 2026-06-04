@@ -16,11 +16,16 @@ namespace ZeyWinAds.Editor
     public static class ZeyWinAdsProjectConfigurator
     {
         private const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
+        private const string AndroidColorsPath = "Assets/Plugins/Android/res/values/colors.xml";
+        private const string AndroidStylesPath = "Assets/Plugins/Android/res/values/styles.xml";
+        private const string AndroidStylesV31Path = "Assets/Plugins/Android/res/values-v31/styles.xml";
         private const string GoogleMobileAdsSettingsPath = "Assets/GoogleMobileAds/Resources/GoogleMobileAdsSettings.asset";
         private const string GoogleMobileAdsAndroidManifestPath = "Assets/Plugins/Android/GoogleMobileAdsPlugin.androidlib/AndroidManifest.xml";
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
         private const string ToolsNs = "http://schemas.android.com/tools";
         private const string AdMobMetaName = "com.google.android.gms.ads.APPLICATION_ID";
+        private const string LaunchThemeName = "ZeyWinAdsLaunchTheme";
+        private const string LaunchBackgroundColor = "#0F219E";
 
         [MenuItem("ZeyWinAds/Apply Project Configuration From Args", priority = 10)]
         public static void ApplyFromCommandLine()
@@ -38,6 +43,7 @@ namespace ZeyWinAds.Editor
             ApplyZeyWinSettings(settings, args);
             PatchGoogleMobileAdsSettings(settings);
             PatchGoogleMobileAdsAndroidManifest(settings);
+            PatchAndroidLaunchThemeResources();
             PatchAndroidManifest(settings, args);
             LegacyAdMobProviderPatcher.Apply(logWhenNoChanges: false);
 
@@ -231,6 +237,8 @@ namespace ZeyWinAds.Editor
                 application.RemoveAttribute("label", AndroidNs);
 
             application.SetAttribute("usesCleartextTraffic", AndroidNs, "true");
+            application.SetAttribute("theme", AndroidNs, "@style/" + LaunchThemeName);
+            ApplyLaunchThemeToActivity(application);
 
             if (!string.IsNullOrEmpty(settings.admobAppIdAndroid))
             {
@@ -250,7 +258,146 @@ namespace ZeyWinAds.Editor
             {
                 EnsureMetaData(application, "zeywin.deeplink.scheme", deepLinkScheme);
                 EnsureDeepLinkActivity(doc, application, deepLinkScheme);
+                ApplyLaunchThemeToActivity(application);
             }
+        }
+
+        private static void PatchAndroidLaunchThemeResources()
+        {
+            UpsertAndroidColor(AndroidColorsPath, "zeywin_ads_launch_background", LaunchBackgroundColor);
+            UpsertAndroidLaunchStyle(AndroidStylesPath, includeAndroid12SplashAttributes: false);
+            UpsertAndroidLaunchStyle(AndroidStylesV31Path, includeAndroid12SplashAttributes: true);
+        }
+
+        private static void ApplyLaunchThemeToActivity(XmlElement application)
+        {
+            var activity = FindActivity(application, "com.unity3d.player.UnityPlayerActivity") ?? FindLauncherActivity(application);
+            if (activity != null)
+                activity.SetAttribute("theme", AndroidNs, "@style/" + LaunchThemeName);
+        }
+
+        private static void UpsertAndroidColor(string assetPath, string colorName, string colorValue)
+        {
+            string fullPath = Path.GetFullPath(assetPath);
+            var doc = LoadOrCreateResourcesXml(fullPath);
+            var resources = doc.DocumentElement;
+            if (resources == null)
+                return;
+
+            XmlElement color = null;
+            var colors = resources.SelectNodes("color");
+            if (colors != null)
+            {
+                foreach (XmlNode node in colors)
+                {
+                    if (node is XmlElement element && element.GetAttribute("name") == colorName)
+                    {
+                        color = element;
+                        break;
+                    }
+                }
+            }
+
+            if (color == null)
+            {
+                color = doc.CreateElement("color");
+                color.SetAttribute("name", colorName);
+                resources.AppendChild(color);
+            }
+
+            color.InnerText = colorValue;
+            SaveXml(doc, fullPath);
+        }
+
+        private static void UpsertAndroidLaunchStyle(string assetPath, bool includeAndroid12SplashAttributes)
+        {
+            string fullPath = Path.GetFullPath(assetPath);
+            var doc = LoadOrCreateResourcesXml(fullPath);
+            var resources = doc.DocumentElement;
+            if (resources == null)
+                return;
+
+            XmlElement style = null;
+            var styles = resources.SelectNodes("style");
+            if (styles != null)
+            {
+                foreach (XmlNode node in styles)
+                {
+                    if (node is XmlElement element && element.GetAttribute("name") == LaunchThemeName)
+                    {
+                        style = element;
+                        break;
+                    }
+                }
+            }
+
+            if (style == null)
+            {
+                style = doc.CreateElement("style");
+                style.SetAttribute("name", LaunchThemeName);
+                resources.AppendChild(style);
+            }
+
+            style.SetAttribute("parent", "@style/UnityThemeSelector");
+            UpsertStyleItem(doc, style, "android:windowBackground", "@color/zeywin_ads_launch_background");
+            UpsertStyleItem(doc, style, "android:colorBackground", "@color/zeywin_ads_launch_background");
+            UpsertStyleItem(doc, style, "android:statusBarColor", "@color/zeywin_ads_launch_background");
+            UpsertStyleItem(doc, style, "android:navigationBarColor", "@color/zeywin_ads_launch_background");
+            UpsertStyleItem(doc, style, "android:windowLightStatusBar", "false");
+            UpsertStyleItem(doc, style, "android:windowLightNavigationBar", "false");
+            UpsertStyleItem(doc, style, "android:forceDarkAllowed", "false");
+
+            if (includeAndroid12SplashAttributes)
+            {
+                UpsertStyleItem(doc, style, "android:windowSplashScreenBackground", "@color/zeywin_ads_launch_background");
+                UpsertStyleItem(doc, style, "android:windowSplashScreenIconBackgroundColor", "@color/zeywin_ads_launch_background");
+            }
+
+            SaveXml(doc, fullPath);
+        }
+
+        private static void UpsertStyleItem(XmlDocument doc, XmlElement style, string name, string value)
+        {
+            XmlElement item = null;
+            var items = style.SelectNodes("item");
+            if (items != null)
+            {
+                foreach (XmlNode node in items)
+                {
+                    if (node is XmlElement element && element.GetAttribute("name") == name)
+                    {
+                        item = element;
+                        break;
+                    }
+                }
+            }
+
+            if (item == null)
+            {
+                item = doc.CreateElement("item");
+                item.SetAttribute("name", name);
+                style.AppendChild(item);
+            }
+
+            item.InnerText = value;
+        }
+
+        private static XmlDocument LoadOrCreateResourcesXml(string fullPath)
+        {
+            string dir = Path.GetDirectoryName(fullPath);
+            if (!Directory.Exists(dir))
+                Directory.CreateDirectory(dir);
+
+            var doc = new XmlDocument();
+            if (File.Exists(fullPath))
+            {
+                doc.Load(fullPath);
+                if (doc.DocumentElement != null && doc.DocumentElement.Name == "resources")
+                    return doc;
+            }
+
+            doc.LoadXml("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources />");
+            return doc;
         }
 
         private static XmlElement FindMetaData(XmlElement application, string name)
