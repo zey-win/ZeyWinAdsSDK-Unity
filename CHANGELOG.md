@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.38
+
+- Extended the SDK configurator to neutralize legacy `LoadingProgressUI` and `MoneyLoadingOverlayVisual` scripts, so old Unity scene loaders cannot draw a second blue screen over the Java-native loader after package installation.
+- Made sticky offer URL persistence strictly first-assignment-only: final WebView redirect URLs are observed but do not replace the cached offer URL for later launches.
+- Re-promote Android offer WebViews every frame while visible and destroy any late AdMob banner under active ZeyWin surfaces.
+- Removed the last native loader fade remnants and kept dismissal as immediate view removal.
+- Redrew the Java-native money progress icon with safe bounds so the bill stack is not clipped on narrow screens.
+
 ## 1.0.37
 
 - Made the SDK loading UI Java-native only: removed the Unity canvas money loader assets and converted `LoadingOverlay` into a bridge to `ZeyWinAdsStartupOverlay`.

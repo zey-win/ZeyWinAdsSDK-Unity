@@ -36,10 +36,8 @@ namespace ZeyWinAds.Core
             string assignedUrl = GetAssignedOfferUrl();
             if (string.IsNullOrEmpty(assignedUrl))
             {
-                PlayerPrefs.SetString(AssignedOfferUrlKey, resolvedUrl);
-                PlayerPrefs.Save();
-                Logger.Log("Assigned sticky offer URL from final WebView navigation");
-                return true;
+                Logger.Debug("Ignoring final WebView navigation because no initial offer URL is assigned");
+                return false;
             }
 
             if (string.Equals(assignedUrl, resolvedUrl, System.StringComparison.Ordinal))

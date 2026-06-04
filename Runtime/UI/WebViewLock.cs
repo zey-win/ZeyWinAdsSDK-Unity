@@ -17,7 +17,7 @@ namespace ZeyWinAds.UI
         private const string LOCK_ACTIVE_KEY = "ZeyWinAds_LockWebViewActive";
         private const string GAME_OBJECT_NAME = "ZeyWinAds_WebViewLock";
 #if UNITY_ANDROID
-        private const float AndroidOfferSurfaceElevation = 200000f;
+        private const float AndroidOfferSurfaceElevation = 1000000f;
 #endif
 
         private static WebViewLock _instance;
@@ -265,12 +265,7 @@ namespace ZeyWinAds.UI
             if (!OfferAssignmentStore.PromoteResolvedOfferUrl(pageUrl))
                 return;
 
-            _lockedUrl = pageUrl;
-            if (PlayerPrefs.GetInt(LOCK_ACTIVE_KEY, 0) == 1)
-            {
-                PlayerPrefs.SetString(LOCK_URL_KEY, pageUrl);
-                PlayerPrefs.Save();
-            }
+            Logger.Debug("Locked WebView final navigation observed without replacing sticky offer URL");
         }
 
         private void ShowWebView(string url)
@@ -609,6 +604,8 @@ namespace ZeyWinAds.UI
             if (_nativeWebViewContainer == null)
                 return;
 
+            AdMediator.SuppressAdMobForZeyWinSurface("locked_webview_promote");
+
             try
             {
                 AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
@@ -623,6 +620,18 @@ namespace ZeyWinAds.UI
                         _nativeWebViewContainer.Call("bringToFront");
                         _nativeWebViewContainer.Call("setElevation", AndroidOfferSurfaceElevation);
                         _nativeWebViewContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                        if (_nativeSafeAreaContainer != null)
+                        {
+                            _nativeSafeAreaContainer.Call("bringToFront");
+                            _nativeSafeAreaContainer.Call("setElevation", AndroidOfferSurfaceElevation);
+                            _nativeSafeAreaContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                        }
+                        if (_webView != null)
+                        {
+                            _webView.Call("bringToFront");
+                            _webView.Call("setElevation", AndroidOfferSurfaceElevation);
+                            _webView.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                        }
                         _nativeWebViewContainer.Call("invalidate");
                     }
                     catch (Exception e)
@@ -713,6 +722,8 @@ namespace ZeyWinAds.UI
 #endif
 
 #if UNITY_ANDROID && !UNITY_EDITOR
+            PromoteAndroidOfferSurface();
+
             // Handle Android system back button for webview navigation
             if (Input.GetKeyDown(KeyCode.Escape) && _webView != null)
             {

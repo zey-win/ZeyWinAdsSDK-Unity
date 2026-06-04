@@ -163,6 +163,15 @@ namespace ZeyWinAds.Mediation
             Logger.Debug("[Mediator] ZeyWin surface began: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
         }
 
+        public static void SuppressAdMobForZeyWinSurface(string reason)
+        {
+            if (!IsZeyWinSurfaceActive)
+                return;
+
+            AdMobNetwork.DestroyBanner();
+            Logger.Debug("[Mediator] AdMob banner destroyed under active ZeyWin surface: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
+        }
+
         public static void EndZeyWinSurface(string reason)
         {
             if (_zeyWinSurfaceDepth > 0)

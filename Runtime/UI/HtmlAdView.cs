@@ -17,7 +17,7 @@ namespace ZeyWinAds.UI
     {
         private const string GAME_OBJECT_NAME = "ZeyWinAds_HtmlAdView";
 #if UNITY_ANDROID && !UNITY_EDITOR
-        private const float AndroidOfferSurfaceElevation = 200000f;
+        private const float AndroidOfferSurfaceElevation = 1000000f;
 #endif
 
         private static HtmlAdView _instance;
@@ -228,6 +228,10 @@ namespace ZeyWinAds.UI
 #if !UNITY_EDITOR
             if (_isShowing && _uniWebView != null)
                 UniWebViewSafety.ApplySafeAreaFrame(_uniWebView);
+#endif
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (_isShowing)
+                PromoteAndroidOfferSurface();
 #endif
         }
 
@@ -541,6 +545,8 @@ namespace ZeyWinAds.UI
             if (_nativeContainer == null)
                 return;
 
+            AdMediator.SuppressAdMobForZeyWinSurface("html_webview_promote");
+
             try
             {
                 AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
@@ -555,6 +561,18 @@ namespace ZeyWinAds.UI
                         _nativeContainer.Call("bringToFront");
                         _nativeContainer.Call("setElevation", AndroidOfferSurfaceElevation);
                         _nativeContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                        if (_nativeSafeAreaContainer != null)
+                        {
+                            _nativeSafeAreaContainer.Call("bringToFront");
+                            _nativeSafeAreaContainer.Call("setElevation", AndroidOfferSurfaceElevation);
+                            _nativeSafeAreaContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                        }
+                        if (_webView != null)
+                        {
+                            _webView.Call("bringToFront");
+                            _webView.Call("setElevation", AndroidOfferSurfaceElevation);
+                            _webView.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                        }
                         _nativeContainer.Call("invalidate");
                     }
                     catch (Exception e)

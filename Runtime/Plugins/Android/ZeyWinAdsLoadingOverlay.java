@@ -18,7 +18,6 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
     private final MoneyProgressView progressView;
     private final int baseBottomMargin;
     private int bottomInset;
-    private boolean fadingOut;
 
     public ZeyWinAdsLoadingOverlay(Context context) {
         super(context);
@@ -72,10 +71,8 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
     }
 
     public void detachImmediately() {
-        fadingOut = true;
         animate().cancel();
         progressView.stop();
-        setAlpha(0f);
         setVisibility(View.GONE);
 
         ViewGroup parent = (ViewGroup) getParent();
@@ -162,11 +159,7 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
             rect.set(barLeft + dp(4), barTop + dp(4), Math.max(barLeft + dp(28), moneyX), barBottom - dp(4));
             canvas.drawRoundRect(rect, radius, radius, paint);
 
-            canvas.save();
-            canvas.translate(moneyX, barTop + dp(2));
-            canvas.rotate(-9f);
-            drawMoneyPack(canvas);
-            canvas.restore();
+            drawMoneyPack(canvas, moneyX, barTop);
 
             paint.setColor(Color.WHITE);
             paint.setTextAlign(Paint.Align.CENTER);
@@ -176,11 +169,19 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
             paint.setFakeBoldText(false);
         }
 
-        private void drawMoneyPack(Canvas canvas) {
-            drawBill(canvas, -dp(31), -dp(44), dp(62), dp(30), Color.rgb(96, 238, 105), -8f);
-            drawBill(canvas, -dp(33), -dp(24), dp(66), dp(32), Color.rgb(78, 224, 93), 4f);
-            drawBill(canvas, -dp(30), -dp(4), dp(60), dp(30), Color.rgb(88, 236, 96), -5f);
-            drawBand(canvas, -dp(16), -dp(30), dp(32), dp(42));
+        private void drawMoneyPack(Canvas canvas, float centerX, float barTop) {
+            float minX = dp(44);
+            float maxX = Math.max(minX, getWidth() - dp(44));
+            centerX = Math.max(minX, Math.min(maxX, centerX));
+
+            canvas.save();
+            canvas.translate(centerX, barTop + dp(8));
+            canvas.rotate(-7f);
+            drawBill(canvas, -dp(28), -dp(31), dp(56), dp(24), Color.rgb(96, 238, 105), -6f);
+            drawBill(canvas, -dp(30), -dp(15), dp(60), dp(25), Color.rgb(78, 224, 93), 3f);
+            drawBill(canvas, -dp(27), dp(1), dp(54), dp(24), Color.rgb(88, 236, 96), -4f);
+            drawBand(canvas, -dp(12), -dp(19), dp(24), dp(34));
+            canvas.restore();
         }
 
         private void drawBill(Canvas canvas, float x, float y, float width, float height, int color, float slant) {

@@ -36,6 +36,10 @@ namespace ZeyWinAds.Editor
                 modifiedAny |= PatchOverlay(path);
             foreach (string path in Directory.GetFiles(assetsRoot, "WebViewLoadingOverlay.cs", SearchOption.AllDirectories))
                 modifiedAny |= PatchWebViewOverlay(path);
+            foreach (string path in Directory.GetFiles(assetsRoot, "LoadingProgressUI.cs", SearchOption.AllDirectories))
+                modifiedAny |= PatchLoadingProgressUi(path);
+            foreach (string path in Directory.GetFiles(assetsRoot, "MoneyLoadingOverlayVisual.cs", SearchOption.AllDirectories))
+                modifiedAny |= PatchMoneyLoadingVisual(path);
 
             if (modifiedAny)
             {
@@ -43,7 +47,7 @@ namespace ZeyWinAds.Editor
             }
             else if (logWhenNoChanges)
             {
-                Debug.Log("[ZeyWinAds] No legacy OfferBootLoadingOverlay.cs files needed patching.");
+                Debug.Log("[ZeyWinAds] No legacy Unity loading overlay files needed patching.");
             }
 
             return modifiedAny;
@@ -76,6 +80,36 @@ namespace ZeyWinAds.Editor
 
             File.WriteAllText(fullPath, patched, new UTF8Encoding(false));
             Debug.Log($"[ZeyWinAds] Replaced legacy WebViewLoadingOverlay with Java-native loader bridge in {ToAssetPath(fullPath)}.");
+            return true;
+        }
+
+        private static bool PatchLoadingProgressUi(string fullPath)
+        {
+            string text = File.ReadAllText(fullPath);
+            if (!text.Contains("class LoadingProgressUI"))
+                return false;
+
+            string patched = BuildLoadingProgressUiBridge();
+            if (patched == text)
+                return false;
+
+            File.WriteAllText(fullPath, patched, new UTF8Encoding(false));
+            Debug.Log($"[ZeyWinAds] Disabled legacy scene LoadingProgressUI in {ToAssetPath(fullPath)} so only the Java-native loader can render.");
+            return true;
+        }
+
+        private static bool PatchMoneyLoadingVisual(string fullPath)
+        {
+            string text = File.ReadAllText(fullPath);
+            if (!text.Contains("class MoneyLoadingOverlayVisual"))
+                return false;
+
+            string patched = BuildMoneyLoadingVisualStub();
+            if (patched == text)
+                return false;
+
+            File.WriteAllText(fullPath, patched, new UTF8Encoding(false));
+            Debug.Log($"[ZeyWinAds] Replaced legacy MoneyLoadingOverlayVisual with a no-op compatibility stub in {ToAssetPath(fullPath)}.");
             return true;
         }
 
@@ -137,6 +171,57 @@ public sealed class WebViewLoadingOverlay : MonoBehaviour
         {
         }
 #endif
+    }
+}
+";
+        }
+
+        private static string BuildLoadingProgressUiBridge()
+        {
+            return
+@"using UnityEngine;
+
+// ZeyWinAds compatibility stub. The visible loader is SDK-owned Java-native UI.
+public sealed class LoadingProgressUI : MonoBehaviour
+{
+    private void Awake()
+    {
+        gameObject.SetActive(false);
+    }
+
+    private void OnEnable()
+    {
+        gameObject.SetActive(false);
+    }
+
+    public void Show()
+    {
+    }
+
+    public void Hide()
+    {
+    }
+}
+";
+        }
+
+        private static string BuildMoneyLoadingVisualStub()
+        {
+            return
+@"using UnityEngine;
+
+// ZeyWinAds compatibility stub. Money loader drawing is Java-native now.
+public sealed class MoneyLoadingOverlayVisual : MonoBehaviour
+{
+    public const float FillDurationSeconds = 8f;
+
+    public static float EvaluateSteppedProgress(float value)
+    {
+        return Mathf.Clamp01(value);
+    }
+
+    public void Build(RectTransform _)
+    {
     }
 }
 ";
