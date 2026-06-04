@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.25
+
+- Added an SDK-owned runtime TextMesh Pro material guard so older games with imported TMP text objects missing material sources do not throw on Android.
+- The guard also keeps TMP mobile distance-field shaders applied to runtime TMP materials after scenes load.
+
 ## 1.0.24
 
 - Added a session cooldown for terminal ZeyWin API app configuration errors such as inactive or unknown bundle IDs, preventing fleet games from repeatedly hitting the server every few seconds.
