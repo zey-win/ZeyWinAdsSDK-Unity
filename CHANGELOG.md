@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.35
+
+- Dismiss the Android startup overlay after the first Unity scene loads so fleet games keep their own boot loader visible without a second blue money-progress screen.
+
 ## 1.0.34
 
 - Kept startup interstitial preloading silent so SDK loading UI is not shown over a game's own boot screen; SDK loading remains reserved for actual WebView/offer surfaces.
