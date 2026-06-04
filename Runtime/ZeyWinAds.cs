@@ -376,7 +376,6 @@ namespace ZeyWinAds
             }
 
             _startupOfferPending = true;
-            ShowStartupLoading();
             AdLoader.Instance.PreloadAd(AdType.Interstitial);
         }
 

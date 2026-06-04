@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.34
+
+- Kept startup interstitial preloading silent so SDK loading UI is not shown over a game's own boot screen; SDK loading remains reserved for actual WebView/offer surfaces.
+
 ## 1.0.33
 
 - Stopped showing the SDK startup loading overlay immediately during `Initialize()` so fleet games keep their own boot loader clean and do not display duplicate `Loading` bars before the SDK actually opens an offer or WebView.
