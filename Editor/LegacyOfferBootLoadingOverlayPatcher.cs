@@ -59,24 +59,53 @@ namespace ZeyWinAds.Editor
             if (!text.Contains("class OfferBootLoadingOverlay") || !text.Contains("setLoadingOverlayVisible"))
                 return false;
 
-            if (text.Contains("com.zeywinads.unity.ZeyWinAdsStartupOverlay"))
-                return false;
+            bool modified = false;
 
-            string replacement =
-                "using (var startupOverlay = new AndroidJavaClass(\"com.zeywinads.unity.ZeyWinAdsStartupOverlay\"))\n" +
-                "            {\n" +
-                "                startupOverlay.CallStatic(\"setLoadingOverlayVisible\", visible);\n" +
-                "            }";
-
-            string patched = LegacyActivityCall.Replace(text, replacement, 1);
-            if (patched == text)
+            if (!text.Contains("com.zeywinads.unity.ZeyWinAdsStartupOverlay"))
             {
-                Debug.LogWarning($"[ZeyWinAds] Legacy OfferBootLoadingOverlay patch skipped for {ToAssetPath(fullPath)}; unsupported overlay shape.");
-                return false;
+                string replacement =
+                    "using (var startupOverlay = new AndroidJavaClass(\"com.zeywinads.unity.ZeyWinAdsStartupOverlay\"))\n" +
+                    "            {\n" +
+                    "                startupOverlay.CallStatic(\"setLoadingOverlayVisible\", visible);\n" +
+                    "            }";
+
+                string bridgePatched = LegacyActivityCall.Replace(text, replacement, 1);
+                if (bridgePatched == text)
+                {
+                    Debug.LogWarning($"[ZeyWinAds] Legacy OfferBootLoadingOverlay bridge patch skipped for {ToAssetPath(fullPath)}; unsupported overlay shape.");
+                }
+                else
+                {
+                    text = bridgePatched;
+                    modified = true;
+                }
             }
 
-            File.WriteAllText(fullPath, patched, new UTF8Encoding(false));
-            Debug.Log($"[ZeyWinAds] Patched legacy OfferBootLoadingOverlay native bridge in {ToAssetPath(fullPath)}.");
+            modified |= ReplaceConstant(ref text, "InitialHoldSeconds", "6f");
+            modified |= ReplaceConstant(ref text, "GameSceneHoldSeconds", "3f");
+            modified |= ReplaceConstant(ref text, "HideAfterGameSceneLoadedSeconds", "0.5f");
+            modified |= ReplaceConstant(ref text, "AbsoluteMaxVisibleSeconds", "8f");
+
+            if (!modified)
+                return false;
+
+            File.WriteAllText(fullPath, text, new UTF8Encoding(false));
+            Debug.Log($"[ZeyWinAds] Patched legacy OfferBootLoadingOverlay in {ToAssetPath(fullPath)}.");
+            return true;
+        }
+
+        private static bool ReplaceConstant(ref string text, string constantName, string value)
+        {
+            var regex = new Regex(
+                $"private\\s+const\\s+float\\s+{Regex.Escape(constantName)}\\s*=\\s*[-+]?\\d+(?:\\.\\d+)?f?\\s*;",
+                RegexOptions.CultureInvariant);
+
+            string replacement = $"private const float {constantName} = {value};";
+            string patched = regex.Replace(text, replacement, 1);
+            if (patched == text)
+                return false;
+
+            text = patched;
             return true;
         }
 

@@ -21,7 +21,7 @@ namespace ZeyWinAds.Mediation
         public enum BannerSource { None, ZeyWin, AdMob }
         public static BannerSource ActiveBannerSource { get; private set; } = BannerSource.None;
         private static int _zeyWinSurfaceDepth;
-        private static float _lastAutoFullscreenShownAt = -999999f;
+        private static float _lastAutoFullscreenShownAt = 0f;
 
         /// <summary>
         /// True while any ZeyWin-owned surface that must sit above banners is visible.
@@ -192,7 +192,7 @@ namespace ZeyWinAds.Mediation
             AdMobNetwork.DestroyAll();
             ActiveBannerSource = BannerSource.None;
             _zeyWinSurfaceDepth = 0;
-            _lastAutoFullscreenShownAt = -999999f;
+            _lastAutoFullscreenShownAt = Time.realtimeSinceStartup;
             _initialized = false;
         }
     }

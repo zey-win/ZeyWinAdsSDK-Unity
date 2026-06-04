@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.31
+
+- Prevented SDK-owned automatic fullscreen fallback ads from opening during the first 60 seconds of app runtime by starting the auto-fullscreen cooldown at launch.
+- Updated the legacy boot loading overlay patcher so older games release the blue loading screen quickly after the `Game` scene loads and keep an 8 second absolute safety timeout.
+
 ## 1.0.30
 
 - Added a compatible Android startup overlay bridge for older game-owned `OfferBootLoadingOverlay` scripts that previously called `setLoadingOverlayVisible` on `UnityPlayerActivity`.
