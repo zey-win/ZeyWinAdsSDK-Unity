@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.7.7
+
+- Released the SDK-side loader, sticky offer URL, WebView layering, and legacy AdMobProvider banner suppression fixes under the production `3.7.7` version.
+
 ## 1.1.1
 
 - Extended the legacy AdMobProvider patcher for games that use `_banner`, `PreloadBannerAd()`, `ShowBanner()`, and `DestroyBanner()`, preventing AdMob banner loading/showing while a ZeyWin offer WebView is active.
