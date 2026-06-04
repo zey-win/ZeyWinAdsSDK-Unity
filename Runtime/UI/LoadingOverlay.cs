@@ -92,6 +92,7 @@ namespace ZeyWinAds.UI
 
             if (visible)
             {
+                DismissAndroidStartupOverlay();
                 _visual?.Restart();
                 StartLoadingMusic();
             }
@@ -138,6 +139,24 @@ namespace ZeyWinAds.UI
             _musicSource.ignoreListenerPause = true;
             _musicSource.spatialBlend = 0f;
             _musicSource.volume = 0f;
+        }
+
+        private static void DismissAndroidStartupOverlay()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using (var startupOverlay = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsStartupOverlay"))
+                {
+                    startupOverlay.CallStatic("dismissWhenUnityReady");
+                }
+            }
+            catch
+            {
+                // The startup overlay is best-effort and only exists on Android builds
+                // where the SDK configurator installed its manifest provider.
+            }
+#endif
         }
 
         private void StartLoadingMusic()

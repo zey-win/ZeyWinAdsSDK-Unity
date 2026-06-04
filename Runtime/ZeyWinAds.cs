@@ -369,7 +369,7 @@ namespace ZeyWinAds
             if (AdLoader.Instance.IsAdReady(AdType.Interstitial))
             {
                 _startupInterstitialOpening = true;
-                ShowInterstitial();
+                ShowInterstitial(HandleStartupInterstitialClosed);
                 return;
             }
 
@@ -421,7 +421,7 @@ namespace ZeyWinAds
             if (AdMediator.IsAdMobInterstitialReady())
             {
                 AdMediator.RecordAutoFullscreenShown();
-                AdMediator.ShowAdMobInterstitial(null);
+                AdMediator.ShowAdMobInterstitial(HandleStartupInterstitialClosed);
                 return;
             }
 
@@ -451,7 +451,7 @@ namespace ZeyWinAds
                     }
 
                     AdMediator.RecordAutoFullscreenShown();
-                    AdMediator.ShowAdMobInterstitial(null);
+                    AdMediator.ShowAdMobInterstitial(HandleStartupInterstitialClosed);
                     _googleFallbackCoroutine = null;
                     yield break;
                 }
@@ -461,6 +461,12 @@ namespace ZeyWinAds
 
             Core.Logger.Warn("Google fallback was requested but no AdMob interstitial became ready: {0}", reason);
             _googleFallbackCoroutine = null;
+        }
+
+        private static void HandleStartupInterstitialClosed()
+        {
+            _startupInterstitialOpening = false;
+            HideStartupLoading();
         }
 
         private static void TryStartCrashGuard()

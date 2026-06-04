@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 1.0.28
+
+- Added an Android startup ContentProvider that installs the SDK blue native loading overlay before Unity finishes creating its first frame, removing the dark launch gap on fleet games.
+- The Unity loading overlay now dismisses the native startup overlay with the existing 3 second fade once the C# loader is ready.
+- Startup interstitial and AdMob fallback close callbacks now always clear startup loading state so games do not remain on `Loading 100%` after an auto fullscreen ad closes.
+
 ## 1.0.27
 
 - Added SDK-owned Android launch theme installation so games show the blue ZeyWin loading background immediately from the Android launch preview window.

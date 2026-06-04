@@ -26,6 +26,8 @@ namespace ZeyWinAds.Editor
         private const string AdMobMetaName = "com.google.android.gms.ads.APPLICATION_ID";
         private const string LaunchThemeName = "ZeyWinAdsLaunchTheme";
         private const string LaunchBackgroundColor = "#0F219E";
+        private const string StartupProviderName = "com.zeywinads.unity.ZeyWinAdsStartupProvider";
+        private const string StartupProviderAuthoritySuffix = ".zeywinads.startup";
 
         [MenuItem("ZeyWinAds/Apply Project Configuration From Args", priority = 10)]
         public static void ApplyFromCommandLine()
@@ -238,6 +240,7 @@ namespace ZeyWinAds.Editor
 
             application.SetAttribute("usesCleartextTraffic", AndroidNs, "true");
             application.SetAttribute("theme", AndroidNs, "@style/" + LaunchThemeName);
+            EnsureStartupProvider(doc, application, args);
             ApplyLaunchThemeToActivity(application);
 
             if (!string.IsNullOrEmpty(settings.admobAppIdAndroid))
@@ -307,6 +310,59 @@ namespace ZeyWinAds.Editor
 
             color.InnerText = colorValue;
             SaveXml(doc, fullPath);
+        }
+
+        private static void EnsureStartupProvider(XmlDocument doc, XmlElement application, IDictionary<string, string> args)
+        {
+            XmlElement provider = FindProvider(application, StartupProviderName);
+            if (provider == null)
+            {
+                provider = doc.CreateElement("provider");
+                application.AppendChild(provider);
+            }
+
+            provider.SetAttribute("name", AndroidNs, StartupProviderName);
+            provider.SetAttribute("authorities", AndroidNs, ResolveStartupProviderAuthority(args));
+            provider.SetAttribute("exported", AndroidNs, "false");
+            provider.SetAttribute("initOrder", AndroidNs, "100");
+        }
+
+        private static XmlElement FindProvider(XmlElement application, string providerName)
+        {
+            var nodes = application.SelectNodes("provider");
+            if (nodes == null)
+                return null;
+
+            foreach (XmlNode node in nodes)
+            {
+                if (node is XmlElement element
+                    && element.GetAttribute("name", AndroidNs) == providerName)
+                {
+                    return element;
+                }
+            }
+
+            return null;
+        }
+
+        private static string ResolveStartupProviderAuthority(IDictionary<string, string> args)
+        {
+            string packageId = ResolveAndroidPackageId(args);
+            return string.IsNullOrEmpty(packageId)
+                ? "${applicationId}" + StartupProviderAuthoritySuffix
+                : packageId + StartupProviderAuthoritySuffix;
+        }
+
+        private static string ResolveAndroidPackageId(IDictionary<string, string> args)
+        {
+            if (TryGetAny(args, out string packageId, "androidPackageId", "packageId", "bundleId", "applicationId"))
+                return packageId;
+
+            string androidIdentifier = PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.Android);
+            if (!string.IsNullOrEmpty(androidIdentifier))
+                return androidIdentifier;
+
+            return PlayerSettings.applicationIdentifier;
         }
 
         private static void UpsertAndroidLaunchStyle(string assetPath, bool includeAndroid12SplashAttributes)
