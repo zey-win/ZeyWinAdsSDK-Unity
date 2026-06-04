@@ -103,7 +103,7 @@ namespace ZeyWinAds.UI
 
                 if (!string.IsNullOrEmpty(url))
                 {
-                    Logger.Log("Restoring locked webview ({0})", DescribeUrlForLogs(url));
+                    OfferAssignmentStore.LogStickyEvent("Restoring locked webview ({0})", DescribeUrlForLogs(url));
                     LockWithUrl(url, false);
                 }
                 else
@@ -198,9 +198,9 @@ namespace ZeyWinAds.UI
 
             PersistLockUrl(url);
             if (persist)
-                Logger.Log("Locking app with webview");
+                OfferAssignmentStore.LogStickyEvent("Locking app with webview ({0})", DescribeUrlForLogs(url));
             else
-                Logger.Log("Restored app with webview");
+                OfferAssignmentStore.LogStickyEvent("Restored app with webview ({0})", DescribeUrlForLogs(url));
 
             ShowWebView(url);
             OnLocked?.Invoke(url);
@@ -227,7 +227,7 @@ namespace ZeyWinAds.UI
             PlayerPrefs.SetString(LOCK_LAST_URL_KEY, url);
             PlayerPrefs.SetInt(LOCK_ACTIVE_KEY, 1);
             PlayerPrefs.Save();
-            Logger.Log("Persisted WebView lock URL ({0})", DescribeUrlForLogs(url));
+            OfferAssignmentStore.LogStickyEvent("Persisted WebView lock URL ({0})", DescribeUrlForLogs(url));
         }
 
         private void UnlockInternal()
@@ -472,6 +472,8 @@ namespace ZeyWinAds.UI
 
         private void ShowAndroidWebView(string url)
         {
+            OfferAssignmentStore.LogStickyEvent("Android WebView create requested ({0})", DescribeUrlForLogs(url));
+
             try
             {
                 AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");

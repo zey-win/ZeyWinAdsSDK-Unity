@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.7.9
+
+- Added native Android `ZeyWinAdsSticky` logcat entries for sticky offer assignment, restore, WebView lock persistence, and Android WebView creation so URL reuse cannot be hidden by Unity `chatty` log compression.
+
 ## 3.7.8
 
 - Rotated the Java-native loader money pack 90 degrees, enlarged it, and disabled clipping so it protrudes strongly outside the progress bar without being cut off.

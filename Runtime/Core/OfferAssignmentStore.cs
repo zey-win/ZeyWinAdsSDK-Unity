@@ -19,7 +19,7 @@ namespace ZeyWinAds.Core
             if (IsPersistableUrl(backupUrl))
             {
                 SaveAssignedOfferUrl(backupUrl);
-                Logger.Log("Restored sticky offer URL from backup ({0})", DescribeUrl(backupUrl));
+                LogStickyEvent("Restored sticky offer URL from backup ({0})", DescribeUrl(backupUrl));
                 return backupUrl;
             }
 
@@ -31,7 +31,7 @@ namespace ZeyWinAds.Core
             string assignedUrl = GetAssignedOfferUrl();
             if (!string.IsNullOrEmpty(assignedUrl))
             {
-                Logger.Log("Using sticky assigned offer URL ({0})", DescribeUrl(assignedUrl));
+                LogStickyEvent("Using sticky assigned offer URL ({0})", DescribeUrl(assignedUrl));
                 return assignedUrl;
             }
 
@@ -39,7 +39,7 @@ namespace ZeyWinAds.Core
                 return url;
 
             SaveAssignedOfferUrl(url);
-            Logger.Log("Assigned sticky offer URL for this device ({0})", DescribeUrl(url));
+            LogStickyEvent("Assigned sticky offer URL for this device ({0})", DescribeUrl(url));
             return url;
         }
 
@@ -51,12 +51,12 @@ namespace ZeyWinAds.Core
             string assignedUrl = GetAssignedOfferUrl();
             if (!string.IsNullOrEmpty(assignedUrl))
             {
-                Logger.Log("Sticky offer URL preserved during {0} ({1})", reason, DescribeUrl(assignedUrl));
+                LogStickyEvent("Sticky offer URL preserved during {0} ({1})", reason, DescribeUrl(assignedUrl));
                 return;
             }
 
             SaveAssignedOfferUrl(url);
-            Logger.Log("Sticky offer URL persisted during {0} ({1})", reason, DescribeUrl(url));
+            LogStickyEvent("Sticky offer URL persisted during {0} ({1})", reason, DescribeUrl(url));
         }
 
         public static bool PromoteResolvedOfferUrl(string resolvedUrl)
@@ -116,6 +116,32 @@ namespace ZeyWinAds.Core
                 path = path.Substring(0, 32) + "...";
 
             return uri.Host + path;
+        }
+
+        internal static void LogStickyEvent(string format, params object[] args)
+        {
+            string message = args == null || args.Length == 0
+                ? format
+                : string.Format(format, args);
+
+            Logger.Log(message);
+            WriteAndroidStickyLog(message);
+        }
+
+        private static void WriteAndroidStickyLog(string message)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using (var log = new AndroidJavaClass("android.util.Log"))
+                {
+                    log.CallStatic<int>("i", "ZeyWinAdsSticky", message);
+                }
+            }
+            catch
+            {
+            }
+#endif
         }
     }
 }
