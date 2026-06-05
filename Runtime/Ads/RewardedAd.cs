@@ -46,7 +46,6 @@ namespace ZeyWinAds.Ads
         private bool _canSkip;
         private int _rewardAmount;
         private float _skipAfterSeconds;
-        private float _previousAudioVolume;
         private bool _audioMuted;
 
         /// <summary>
@@ -114,8 +113,7 @@ namespace ZeyWinAds.Ads
 
         private void MuteGameAudio()
         {
-            _previousAudioVolume = AudioListener.volume;
-            AudioListener.volume = 0f;
+            AdAudioController.BeginAdAudio("zeywin_rewarded_video");
             _audioMuted = true;
         }
 
@@ -123,7 +121,7 @@ namespace ZeyWinAds.Ads
         {
             if (_audioMuted)
             {
-                AudioListener.volume = _previousAudioVolume;
+                AdAudioController.EndAdAudio("zeywin_rewarded_video");
                 _audioMuted = false;
             }
         }

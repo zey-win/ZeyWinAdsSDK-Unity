@@ -84,6 +84,7 @@ namespace ZeyWinAds.Mediation
             // First call boots MobileAds + preloads in its init callback.
             // Re-init after Reset() does not re-init MobileAds (one-shot), so
             // only then do we explicitly re-trigger preloads.
+            FrameRateController.Apply("mediator_initialize");
             bool wasAdMobInitialized = AdMobNetwork.IsInitialized;
             AdMobNetwork.Initialize(settings);
             if (wasAdMobInitialized)
@@ -181,6 +182,11 @@ namespace ZeyWinAds.Mediation
         {
             _zeyWinSurfaceDepth++;
             AdMobNetwork.DestroyBanner();
+            if (IsAudioSurface(reason))
+            {
+                AdAudioController.BeginAdAudio(reason);
+                FrameRateController.ApplyWebView(reason);
+            }
             Logger.Debug("[Mediator] ZeyWin surface began: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
         }
 
@@ -199,8 +205,16 @@ namespace ZeyWinAds.Mediation
                 _zeyWinSurfaceDepth--;
 
             Logger.Debug("[Mediator] ZeyWin surface ended: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
+            if (IsAudioSurface(reason))
+                AdAudioController.EndAdAudio(reason);
             if (!IsZeyWinSurfaceActive && _initialized)
                 AdMobNetwork.RepreloadAll();
+        }
+
+        private static bool IsAudioSurface(string reason)
+        {
+            return !string.IsNullOrEmpty(reason)
+                && reason.IndexOf("webview", StringComparison.OrdinalIgnoreCase) >= 0;
         }
 
         public static void HideBanner()
@@ -224,6 +238,7 @@ namespace ZeyWinAds.Mediation
             _zeyWinSurfaceDepth = 0;
             _lastAutoFullscreenShownAt = Time.realtimeSinceStartup;
             _initialized = false;
+            AdAudioController.Reset();
         }
     }
 }

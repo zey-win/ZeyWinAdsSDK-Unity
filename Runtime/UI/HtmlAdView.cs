@@ -99,6 +99,7 @@ namespace ZeyWinAds.UI
 
             _isShowing = true;
             BeginZeyWinSurface();
+            FrameRateController.ApplyWebView("html_webview_show");
             LoadingOverlay.Show();
 
 #if UNITY_EDITOR
@@ -174,6 +175,7 @@ namespace ZeyWinAds.UI
         {
             Logger.Debug("HTML ad: page loaded");
             RememberResolvedOfferUrl(pageUrl);
+            ApplyWebViewMediaVolume("html_webview_page_loaded");
             HideNativeLoadingOverlay();
             PromoteAndroidOfferSurface();
             LoadingOverlay.ForceHide();
@@ -387,6 +389,7 @@ namespace ZeyWinAds.UI
                         // Create WebView
                         _webView = new AndroidJavaObject("android.webkit.WebView", activity);
                         _webView.Call("setBackgroundColor", unchecked((int)0xFF000000));
+                        FrameRateController.ApplyAndroidWebViewFrameRate(_webView, "html_webview_create");
 
                         // Enable hardware acceleration (critical for WebGL content)
                         // LAYER_TYPE_HARDWARE = 2
@@ -603,6 +606,15 @@ namespace ZeyWinAds.UI
         private void HideNativeLoadingOverlay() {}
         private void PromoteAndroidOfferSurface() {}
 #endif
+
+        private void ApplyWebViewMediaVolume(string reason)
+        {
+            if (_uniWebView != null)
+                AdAudioController.ApplyUniWebViewMediaVolume(_uniWebView, reason);
+#if UNITY_ANDROID && !UNITY_EDITOR
+            AdAudioController.ApplyAndroidWebViewMediaVolume(_webView, reason);
+#endif
+        }
 
         // ============================================================
         // iOS implementation

@@ -117,6 +117,7 @@ namespace ZeyWinAds.Mediation
             if (_initialized)
                 return;
 
+            AdAudioController.ApplyAdMobVolume("admob_initialize");
             MobileAds.Initialize(status =>
             {
                 _initialized = true;
@@ -213,6 +214,7 @@ namespace ZeyWinAds.Mediation
                 _interstitial = ad;
                 _interstitial.OnAdFullScreenContentClosed += () =>
                 {
+                    AdAudioController.EndAdAudio("admob_interstitial");
                     var cb = _interstitialOnClose;
                     _interstitialOnClose = null;
                     cb?.Invoke();
@@ -221,6 +223,7 @@ namespace ZeyWinAds.Mediation
                 _interstitial.OnAdFullScreenContentFailed += err =>
                 {
                     Core.Logger.Warn("[AdMob] Interstitial show failed: {0}", err.GetMessage());
+                    AdAudioController.EndAdAudio("admob_interstitial_failed");
                     var cb = _interstitialOnClose;
                     _interstitialOnClose = null;
                     cb?.Invoke();
@@ -243,6 +246,7 @@ namespace ZeyWinAds.Mediation
 
             if (!IsInterstitialReady()) return false;
             _interstitialOnClose = onClose;
+            AdAudioController.BeginAdAudio("admob_interstitial");
             _interstitial.Show();
             return true;
 #else
@@ -313,6 +317,7 @@ namespace ZeyWinAds.Mediation
                 _rewarded = ad;
                 _rewarded.OnAdFullScreenContentClosed += () =>
                 {
+                    AdAudioController.EndAdAudio("admob_rewarded");
                     var cb = _rewardedOnClose;
                     _rewardedOnClose = null;
                     _rewardedOnReward = null;
@@ -322,6 +327,7 @@ namespace ZeyWinAds.Mediation
                 _rewarded.OnAdFullScreenContentFailed += err =>
                 {
                     Core.Logger.Warn("[AdMob] Rewarded show failed: {0}", err.GetMessage());
+                    AdAudioController.EndAdAudio("admob_rewarded_failed");
                     var cb = _rewardedOnClose;
                     _rewardedOnClose = null;
                     _rewardedOnReward = null;
@@ -346,6 +352,7 @@ namespace ZeyWinAds.Mediation
             if (!IsRewardedReady()) return false;
             _rewardedOnReward = onReward;
             _rewardedOnClose = onClose;
+            AdAudioController.BeginAdAudio("admob_rewarded");
             _rewarded.Show(reward =>
             {
                 int amount = reward != null ? Mathf.RoundToInt((float)reward.Amount) : ZeyWinAdsConfig.DefaultRewardAmount;
@@ -523,6 +530,7 @@ namespace ZeyWinAds.Mediation
             _interstitialOnClose = null;
             _rewardedOnReward = null;
             _rewardedOnClose = null;
+            AdAudioController.EndAdAudio("admob_destroy_all");
 #endif
         }
 

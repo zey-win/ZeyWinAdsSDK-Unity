@@ -195,9 +195,8 @@ namespace ZeyWinAds.UI
             _lockStartedAt = Time.realtimeSinceStartup;
             LoadingOverlay.Show();
 
-            // Mute all Unity audio while webview is active
-            AudioListener.pause = true;
             BeginZeyWinSurface();
+            FrameRateController.ApplyWebView("locked_webview_show");
 
             PersistLockUrl(url);
             if (persist)
@@ -238,9 +237,6 @@ namespace ZeyWinAds.UI
             _isLocked = false;
             _lockedUrl = null;
 
-            // Restore Unity audio
-            AudioListener.pause = false;
-
             DestroyWebView();
             LoadingOverlay.Hide();
             Logger.Log("WebView lock removed");
@@ -251,6 +247,7 @@ namespace ZeyWinAds.UI
         {
             RememberResolvedOfferUrl(pageUrl);
             Logger.Debug("Locked WebView page loaded");
+            ApplyWebViewMediaVolume("locked_webview_page_loaded");
             HideNativeLoadingOverlay();
             PromoteAndroidOfferSurface();
             LoadingOverlay.ForceHide();
@@ -259,6 +256,7 @@ namespace ZeyWinAds.UI
         public void OnWebViewNavigationFinished(string pageUrl)
         {
             RememberResolvedOfferUrl(pageUrl);
+            ApplyWebViewMediaVolume("locked_webview_navigation_finished");
         }
 
         public void OnWebViewLoadError(string error)
@@ -503,6 +501,7 @@ namespace ZeyWinAds.UI
                         // Create WebView
                         _webView = new AndroidJavaObject("android.webkit.WebView", activity);
                         _webView.Call("setBackgroundColor", AndroidColor(0xFF000000));
+                        FrameRateController.ApplyAndroidWebViewFrameRate(_webView, "locked_webview_create");
 
                         // Enable hardware acceleration (critical for WebGL content)
                         // LAYER_TYPE_HARDWARE = 2
@@ -717,6 +716,15 @@ namespace ZeyWinAds.UI
         private void PromoteAndroidOfferSurface() {}
         private void HideNativeLoadingOverlay() {}
 #endif
+
+        private void ApplyWebViewMediaVolume(string reason)
+        {
+            if (_uniWebView != null)
+                AdAudioController.ApplyUniWebViewMediaVolume(_uniWebView, reason);
+#if UNITY_ANDROID && !UNITY_EDITOR
+            AdAudioController.ApplyAndroidWebViewMediaVolume(_webView, reason);
+#endif
+        }
 
 #if UNITY_IOS
         [System.Runtime.InteropServices.DllImport("__Internal")]

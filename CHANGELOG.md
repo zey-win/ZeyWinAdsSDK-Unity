@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.8.1
+
+- Added SDK-owned ad audio adaptation: AdMob application volume is capped from remote config, fullscreen/video/WebView surfaces duck Unity game audio instead of pausing it, and WebView media elements receive a runtime volume limiter.
+- Added Russian-first SDK logging through the central logger: common SDK, AdMob, WebView, popup, preload, error, and routing messages are localized before they reach logcat.
+- Added high-FPS/frame pacing support: SDK initialization and WebView surfaces set target frame rate, Android preferred refresh rate, and Android WebView frame-rate requests from remote config.
+- Added an optional perceived-smoothness shader post effect with temporal blending so ordinary displays can look softer during motion when the current render pipeline supports camera post effects.
+- Updated runtime `SdkVersion` reporting to `3.8.1`.
+
 ## 3.8.0
 
 - Reworked SDK native/banner ad rendering into an adaptive typography card: Roboto/Noto/Helvetica OS font fallback, wrapped text, best-fit sizing, and height/width tuning for different languages and CTA lengths.
