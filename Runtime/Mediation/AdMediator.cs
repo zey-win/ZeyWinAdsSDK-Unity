@@ -200,7 +200,7 @@ namespace ZeyWinAds.Mediation
 
             Logger.Debug("[Mediator] ZeyWin surface ended: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
             if (!IsZeyWinSurfaceActive && _initialized)
-                AdMobNetwork.PreloadBanner();
+                AdMobNetwork.RepreloadAll();
         }
 
         public static void HideBanner()

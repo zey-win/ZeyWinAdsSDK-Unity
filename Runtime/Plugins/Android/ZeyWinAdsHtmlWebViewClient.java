@@ -45,6 +45,12 @@ public class ZeyWinAdsHtmlWebViewClient extends WebViewClient {
     public void onPageFinished(WebView view, String url) {
         super.onPageFinished(view, url);
         ZeyWinAdsPermissionBridge.inject(view);
+    }
+
+    @Override
+    public void onPageCommitVisible(WebView view, String url) {
+        super.onPageCommitVisible(view, url);
+        ZeyWinAdsPermissionBridge.inject(view);
         if (!initialLoadDone) {
             initialLoadDone = true;
             UnityPlayer.UnitySendMessage(gameObjectName, "OnJsBridgePageLoaded", url != null ? url : "");

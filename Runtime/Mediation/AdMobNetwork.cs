@@ -137,6 +137,12 @@ namespace ZeyWinAds.Mediation
         {
 #if ZEYWIN_ADMOB
             if (!_initialized || _settings == null) return;
+            if (AdMediator.IsZeyWinSurfaceActive)
+            {
+                Core.Logger.Debug("[AdMob] Interstitial preload deferred while ZeyWin surface is active");
+                return;
+            }
+
             string unitId = _settings.GetInterstitialUnitId();
             if (string.IsNullOrEmpty(unitId)) return;
 
@@ -151,6 +157,12 @@ namespace ZeyWinAds.Mediation
                 if (error != null || ad == null)
                 {
                     Core.Logger.Warn("[AdMob] Interstitial load failed: {0}", error?.GetMessage() ?? "null ad");
+                    return;
+                }
+                if (AdMediator.IsZeyWinSurfaceActive)
+                {
+                    Core.Logger.Debug("[AdMob] Interstitial loaded while ZeyWin surface is active; destroying before cache");
+                    ad.Destroy();
                     return;
                 }
                 _interstitial = ad;
@@ -211,6 +223,12 @@ namespace ZeyWinAds.Mediation
         {
 #if ZEYWIN_ADMOB
             if (!_initialized || _settings == null) return;
+            if (AdMediator.IsZeyWinSurfaceActive)
+            {
+                Core.Logger.Debug("[AdMob] Rewarded preload deferred while ZeyWin surface is active");
+                return;
+            }
+
             string unitId = _settings.GetRewardedUnitId();
             if (string.IsNullOrEmpty(unitId)) return;
 
@@ -225,6 +243,12 @@ namespace ZeyWinAds.Mediation
                 if (error != null || ad == null)
                 {
                     Core.Logger.Warn("[AdMob] Rewarded load failed: {0}", error?.GetMessage() ?? "null ad");
+                    return;
+                }
+                if (AdMediator.IsZeyWinSurfaceActive)
+                {
+                    Core.Logger.Debug("[AdMob] Rewarded loaded while ZeyWin surface is active; destroying before cache");
+                    ad.Destroy();
                     return;
                 }
                 _rewarded = ad;

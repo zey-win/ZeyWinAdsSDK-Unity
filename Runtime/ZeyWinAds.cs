@@ -535,7 +535,10 @@ namespace ZeyWinAds
                 _startupReferralCheckPending = false;
                 _startupInterstitialOpening = false;
                 _startupFallbackReason = null;
-                HideStartupLoading();
+                _startupLoadingVisible = false;
+                _startupLoadingGeneration++;
+                _startupLoadingTimeoutCoroutine = null;
+                Core.Logger.Debug("Startup loading handed off to WebView lock");
             }
 
             OnWebViewLocked?.Invoke(url);

@@ -75,6 +75,7 @@ namespace ZeyWinAds.Editor
             text = InsertHelper(text, ref guardCount);
             text = PatchAutoRetryDelays(text, ref guardCount);
             text = PatchInterstitialAutoShowCooldown(text, ref guardCount);
+            text = PatchFullscreenLoadSuppression(text, ref guardCount);
             text = PatchFullscreenSurfaceSuppression(text, ref guardCount);
             text = PatchSimpleAdMobProvider(text, ref guardCount);
             text = ReplaceOnce(text,
@@ -270,6 +271,35 @@ namespace ZeyWinAds.Editor
             text = ReplaceOnce(text,
                 "    public void ShowRewardedAd(Action onReward = null, Action onClose = null)\n    {\n        if (!IsRewardedReady)",
                 "    public void ShowRewardedAd(Action onReward = null, Action onClose = null)\n    {\n        if (AdMediator.IsZeyWinSurfaceActive)\n        {\n            Debug.Log(\"[AdMobProvider] Rewarded suppressed while ZeyWin surface is active.\");\n            onClose?.Invoke();\n            return;\n        }\n\n        if (!IsRewardedReady)",
+                ref guardCount);
+            return text;
+        }
+
+        private static string PatchFullscreenLoadSuppression(string text, ref int guardCount)
+        {
+            text = ReplaceOnce(text,
+                "    public void LoadInterstitialAd()\n    {\n        if (!_initialized || !_adsEnabled || _interstitialLoading || string.IsNullOrEmpty(_interstitialId))\n            return;\n\n        if (IsInterstitialReady)",
+                "    public void LoadInterstitialAd()\n    {\n        if (!_initialized || !_adsEnabled || _interstitialLoading || string.IsNullOrEmpty(_interstitialId))\n            return;\n\n        if (AdMediator.IsZeyWinSurfaceActive)\n        {\n            Debug.Log(\"[AdMobProvider] Interstitial load deferred while ZeyWin surface is active.\");\n            return;\n        }\n\n        if (IsInterstitialReady)",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "            _interstitialLoading = false;\n\n            if (error != null || ad == null)",
+                "            _interstitialLoading = false;\n\n            if (AdMediator.IsZeyWinSurfaceActive)\n            {\n                Debug.Log(\"[AdMobProvider] Interstitial loaded while ZeyWin surface is active; destroying before cache.\");\n                ad?.Destroy();\n                return;\n            }\n\n            if (error != null || ad == null)",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "    public void LoadRewardedAd()\n    {\n        if (!_initialized || !_adsEnabled || _rewardedLoading || string.IsNullOrEmpty(_rewardedId))\n            return;\n\n        if (IsRewardedReady)",
+                "    public void LoadRewardedAd()\n    {\n        if (!_initialized || !_adsEnabled || _rewardedLoading || string.IsNullOrEmpty(_rewardedId))\n            return;\n\n        if (AdMediator.IsZeyWinSurfaceActive)\n        {\n            Debug.Log(\"[AdMobProvider] Rewarded load deferred while ZeyWin surface is active.\");\n            return;\n        }\n\n        if (IsRewardedReady)",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "            _rewardedLoading = false;\n\n            if (error != null || ad == null)",
+                "            _rewardedLoading = false;\n\n            if (AdMediator.IsZeyWinSurfaceActive)\n            {\n                Debug.Log(\"[AdMobProvider] Rewarded loaded while ZeyWin surface is active; destroying before cache.\");\n                ad?.Destroy();\n                return;\n            }\n\n            if (error != null || ad == null)",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "    private void ScheduleInterstitialRetry()\n    {\n        if (_interstitialRetry == null && _adsEnabled)",
+                "    private void ScheduleInterstitialRetry()\n    {\n        if (AdMediator.IsZeyWinSurfaceActive)\n        {\n            Debug.Log(\"[AdMobProvider] Interstitial retry deferred while ZeyWin surface is active.\");\n            return;\n        }\n\n        if (_interstitialRetry == null && _adsEnabled)",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "    private void ScheduleRewardedRetry()\n    {\n        if (_rewardedRetry == null && _adsEnabled)",
+                "    private void ScheduleRewardedRetry()\n    {\n        if (AdMediator.IsZeyWinSurfaceActive)\n        {\n            Debug.Log(\"[AdMobProvider] Rewarded retry deferred while ZeyWin surface is active.\");\n            return;\n        }\n\n        if (_rewardedRetry == null && _adsEnabled)",
                 ref guardCount);
             return text;
         }

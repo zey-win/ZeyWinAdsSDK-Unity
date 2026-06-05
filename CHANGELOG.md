@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.7.15
+
+- Deferred SDK AdMob interstitial and rewarded preload requests while a ZeyWin offer WebView, popup, or banner surface is active.
+- Extended legacy `AdMobProvider` auto-patching to defer fullscreen AdMob loads and retries during active ZeyWin offer surfaces, reducing unnecessary AdMob request activity.
+- Kept the Java-native startup loader visible through WebView lock handoff and now hide it only after Android reports the WebView page is committed visible.
+
 ## 3.7.14
 
 - Suppressed SDK and AdMob fullscreen ad shows while a ZeyWin offer WebView, popup, or banner surface is active.
