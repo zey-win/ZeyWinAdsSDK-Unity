@@ -77,9 +77,9 @@ namespace ZeyWinAds.Ads
         {
             float height = CalculateAdaptiveHeight();
             float padding = 14f;
-            float iconSize = 54f;
-            float ctaWidth = 78f;
-            float ctaHeight = 42f;
+            float iconSize = 108f;
+            float ctaWidth = 156f;
+            float ctaHeight = 84f;
             bool hasCta = !string.IsNullOrEmpty(AdData.cta_text);
             bool hasBody = !string.IsNullOrEmpty(AdData.ad_body);
             bool hasIcon = !string.IsNullOrEmpty(AdData.icon_url);
@@ -159,7 +159,7 @@ namespace ZeyWinAds.Ads
                     }
                 });
 
-                contentLeft += iconSize + 12f;
+                contentLeft += iconSize + 16f;
             }
 
             float badgeWidth = 36f;
@@ -198,8 +198,8 @@ namespace ZeyWinAds.Ads
             var textGroupRect = textGroupObj.AddComponent<RectTransform>();
             textGroupRect.anchorMin = new Vector2(0, 0);
             textGroupRect.anchorMax = new Vector2(1, 1);
-            textGroupRect.offsetMin = new Vector2(contentLeft, hasCta ? padding + ctaHeight + 8f : padding);
-            textGroupRect.offsetMax = new Vector2(-padding, -padding);
+            textGroupRect.offsetMin = new Vector2(contentLeft, padding);
+            textGroupRect.offsetMax = new Vector2(hasCta ? -(padding + ctaWidth + 16f) : -padding, -padding);
 
             var headlineObj = new GameObject("Headline");
             headlineObj.transform.SetParent(textGroupObj.transform, false);
@@ -212,7 +212,7 @@ namespace ZeyWinAds.Ads
             var headlineText = headlineObj.AddComponent<Text>();
             headlineText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             headlineText.text = AdData.ad_text ?? "";
-            headlineText.fontSize = 19;
+            headlineText.fontSize = 38;
             headlineText.color = new Color(0.08f, 0.10f, 0.12f, 1f);
             headlineText.fontStyle = FontStyle.Bold;
             headlineText.horizontalOverflow = HorizontalWrapMode.Wrap;
@@ -233,7 +233,7 @@ namespace ZeyWinAds.Ads
                 var bodyText = bodyObj.AddComponent<Text>();
                 bodyText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 bodyText.text = AdData.ad_body;
-                bodyText.fontSize = 15;
+                bodyText.fontSize = 30;
                 bodyText.color = new Color(0.23f, 0.27f, 0.32f, 1f);
                 bodyText.alignment = TextAnchor.UpperLeft;
                 bodyText.horizontalOverflow = HorizontalWrapMode.Wrap;
@@ -246,10 +246,10 @@ namespace ZeyWinAds.Ads
                 var ctaObj = new GameObject("CTAButton");
                 ctaObj.transform.SetParent(cardObj.transform, false);
                 var ctaRect = ctaObj.AddComponent<RectTransform>();
-                ctaRect.anchorMin = new Vector2(1, 0);
-                ctaRect.anchorMax = new Vector2(1, 0);
-                ctaRect.pivot = new Vector2(1, 0);
-                ctaRect.anchoredPosition = new Vector2(-padding, padding);
+                ctaRect.anchorMin = new Vector2(1, 0.5f);
+                ctaRect.anchorMax = new Vector2(1, 0.5f);
+                ctaRect.pivot = new Vector2(1, 0.5f);
+                ctaRect.anchoredPosition = new Vector2(-padding, 0f);
                 ctaRect.sizeDelta = new Vector2(ctaWidth, ctaHeight);
 
                 var ctaBg = ctaObj.AddComponent<Image>();
@@ -269,7 +269,7 @@ namespace ZeyWinAds.Ads
                 var ctaText = ctaTextObj.AddComponent<Text>();
                 ctaText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 ctaText.text = AdData.cta_text;
-                ctaText.fontSize = AdData.cta_text.Length > 10 ? 13 : 15;
+                ctaText.fontSize = AdData.cta_text.Length > 10 ? 26 : 30;
                 ctaText.color = Color.white;
                 ctaText.fontStyle = FontStyle.Bold;
                 ctaText.alignment = TextAnchor.MiddleCenter;

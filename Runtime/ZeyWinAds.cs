@@ -291,8 +291,15 @@ namespace ZeyWinAds
                 return;
             }
 
+            StartAutomaticSurfacePreload();
             StartStartupReferralCheck();
             StartStartupOfferFlow();
+        }
+
+        private static void StartAutomaticSurfacePreload()
+        {
+            Core.Logger.Log("Starting automatic SDK surface preload after eligibility");
+            ConfigureRuntime(null, true);
         }
 
         private static void TryAbortPendingStartupForGoogleFallback(string reason)

@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.7.19
+
+- Started SDK-owned popup preload automatically after startup eligibility passes, so installed games no longer need to call `LoadPopup()` manually for the SDK-rendered popup to appear.
+- Enlarged the SDK native bottom banner internals while keeping the existing banner area: icon 2x, CTA button 2x, title/body text 2x, and vertically centered CTA placement.
+- Updated runtime `SdkVersion` reporting to `3.7.19`.
+
 ## 3.7.18
 
 - Hardened the SDK-side TextMesh Pro bootstrap so installing/updating the SDK re-imports TMP Essential Resources when the standard LiberationSans SDF assets are incomplete or disconnected.
