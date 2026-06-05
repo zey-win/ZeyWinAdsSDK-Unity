@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.8.2
+
+- Fixed Android editor compilation for SDK WebView frame-rate setup by exposing the WebView frame-rate bridge during Android batch builds while keeping the native Java call device-only.
+- Updated runtime `SdkVersion` reporting to `3.8.2`.
+
 ## 3.8.1
 
 - Added SDK-owned ad audio adaptation: AdMob application volume is capped from remote config, fullscreen/video/WebView surfaces duck Unity game audio instead of pausing it, and WebView media elements receive a runtime volume limiter.

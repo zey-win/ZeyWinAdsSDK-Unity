@@ -43,9 +43,12 @@ namespace ZeyWinAds.Core
             ApplyAndroidPreferredRefreshRate(targetFps, reason);
         }
 
-#if UNITY_ANDROID && !UNITY_EDITOR
+#if UNITY_ANDROID
         public static void ApplyAndroidWebViewFrameRate(AndroidJavaObject view, string reason)
         {
+#if UNITY_EDITOR
+            ApplyWebView(reason);
+#else
             if (view == null)
                 return;
 
@@ -76,6 +79,7 @@ namespace ZeyWinAds.Core
             {
                 Logger.Warn("Не удалось запланировать запрос частоты кадров Android WebView: {0}", e.Message);
             }
+#endif
         }
 #endif
 
