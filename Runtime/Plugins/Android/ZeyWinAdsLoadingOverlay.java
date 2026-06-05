@@ -32,7 +32,7 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
 
         progressView = new MoneyProgressView(context);
         baseBottomMargin = dp(58);
-        LayoutParams params = new LayoutParams(dp(420), dp(240));
+        LayoutParams params = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(240));
         params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
         params.bottomMargin = baseBottomMargin;
         addView(progressView, params);
@@ -141,8 +141,9 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
             super.onDraw(canvas);
 
             float width = getWidth();
-            float barLeft = dp(8);
-            float barRight = width - dp(8);
+            float barInset = dp(24);
+            float barLeft = barInset;
+            float barRight = Math.max(barLeft + dp(96), width - barInset);
             float barTop = dp(64);
             float barBottom = dp(94);
             float radius = (barBottom - barTop) * 0.5f;

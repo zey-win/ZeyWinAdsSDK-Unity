@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.7.10
+
+- Made the Java-native loader progress view screen-width adaptive so the rotated money pack can protrude outside the progress bar without the bar or icon being clipped on narrow/high-density Android phones.
+
 ## 3.7.9
 
 - Added native Android `ZeyWinAdsSticky` logcat entries for sticky offer assignment, restore, WebView lock persistence, and Android WebView creation so URL reuse cannot be hidden by Unity `chatty` log compression.
