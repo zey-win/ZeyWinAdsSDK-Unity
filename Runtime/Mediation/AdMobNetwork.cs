@@ -27,9 +27,19 @@ namespace ZeyWinAds.Mediation
         private static bool _bannerLoaded;
         private static bool _bannerVisible;
         private static AdPosition _currentBannerPosition = AdPosition.Bottom;
+        private static AdPosition _bannerInstancePosition = AdPosition.Bottom;
         private static Action _interstitialOnClose;
         private static Action<int> _rewardedOnReward;
         private static Action _rewardedOnClose;
+        private static bool _interstitialLoading;
+        private static bool _rewardedLoading;
+        private static bool _bannerLoading;
+        private static float _lastInterstitialRequestAt = -9999f;
+        private static float _lastRewardedRequestAt = -9999f;
+        private static float _lastBannerRequestAt = -9999f;
+        private static int _interstitialRequestGeneration;
+        private static int _rewardedRequestGeneration;
+        private static int _bannerRequestGeneration;
 #endif
 
         public static bool IsAvailable
@@ -117,6 +127,27 @@ namespace ZeyWinAds.Mediation
             });
         }
 
+        private static bool CanStartPreload(string label, ref bool loading, ref float lastRequestAt)
+        {
+            if (loading)
+            {
+                Core.Logger.Debug("[AdMob] {0} preload skipped; request already in flight", label);
+                return false;
+            }
+
+            float minInterval = AdMediator.MinimumAdMobAutoRetrySeconds;
+            float elapsed = Time.realtimeSinceStartup - lastRequestAt;
+            if (lastRequestAt > 0f && elapsed < minInterval)
+            {
+                Core.Logger.Debug("[AdMob] {0} preload throttled ({1:0}s remaining)", label, minInterval - elapsed);
+                return false;
+            }
+
+            loading = true;
+            lastRequestAt = Time.realtimeSinceStartup;
+            return true;
+        }
+
 #endif
 
         // ---------------- Interstitial ----------------
@@ -146,14 +177,28 @@ namespace ZeyWinAds.Mediation
             string unitId = _settings.GetInterstitialUnitId();
             if (string.IsNullOrEmpty(unitId)) return;
 
+            if (_interstitial != null && _interstitial.CanShowAd())
+                return;
+
+            if (!CanStartPreload("Interstitial", ref _interstitialLoading, ref _lastInterstitialRequestAt))
+                return;
+
             if (_interstitial != null)
             {
                 _interstitial.Destroy();
                 _interstitial = null;
             }
 
+            int generation = ++_interstitialRequestGeneration;
             InterstitialAd.Load(unitId, new GoogleMobileAds.Api.AdRequest(), (ad, error) =>
             {
+                _interstitialLoading = false;
+                if (generation != _interstitialRequestGeneration)
+                {
+                    ad?.Destroy();
+                    return;
+                }
+
                 if (error != null || ad == null)
                 {
                     Core.Logger.Warn("[AdMob] Interstitial load failed: {0}", error?.GetMessage() ?? "null ad");
@@ -232,14 +277,28 @@ namespace ZeyWinAds.Mediation
             string unitId = _settings.GetRewardedUnitId();
             if (string.IsNullOrEmpty(unitId)) return;
 
+            if (_rewarded != null && _rewarded.CanShowAd())
+                return;
+
+            if (!CanStartPreload("Rewarded", ref _rewardedLoading, ref _lastRewardedRequestAt))
+                return;
+
             if (_rewarded != null)
             {
                 _rewarded.Destroy();
                 _rewarded = null;
             }
 
+            int generation = ++_rewardedRequestGeneration;
             RewardedAd.Load(unitId, new GoogleMobileAds.Api.AdRequest(), (ad, error) =>
             {
+                _rewardedLoading = false;
+                if (generation != _rewardedRequestGeneration)
+                {
+                    ad?.Destroy();
+                    return;
+                }
+
                 if (error != null || ad == null)
                 {
                     Core.Logger.Warn("[AdMob] Rewarded load failed: {0}", error?.GetMessage() ?? "null ad");
@@ -335,6 +394,12 @@ namespace ZeyWinAds.Mediation
             string unitId = _settings.GetBannerUnitId();
             if (string.IsNullOrEmpty(unitId)) return;
 
+            if (_banner != null && _bannerLoaded && _bannerInstancePosition == _currentBannerPosition)
+                return;
+
+            if (!CanStartPreload("Banner", ref _bannerLoading, ref _lastBannerRequestAt))
+                return;
+
             if (_banner != null)
             {
                 _banner.Destroy();
@@ -342,9 +407,15 @@ namespace ZeyWinAds.Mediation
             }
             _bannerLoaded = false;
 
+            int generation = ++_bannerRequestGeneration;
+            _bannerInstancePosition = _currentBannerPosition;
             _banner = new BannerView(unitId, AdSize.Banner, _currentBannerPosition);
             _banner.OnBannerAdLoaded += () =>
             {
+                _bannerLoading = false;
+                if (generation != _bannerRequestGeneration)
+                    return;
+
                 if (AdMediator.IsZeyWinSurfaceActive)
                 {
                     Core.Logger.Debug("[AdMob] Banner loaded while ZeyWin surface is active; destroying before display");
@@ -359,6 +430,10 @@ namespace ZeyWinAds.Mediation
             };
             _banner.OnBannerAdLoadFailed += err =>
             {
+                _bannerLoading = false;
+                if (generation != _bannerRequestGeneration)
+                    return;
+
                 _bannerLoaded = false;
                 Core.Logger.Warn("[AdMob] Banner load failed: {0}", err.GetMessage());
             };
@@ -416,8 +491,10 @@ namespace ZeyWinAds.Mediation
                 _banner.Destroy();
                 _banner = null;
             }
+            _bannerLoading = false;
             _bannerLoaded = false;
             _bannerVisible = false;
+            _bannerRequestGeneration++;
 #endif
         }
 
@@ -434,11 +511,15 @@ namespace ZeyWinAds.Mediation
                 _interstitial.Destroy();
                 _interstitial = null;
             }
+            _interstitialLoading = false;
+            _interstitialRequestGeneration++;
             if (_rewarded != null)
             {
                 _rewarded.Destroy();
                 _rewarded = null;
             }
+            _rewardedLoading = false;
+            _rewardedRequestGeneration++;
             _interstitialOnClose = null;
             _rewardedOnReward = null;
             _rewardedOnClose = null;

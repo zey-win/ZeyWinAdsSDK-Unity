@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.7.16
+
+- Added in-flight guards and remote-configured cooldowns around SDK AdMob fallback preload requests so repeated game calls cannot spam Google ad requests while an offer flow is active or immediately after a recent request.
+- Reused already loaded AdMob fallback ads instead of destroying and re-requesting them during repeated preload passes.
+- Updated legacy `AdMobProvider` auto-patching so older banner/fullscreen suppression paths route through the SDK mediator instead of emitting repeated runtime `Debug.Log` spam.
+
 ## 3.7.15
 
 - Deferred SDK AdMob interstitial and rewarded preload requests while a ZeyWin offer WebView, popup, or banner surface is active.

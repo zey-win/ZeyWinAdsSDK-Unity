@@ -1,6 +1,6 @@
 {
   "name": "com.zeywin.ads",
-  "version": "3.7.15",
+  "version": "3.7.16",
   "displayName": "ZeyWin Ads SDK",
   "description": "Drop-in mobile advertising SDK for Unity games. Installs and configures AdMob, CrashGuard, WebView offers, loading UI, and fallback mediation.",
   "unity": "2020.3",

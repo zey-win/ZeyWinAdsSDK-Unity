@@ -73,6 +73,7 @@ namespace ZeyWinAds.Editor
             text = PatchBannerReady(text, ref guardCount);
             text = PatchFullscreenReady(text, ref guardCount);
             text = InsertHelper(text, ref guardCount);
+            text = PatchLegacySuppressionLogging(text, ref guardCount);
             text = PatchAutoRetryDelays(text, ref guardCount);
             text = PatchInterstitialAutoShowCooldown(text, ref guardCount);
             text = PatchFullscreenLoadSuppression(text, ref guardCount);
@@ -186,7 +187,7 @@ namespace ZeyWinAds.Editor
                 "        _bannerLoaded = false;\n" +
                 "        StopBannerEnsureLoop();\n" +
                 "        DestroyBannerAd();\n" +
-                "        Debug.Log($\"[AdMob] Banner {source} suppressed while ZeyWin surface is active.\");\n" +
+                "        AdMediator.SuppressAdMobForZeyWinSurface(\"legacy banner \" + source);\n" +
                 "        return true;\n" +
                 "    }\n\n";
         }
@@ -207,9 +208,54 @@ namespace ZeyWinAds.Editor
                 "            _bannerRetry = null;\n" +
                 "        }\n" +
                 "        DestroyBanner();\n" +
-                "        Debug.Log($\"[AdMobProvider] Banner {source} suppressed while ZeyWin surface is active.\");\n" +
+                "        AdMediator.SuppressAdMobForZeyWinSurface(\"legacy banner \" + source);\n" +
                 "        return true;\n" +
                 "    }\n\n";
+        }
+
+        private static string PatchLegacySuppressionLogging(string text, ref int guardCount)
+        {
+            text = ReplaceAll(text,
+                "        Debug.Log($\"[AdMob] Banner {source} suppressed while ZeyWin surface is active.\");",
+                "        AdMediator.SuppressAdMobForZeyWinSurface(\"legacy banner \" + source);",
+                ref guardCount);
+            text = ReplaceAll(text,
+                "        Debug.Log($\"[AdMobProvider] Banner {source} suppressed while ZeyWin surface is active.\");",
+                "        AdMediator.SuppressAdMobForZeyWinSurface(\"legacy banner \" + source);",
+                ref guardCount);
+            text = ReplaceAll(text,
+                "            Debug.Log(\"[AdMobProvider] Interstitial suppressed while ZeyWin surface is active.\");",
+                "            AdMediator.SuppressAdMobForZeyWinSurface(\"legacy interstitial show\");",
+                ref guardCount);
+            text = ReplaceAll(text,
+                "            Debug.Log(\"[AdMobProvider] Rewarded suppressed while ZeyWin surface is active.\");",
+                "            AdMediator.SuppressAdMobForZeyWinSurface(\"legacy rewarded show\");",
+                ref guardCount);
+            text = ReplaceAll(text,
+                "            Debug.Log(\"[AdMobProvider] Interstitial load deferred while ZeyWin surface is active.\");",
+                "            AdMediator.SuppressAdMobForZeyWinSurface(\"legacy interstitial load\");",
+                ref guardCount);
+            text = ReplaceAll(text,
+                "            Debug.Log(\"[AdMobProvider] Rewarded load deferred while ZeyWin surface is active.\");",
+                "            AdMediator.SuppressAdMobForZeyWinSurface(\"legacy rewarded load\");",
+                ref guardCount);
+            text = ReplaceAll(text,
+                "                Debug.Log(\"[AdMobProvider] Interstitial loaded while ZeyWin surface is active; destroying before cache.\");",
+                "                AdMediator.SuppressAdMobForZeyWinSurface(\"legacy interstitial late load\");",
+                ref guardCount);
+            text = ReplaceAll(text,
+                "                Debug.Log(\"[AdMobProvider] Rewarded loaded while ZeyWin surface is active; destroying before cache.\");",
+                "                AdMediator.SuppressAdMobForZeyWinSurface(\"legacy rewarded late load\");",
+                ref guardCount);
+            text = ReplaceAll(text,
+                "            Debug.Log(\"[AdMobProvider] Interstitial retry deferred while ZeyWin surface is active.\");",
+                "            AdMediator.SuppressAdMobForZeyWinSurface(\"legacy interstitial retry\");",
+                ref guardCount);
+            text = ReplaceAll(text,
+                "            Debug.Log(\"[AdMobProvider] Rewarded retry deferred while ZeyWin surface is active.\");",
+                "            AdMediator.SuppressAdMobForZeyWinSurface(\"legacy rewarded retry\");",
+                ref guardCount);
+            return text;
         }
 
         private static string PatchSimpleAdMobProvider(string text, ref int guardCount)
@@ -312,6 +358,23 @@ namespace ZeyWinAds.Editor
 
             guardCount++;
             return text.Remove(index, search.Length).Insert(index, replacement);
+        }
+
+        private static string ReplaceAll(string text, string search, string replacement, ref int guardCount)
+        {
+            int index = text.IndexOf(search, StringComparison.Ordinal);
+            if (index < 0)
+                return text;
+
+            int count = 0;
+            while (index >= 0)
+            {
+                count++;
+                index = text.IndexOf(search, index + search.Length, StringComparison.Ordinal);
+            }
+
+            guardCount += count;
+            return text.Replace(search, replacement);
         }
 
         private static string ToAssetPath(string fullPath)
