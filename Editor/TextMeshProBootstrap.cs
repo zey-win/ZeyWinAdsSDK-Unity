@@ -14,14 +14,27 @@ namespace ZeyWinAds.Editor
     [InitializeOnLoad]
     public static class TextMeshProBootstrap
     {
-        private const string MarkerKey = "ZeyWinAds_TextMeshProBootstrap_Done_v1";
+        private const string MarkerKey = "ZeyWinAds_TextMeshProBootstrap_Done_v2";
         private const string TextMeshProPackage = "com.unity.textmeshpro";
         private const string TextMeshProVersion = "3.0.9";
         private const string UguiPackage = "com.unity.ugui";
         private const string UguiVersion = "1.0.0";
         private const string TmpSettingsPath = "Assets/TextMesh Pro/Resources/TMP Settings.asset";
+        private const string TmpDefaultFontPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset";
+        private const string TmpDefaultFallbackFontPath = "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF - Fallback.asset";
+        private const string TmpDefaultFontSourcePath = "Assets/TextMesh Pro/Fonts/LiberationSans.ttf";
+        private const string TmpDefaultSpritePath = "Assets/TextMesh Pro/Resources/Sprite Assets/Default Sprite Asset.asset";
+        private const string TmpDefaultStyleSheetPath = "Assets/TextMesh Pro/Resources/Style Sheets/Default Style Sheet.asset";
         private const string TmpExamplesPath = "Assets/TextMesh Pro/Examples & Extras";
         private const int MinimumExamplesFileCount = 50;
+        private static readonly string[] RequiredEssentialAssetPaths =
+        {
+            TmpSettingsPath,
+            TmpDefaultFontPath,
+            TmpDefaultFontSourcePath,
+            TmpDefaultSpritePath,
+            TmpDefaultStyleSheetPath
+        };
         private static readonly string[] RequiredTmpShaderNames =
         {
             "TextMeshPro/Mobile/Distance Field",
@@ -55,24 +68,27 @@ namespace ZeyWinAds.Editor
                 return false;
             }
 
-            bool essentialsMissing = !HasEssentialResources();
+            bool essentialsMissing = !HasEssentialResources() || !HasUsableDefaultFontAsset();
             bool examplesMissing = !HasExamplesAndExtras();
 
             if (force || essentialsMissing || examplesMissing)
             {
-                ImportTextMeshProResources(essentialsMissing, examplesMissing);
+                bool importEssentials = force || essentialsMissing;
+                bool importExamples = force || examplesMissing;
+                ImportTextMeshProResources(importEssentials, importExamples);
                 AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
 
-                if (!HasEssentialResources())
+                if (force || !HasEssentialResources() || !HasUsableDefaultFontAsset())
                     ExtractUnityPackage(FindTmpUnityPackage("TMP Essential Resources.unitypackage"), "TMP Essential Resources");
 
-                if (!HasExamplesAndExtras())
+                if (force || !HasExamplesAndExtras())
                     ExtractUnityPackage(FindTmpUnityPackage("TMP Examples & Extras.unitypackage"), "TMP Examples & Extras");
 
                 AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
             }
 
             ConfigureTextMeshProSettings();
+            RepairTextMeshProFontAssets();
             ConfigureTextMeshProShaders();
             AssetDatabase.SaveAssets();
 
@@ -84,7 +100,7 @@ namespace ZeyWinAds.Editor
         private static void RunBootstrap()
         {
             string marker = Application.dataPath + "::" + MarkerKey;
-            if (EditorPrefs.GetBool(marker, false) && HasEssentialResources() && HasExamplesAndExtras())
+            if (EditorPrefs.GetBool(marker, false) && HasEssentialResources() && HasUsableDefaultFontAsset() && HasExamplesAndExtras())
                 return;
 
             try
@@ -100,8 +116,35 @@ namespace ZeyWinAds.Editor
 
         private static bool HasEssentialResources()
         {
-            return File.Exists(TmpSettingsPath)
-                && File.Exists("Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset");
+            foreach (string assetPath in RequiredEssentialAssetPaths)
+            {
+                if (!File.Exists(assetPath))
+                    return false;
+            }
+
+            return true;
+        }
+
+        private static bool HasUsableDefaultFontAsset()
+        {
+            var fontAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(TmpDefaultFontPath);
+            if (fontAsset == null)
+                return false;
+
+            var serialized = new SerializedObject(fontAsset);
+            var material = serialized.FindProperty("material") ?? serialized.FindProperty("m_Material");
+            if (material != null && material.objectReferenceValue == null)
+                return false;
+
+            var atlasTextures = serialized.FindProperty("m_AtlasTextures");
+            if (atlasTextures != null && atlasTextures.isArray && atlasTextures.arraySize == 0)
+                return false;
+
+            var sourceFont = serialized.FindProperty("m_SourceFontFile");
+            if (sourceFont != null && sourceFont.objectReferenceValue == null && File.Exists(TmpDefaultFontSourcePath))
+                return false;
+
+            return true;
         }
 
         private static bool HasExamplesAndExtras()
@@ -171,7 +214,31 @@ namespace ZeyWinAds.Editor
                     return candidate;
             }
 
+            string packageCacheRoot = Path.GetFullPath("Library/PackageCache");
+            if (Directory.Exists(packageCacheRoot))
+            {
+                string packageResource = FindPackageCacheResource(packageCacheRoot, "com.unity.ugui@*", fileName);
+                if (!string.IsNullOrEmpty(packageResource))
+                    return packageResource;
+
+                packageResource = FindPackageCacheResource(packageCacheRoot, "com.unity.textmeshpro@*", fileName);
+                if (!string.IsNullOrEmpty(packageResource))
+                    return packageResource;
+            }
+
             Debug.LogWarning($"[ZeyWinAds] Could not find {fileName} in Unity package resources.");
+            return null;
+        }
+
+        private static string FindPackageCacheResource(string packageCacheRoot, string directoryPattern, string fileName)
+        {
+            foreach (string directory in Directory.GetDirectories(packageCacheRoot, directoryPattern, SearchOption.TopDirectoryOnly))
+            {
+                string candidate = Path.Combine(directory, "Package Resources", fileName);
+                if (File.Exists(candidate))
+                    return candidate;
+            }
+
             return null;
         }
 
@@ -182,24 +249,78 @@ namespace ZeyWinAds.Editor
                 return;
 
             var serialized = new SerializedObject(settings);
-            var defaultFont = serialized.FindProperty("m_defaultFontAsset");
-            var preferredDefault = LoadFirstAsset(
-                "Assets/Fonts/Roboto-VariableFont_wdth,wght SDF.asset",
-                "Assets/Fonts/NotoSans-Regular SDF.asset",
-                "Assets/Fonts/Outfit-Regular SDF.asset",
-                "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset");
+            bool changed = false;
 
-            if (defaultFont != null && preferredDefault != null)
-                defaultFont.objectReferenceValue = preferredDefault;
+            changed |= SetStringIfDifferent(serialized, "m_defaultFontAssetPath", "Fonts & Materials/");
+            changed |= SetStringIfDifferent(serialized, "m_defaultSpriteAssetPath", "Sprite Assets/");
+            changed |= SetStringIfDifferent(serialized, "m_defaultStyleSheetPath", "Style Sheets/");
+            changed |= SetObjectReference(serialized, "m_defaultFontAsset", TmpDefaultFontPath, overwriteExisting: true);
+            changed |= SetObjectReference(serialized, "m_defaultSpriteAsset", TmpDefaultSpritePath, overwriteExisting: true);
+            changed |= SetObjectReference(serialized, "m_defaultStyleSheet", TmpDefaultStyleSheetPath, overwriteExisting: false);
 
             var fallbacks = serialized.FindProperty("m_fallbackFontAssets");
-            AddFallbackFont(fallbacks, "Assets/Fonts/NotoSans-Regular SDF.asset");
-            AddFallbackFont(fallbacks, "Assets/Fonts/Outfit-Regular SDF.asset");
-            AddFallbackFont(fallbacks, "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF - Fallback.asset");
-            AddFallbackFont(fallbacks, "Assets/TextMesh Pro/Resources/Fonts & Materials/LiberationSans SDF.asset");
+            changed |= AddFallbackFont(fallbacks, TmpDefaultFallbackFontPath);
+            changed |= AddFallbackFont(fallbacks, TmpDefaultFontPath);
+            changed |= AddFallbackFont(fallbacks, "Assets/Fonts/NotoSans-Regular SDF.asset");
+            changed |= AddFallbackFont(fallbacks, "Assets/Fonts/Outfit-Regular SDF.asset");
+
+            if (changed)
+            {
+                serialized.ApplyModifiedPropertiesWithoutUndo();
+                EditorUtility.SetDirty(settings);
+            }
+        }
+
+        private static void RepairTextMeshProFontAssets()
+        {
+            int repaired = 0;
+            if (RepairTextMeshProFontAsset(TmpDefaultFontPath))
+                repaired++;
+            if (RepairTextMeshProFontAsset(TmpDefaultFallbackFontPath))
+                repaired++;
+
+            if (repaired > 0)
+                Debug.Log($"[ZeyWinAds] TextMesh Pro standard font assets repaired: {repaired}");
+        }
+
+        private static bool RepairTextMeshProFontAsset(string fontAssetPath)
+        {
+            var fontAsset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(fontAssetPath);
+            if (fontAsset == null)
+                return false;
+
+            bool changed = false;
+            var serialized = new SerializedObject(fontAsset);
+
+            var sourceFont = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(TmpDefaultFontSourcePath);
+            if (sourceFont != null)
+            {
+                changed |= SetObjectReference(serialized, "m_SourceFontFile", TmpDefaultFontSourcePath, overwriteExisting: true);
+                changed |= SetObjectReference(serialized, "m_SourceFontFile_EditorRef", TmpDefaultFontSourcePath, overwriteExisting: true);
+
+                string sourceGuid = AssetDatabase.AssetPathToGUID(TmpDefaultFontSourcePath);
+                if (!string.IsNullOrEmpty(sourceGuid))
+                    changed |= SetStringIfDifferent(serialized, "m_SourceFontFileGUID", sourceGuid);
+            }
+
+            var materialProperty = serialized.FindProperty("material") ?? serialized.FindProperty("m_Material");
+            if (materialProperty != null && materialProperty.objectReferenceValue is Material material)
+            {
+                Shader mobileDistanceField = Shader.Find("TextMeshPro/Mobile/Distance Field");
+                if (mobileDistanceField != null && material.shader != mobileDistanceField)
+                {
+                    material.shader = mobileDistanceField;
+                    EditorUtility.SetDirty(material);
+                    changed = true;
+                }
+            }
+
+            if (!changed)
+                return false;
 
             serialized.ApplyModifiedPropertiesWithoutUndo();
-            EditorUtility.SetDirty(settings);
+            EditorUtility.SetDirty(fontAsset);
+            return true;
         }
 
         private static void ConfigureTextMeshProShaders()
@@ -281,35 +402,54 @@ namespace ZeyWinAds.Editor
             return false;
         }
 
-        private static UnityEngine.Object LoadFirstAsset(params string[] assetPaths)
+        private static bool SetStringIfDifferent(SerializedObject serialized, string propertyName, string value)
         {
-            foreach (string assetPath in assetPaths)
-            {
-                var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
-                if (asset != null)
-                    return asset;
-            }
+            var property = serialized.FindProperty(propertyName);
+            if (property == null || property.stringValue == value)
+                return false;
 
-            return null;
+            property.stringValue = value;
+            return true;
         }
 
-        private static void AddFallbackFont(SerializedProperty array, string assetPath)
+        private static bool SetObjectReference(SerializedObject serialized, string propertyName, string assetPath, bool overwriteExisting)
         {
-            if (array == null || !array.isArray)
-                return;
+            var property = serialized.FindProperty(propertyName);
+            if (property == null)
+                return false;
 
             var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
             if (asset == null)
-                return;
+                return false;
+
+            if (!overwriteExisting && property.objectReferenceValue != null)
+                return false;
+
+            if (property.objectReferenceValue == asset)
+                return false;
+
+            property.objectReferenceValue = asset;
+            return true;
+        }
+
+        private static bool AddFallbackFont(SerializedProperty array, string assetPath)
+        {
+            if (array == null || !array.isArray)
+                return false;
+
+            var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
+            if (asset == null)
+                return false;
 
             for (int i = 0; i < array.arraySize; i++)
             {
                 if (array.GetArrayElementAtIndex(i).objectReferenceValue == asset)
-                    return;
+                    return false;
             }
 
             array.InsertArrayElementAtIndex(array.arraySize);
             array.GetArrayElementAtIndex(array.arraySize - 1).objectReferenceValue = asset;
+            return true;
         }
 
         private static void ExtractUnityPackage(string packagePath, string label)

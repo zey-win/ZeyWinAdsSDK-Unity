@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.7.18
+
+- Hardened the SDK-side TextMesh Pro bootstrap so installing/updating the SDK re-imports TMP Essential Resources when the standard LiberationSans SDF assets are incomplete or disconnected.
+- Repaired TMP Settings to use the package-local LiberationSans default font, sprite asset, style sheet paths, and fallback chain instead of preserving broken project defaults.
+- Added Library/PackageCache lookup for TMP unitypackages so Unity 6 projects can install TMP resources from resolved package cache locations without opening Unity menus.
+
 ## 3.7.17
 
 - Added SDK-side cooldowns after failed ZeyWin preload attempts so legacy banner/native rotation loops cannot immediately re-request the same unavailable ad type every few seconds.
