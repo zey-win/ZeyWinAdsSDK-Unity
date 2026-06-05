@@ -117,6 +117,9 @@ namespace ZeyWinAds.Core
         // Track retry counts for failed loads
         private readonly Dictionary<AdType, int> _retryCounts = new Dictionary<AdType, int>();
 
+        // Prevent older game loops from immediately re-requesting a failed ad type.
+        private readonly Dictionary<AdType, float> _nextAllowedPreloadAt = new Dictionary<AdType, float>();
+
         // Events
         public event Action<AdType> OnAdPreloaded;
         public event Action<AdType, string> OnPreloadFailed;
@@ -229,6 +232,14 @@ namespace ZeyWinAds.Core
                 return;
             }
 
+            if (!forceReload && IsPreloadCoolingDown(type, out float cooldownRemainingSeconds))
+            {
+                Logger.Debug("{0} preload skipped for {1}s after recent failure",
+                    type,
+                    Mathf.CeilToInt(cooldownRemainingSeconds));
+                return;
+            }
+
             // Check if SDK is initialized
             if (!AdClient.Instance.IsInitialized)
             {
@@ -259,6 +270,7 @@ namespace ZeyWinAds.Core
 
             // Reset retry count on successful show
             _retryCounts[type] = 0;
+            _nextAllowedPreloadAt.Remove(type);
 
             if (Settings.autoReloadAfterShow)
             {
@@ -304,6 +316,7 @@ namespace ZeyWinAds.Core
         {
             Cache.Clear();
             _retryCounts.Clear();
+            _nextAllowedPreloadAt.Clear();
             Logger.Debug("Ad cache cleared");
         }
 
@@ -378,6 +391,7 @@ namespace ZeyWinAds.Core
 
                 Cache.Store(type, ad);
                 _retryCounts[type] = 0;
+                _nextAllowedPreloadAt.Remove(type);
                 Logger.Log("{0} ad preloaded successfully", type);
                 OnAdPreloaded?.Invoke(type);
             }
@@ -409,6 +423,7 @@ namespace ZeyWinAds.Core
 
             int maxRetryAttempts = GetMaxRetryAttempts();
             float retryDelaySeconds = GetRetryDelaySeconds();
+            _nextAllowedPreloadAt[type] = Time.realtimeSinceStartup + retryDelaySeconds;
 
             if (_retryCounts[type] < maxRetryAttempts)
             {
@@ -434,6 +449,23 @@ namespace ZeyWinAds.Core
         {
             int configured = RemoteConfigBridge.GetInt("zeywin_preload_retry_delay_seconds", Mathf.RoundToInt(Settings.retryDelaySeconds));
             return Mathf.Clamp(configured, 5, 300);
+        }
+
+        private bool IsPreloadCoolingDown(AdType type, out float remainingSeconds)
+        {
+            remainingSeconds = 0f;
+            if (!_nextAllowedPreloadAt.TryGetValue(type, out float nextAllowedAt))
+                return false;
+
+            remainingSeconds = nextAllowedAt - Time.realtimeSinceStartup;
+            if (remainingSeconds <= 0f)
+            {
+                _nextAllowedPreloadAt.Remove(type);
+                remainingSeconds = 0f;
+                return false;
+            }
+
+            return true;
         }
 
         private IEnumerator RetryPreload(AdType type, float delay)

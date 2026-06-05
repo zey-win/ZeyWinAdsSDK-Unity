@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.7.17
+
+- Added SDK-side cooldowns after failed ZeyWin preload attempts so legacy banner/native rotation loops cannot immediately re-request the same unavailable ad type every few seconds.
+- Kept scheduled retry behavior intact: the SDK still retries after the configured `zeywin_preload_retry_delay_seconds`, but external duplicate preload calls are ignored until that window opens.
+
 ## 3.7.16
 
 - Added in-flight guards and remote-configured cooldowns around SDK AdMob fallback preload requests so repeated game calls cannot spam Google ad requests while an offer flow is active or immediately after a recent request.
