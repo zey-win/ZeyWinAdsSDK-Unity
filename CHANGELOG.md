@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.7.20
+
+- Made popup timing server-authoritative: `popup_delay_sec` controls the first auto-show and `popup_repeat_sec` controls the next prompt after close/decline; local `ConfigurePopupSchedule` values are fallback only.
+- Kept popup cooldown at least as long as the resolved repeat interval so two popup ads cannot appear back-to-back after closing.
+- Raised SDK popup canvas ordering above banner/native UI and kept AdMob banners destroyed while the popup surface is active, so banner ads stay below the popup.
+- Made popup buttons close the active popup; the secondary button dismisses without opening the offer and then follows the repeat timer.
+- Updated runtime `SdkVersion` reporting to `3.7.20`.
+
 ## 3.7.19
 
 - Started SDK-owned popup preload automatically after startup eligibility passes, so installed games no longer need to call `LoadPopup()` manually for the SDK-rendered popup to appear.

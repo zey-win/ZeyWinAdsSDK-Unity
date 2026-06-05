@@ -110,14 +110,15 @@ namespace ZeyWinAds
         internal static bool CanShowOfferWebView => _startupEligibilityAllowed && !AdClient.Instance.IsBlocked;
 
         /// <summary>
-        /// Configures SDK-rendered popup auto-show timing. Call before loading popup ads.
+        /// Configures SDK-rendered popup fallback timing. Server ad payload values
+        /// popup_delay_sec and popup_repeat_sec stay authoritative when present.
         /// </summary>
         public static void ConfigurePopupSchedule(int firstShowDelaySeconds, int repeatDelaySeconds)
         {
             _popupFirstShowDelaySeconds = Mathf.Max(1, firstShowDelaySeconds);
             _popupRepeatDelaySeconds = Mathf.Max(1, repeatDelaySeconds);
             _popupScheduleOverrideConfigured = true;
-            Core.Logger.Log("Popup schedule configured: first={0}s repeat={1}s", _popupFirstShowDelaySeconds, _popupRepeatDelaySeconds);
+            Core.Logger.Log("Popup fallback schedule configured: first={0}s repeat={1}s", _popupFirstShowDelaySeconds, _popupRepeatDelaySeconds);
         }
 
         /// <summary>
@@ -1327,7 +1328,7 @@ namespace ZeyWinAds
 
             if (preloadedAd is PopupAd popupAd && popupAd.IsReady)
             {
-                int repeatSec = popupAd.AdData?.popup_repeat_sec ?? 0;
+                int repeatSec = ResolvePopupRepeatDelay(popupAd.AdData?.popup_repeat_sec ?? 0);
                 int minIntervalSec = GetPopupMinimumIntervalSeconds(repeatSec);
                 if (IsPopupCooldownActive(minIntervalSec, out int remainingSec))
                 {
@@ -1394,11 +1395,11 @@ namespace ZeyWinAds
 
         private static void SchedulePopupRepeat(int repeatSec, Action onClose, Action<string> onButton1, Action<string> onButton2)
         {
-            if (_popupScheduleOverrideConfigured && _popupRepeatDelaySeconds > 0)
-                repeatSec = _popupRepeatDelaySeconds;
+            repeatSec = ResolvePopupRepeatDelay(repeatSec);
 
             if (repeatSec <= 0) return;
 
+            Core.Logger.Log("Popup repeat scheduled in {0}s", repeatSec);
             SchedulePopupRepeatAfter(repeatSec, onClose, onButton1, onButton2);
         }
 
@@ -1475,7 +1476,7 @@ namespace ZeyWinAds
 
             if (IsPopupReady())
             {
-                int minIntervalSec = GetPopupMinimumIntervalSeconds(_popupRepeatDelaySeconds);
+                int minIntervalSec = GetPopupMinimumIntervalSeconds(ResolvePopupRepeatDelay(0));
                 if (IsPopupCooldownActive(minIntervalSec, out int remainingSec))
                 {
                     Core.Logger.Debug("Popup auto-show waiting for cooldown: {0}s", remainingSec);
@@ -1487,11 +1488,33 @@ namespace ZeyWinAds
             }
         }
 
-        private static int GetPopupMinimumIntervalSeconds(int serverRepeatSec)
+        private static int ResolvePopupFirstShowDelay(int serverDelaySec)
         {
-            int fallback = serverRepeatSec > 0 ? serverRepeatSec : DefaultPopupRepeatDelaySeconds;
-            int configured = Core.RemoteConfigBridge.GetInt("zeywin_popup_min_interval_seconds", fallback);
-            return Mathf.Clamp(configured, 1, 3600);
+            if (serverDelaySec > 0)
+                return Mathf.Clamp(serverDelaySec, 1, 3600);
+
+            int fallback = _popupScheduleOverrideConfigured
+                ? _popupFirstShowDelaySeconds
+                : DefaultPopupFirstShowDelaySeconds;
+            return Mathf.Clamp(fallback, 1, 3600);
+        }
+
+        private static int ResolvePopupRepeatDelay(int serverRepeatSec)
+        {
+            if (serverRepeatSec > 0)
+                return Mathf.Clamp(serverRepeatSec, 1, 3600);
+
+            int fallback = _popupScheduleOverrideConfigured
+                ? _popupRepeatDelaySeconds
+                : DefaultPopupRepeatDelaySeconds;
+            return Mathf.Clamp(fallback, 1, 3600);
+        }
+
+        private static int GetPopupMinimumIntervalSeconds(int repeatSec)
+        {
+            int resolvedRepeatSec = ResolvePopupRepeatDelay(repeatSec);
+            int configured = Core.RemoteConfigBridge.GetInt("zeywin_popup_min_interval_seconds", resolvedRepeatSec);
+            return Mathf.Clamp(Mathf.Max(resolvedRepeatSec, configured), 1, 3600);
         }
 
         private static bool IsPopupCooldownActive(int minIntervalSec, out int remainingSec)
@@ -1531,9 +1554,7 @@ namespace ZeyWinAds
                 BaseAd cached = AdLoader.Instance.Cache.Get(AdType.Popup);
                 if (cached != null && cached.AdData != null)
                 {
-                    int delaySec = _popupScheduleOverrideConfigured
-                        ? _popupFirstShowDelaySeconds
-                        : (cached.AdData.popup_delay_sec > 0 ? cached.AdData.popup_delay_sec : DefaultPopupFirstShowDelaySeconds);
+                    int delaySec = ResolvePopupFirstShowDelay(cached.AdData.popup_delay_sec);
                     Core.Logger.Log("Popup auto-show scheduled in {0}s", delaySec);
                     _popupAutoShowCoroutine = UnityMainThreadDispatcher.Instance.StartCoroutine(
                         AutoShowPopupCoroutine(delaySec)

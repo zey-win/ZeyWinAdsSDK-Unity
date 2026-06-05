@@ -113,7 +113,7 @@ namespace ZeyWinAds.Ads
             BeginZeyWinSurface();
 
             _canvas = AdCanvas.Create("PopupAdCanvas");
-            _canvas.SetSortingOrder(32000);
+            _canvas.SetSortingOrder(32760);
 
             CreateOverlay();
             CreateCard();
@@ -407,14 +407,14 @@ namespace ZeyWinAds.Ads
             string url = AdData?.click_url;
             OpenClickUrl();
             _onButton1Callback?.Invoke(url);
+            Close();
         }
 
         private void OnButton2Clicked()
         {
             Logger.Debug("Popup button 2 clicked");
-            string url = AdData?.click_url;
-            OpenClickUrl();
-            _onButton2Callback?.Invoke(url);
+            _onButton2Callback?.Invoke(null);
+            Close();
         }
 
         private void Close()
