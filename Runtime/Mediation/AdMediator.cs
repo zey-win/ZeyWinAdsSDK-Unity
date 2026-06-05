@@ -102,7 +102,18 @@ namespace ZeyWinAds.Mediation
 
         public static bool IsAdMobInterstitialReady() => AdMobNetwork.IsInterstitialReady();
 
-        public static void ShowAdMobInterstitial(Action onClose) => AdMobNetwork.ShowInterstitial(onClose);
+        public static void ShowAdMobInterstitial(Action onClose)
+        {
+            if (IsZeyWinSurfaceActive)
+            {
+                AdMobNetwork.DestroyBanner();
+                Logger.Debug("[Mediator] AdMob interstitial suppressed while ZeyWin surface is active");
+                onClose?.Invoke();
+                return;
+            }
+
+            AdMobNetwork.ShowInterstitial(onClose);
+        }
 
         // ---------------- Rewarded ----------------
 
@@ -115,7 +126,17 @@ namespace ZeyWinAds.Mediation
         public static bool IsAdMobRewardedReady() => AdMobNetwork.IsRewardedReady();
 
         public static void ShowAdMobRewarded(Action<int> onReward, Action onClose)
-            => AdMobNetwork.ShowRewarded(onReward, onClose);
+        {
+            if (IsZeyWinSurfaceActive)
+            {
+                AdMobNetwork.DestroyBanner();
+                Logger.Debug("[Mediator] AdMob rewarded suppressed while ZeyWin surface is active");
+                onClose?.Invoke();
+                return;
+            }
+
+            AdMobNetwork.ShowRewarded(onReward, onClose);
+        }
 
         // ---------------- Banner ----------------
 

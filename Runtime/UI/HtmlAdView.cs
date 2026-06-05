@@ -176,7 +176,7 @@ namespace ZeyWinAds.UI
             RememberResolvedOfferUrl(pageUrl);
             HideNativeLoadingOverlay();
             PromoteAndroidOfferSurface();
-            LoadingOverlay.HideAfterDelay(1.5f);
+            LoadingOverlay.ForceHide();
             OnPageLoaded?.Invoke();
         }
 

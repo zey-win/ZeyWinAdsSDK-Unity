@@ -219,11 +219,11 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
             super.onDraw(canvas);
 
             float width = getWidth();
-            float barInset = dp(24);
-            float barLeft = barInset;
-            float barRight = Math.max(barLeft + dp(96), width - barInset);
-            float barTop = dp(64);
-            float barBottom = dp(94);
+            float barWidth = Math.max(dp(96), width * 0.70f);
+            float barLeft = Math.max(dp(16), (width - barWidth) * 0.5f);
+            float barRight = Math.min(width - dp(16), barLeft + barWidth);
+            float barTop = dp(96);
+            float barBottom = dp(126);
             float radius = (barBottom - barTop) * 0.5f;
             float moneyX = barLeft + radius + (barRight - barLeft - radius * 2f) * progress;
 
@@ -246,12 +246,12 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
             paint.setTextAlign(Paint.Align.CENTER);
             paint.setFakeBoldText(true);
             paint.setTextSize(dp(25));
-            canvas.drawText("Loading " + Math.round(progress * 100f) + "%", width * 0.5f, dp(150), paint);
+            canvas.drawText("Loading " + Math.round(progress * 100f) + "%", width * 0.5f, barBottom + dp(54), paint);
             paint.setFakeBoldText(false);
         }
 
         private void drawMoneyPack(Canvas canvas, float centerX, float barTop) {
-            float targetHeight = dp(116);
+            float targetHeight = dp(58);
             float targetWidth = moneyBitmap != null && moneyBitmap.getHeight() > 0
                 ? targetHeight * moneyBitmap.getWidth() / moneyBitmap.getHeight()
                 : dp(64);

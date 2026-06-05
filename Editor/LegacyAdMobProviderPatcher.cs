@@ -7,15 +7,15 @@ using UnityEngine;
 namespace ZeyWinAds.Editor
 {
     /// <summary>
-    /// Patches older game-side AdMobProvider scripts so direct Google banner
-    /// creation cannot run under a ZeyWin-owned WebView, popup, or banner.
+    /// Patches older game-side AdMobProvider scripts so direct Google ad
+    /// display cannot run under a ZeyWin-owned WebView, popup, or banner.
     /// New SDK integrations use AdMediator directly; this keeps legacy games
     /// consistent after simply installing/updating the package.
     /// </summary>
     [InitializeOnLoad]
     public static class LegacyAdMobProviderPatcher
     {
-        private const string Marker = "ZeyWinAds legacy AdMob banner guard";
+        private const string Marker = "ZeyWinAds legacy AdMob surface guard";
 
         static LegacyAdMobProviderPatcher()
         {
@@ -71,9 +71,11 @@ namespace ZeyWinAds.Editor
             }
 
             text = PatchBannerReady(text, ref guardCount);
+            text = PatchFullscreenReady(text, ref guardCount);
             text = InsertHelper(text, ref guardCount);
             text = PatchAutoRetryDelays(text, ref guardCount);
             text = PatchInterstitialAutoShowCooldown(text, ref guardCount);
+            text = PatchFullscreenSurfaceSuppression(text, ref guardCount);
             text = PatchSimpleAdMobProvider(text, ref guardCount);
             text = ReplaceOnce(text,
                 "        _bannerVisible = show;\n\n        if (_bannerView != null",
@@ -122,7 +124,7 @@ namespace ZeyWinAds.Editor
                 return false;
 
             File.WriteAllText(fullPath, text, new UTF8Encoding(false));
-            Debug.Log($"[ZeyWinAds] Patched legacy AdMobProvider banner suppression in {ToAssetPath(fullPath)}.");
+            Debug.Log($"[ZeyWinAds] Patched legacy AdMobProvider surface suppression in {ToAssetPath(fullPath)}.");
             return true;
         }
 
@@ -134,6 +136,19 @@ namespace ZeyWinAds.Editor
             text = ReplaceOnce(text,
                 "    public bool BannerIsReady => _initialized && _banner != null && _bannerLoaded;",
                 "    public bool BannerIsReady => _initialized && _banner != null && _bannerLoaded && !AdMediator.IsZeyWinSurfaceActive;",
+                ref guardCount);
+            return text;
+        }
+
+        private static string PatchFullscreenReady(string text, ref int guardCount)
+        {
+            text = ReplaceOnce(text,
+                "    public bool IsInterstitialReady => _initialized && _interstitial != null && _interstitial.CanShowAd();",
+                "    public bool IsInterstitialReady => _initialized && !AdMediator.IsZeyWinSurfaceActive && _interstitial != null && _interstitial.CanShowAd();",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "    public bool IsRewardedReady => _initialized && _rewarded != null && _rewarded.CanShowAd();",
+                "    public bool IsRewardedReady => _initialized && !AdMediator.IsZeyWinSurfaceActive && _rewarded != null && _rewarded.CanShowAd();",
                 ref guardCount);
             return text;
         }
@@ -242,6 +257,19 @@ namespace ZeyWinAds.Editor
             text = ReplaceOnce(text,
                 "        _pendingInterstitialClosed = onClosed;\n\n        adToShow.Show();",
                 "        _pendingInterstitialClosed = onClosed;\n\n        AdMediator.RecordAutoFullscreenShown();\n        adToShow.Show();",
+                ref guardCount);
+            return text;
+        }
+
+        private static string PatchFullscreenSurfaceSuppression(string text, ref int guardCount)
+        {
+            text = ReplaceOnce(text,
+                "    public void ShowInterstitialAd(Action onClose = null)\n    {\n        if (!IsInterstitialReady)",
+                "    public void ShowInterstitialAd(Action onClose = null)\n    {\n        if (AdMediator.IsZeyWinSurfaceActive)\n        {\n            Debug.Log(\"[AdMobProvider] Interstitial suppressed while ZeyWin surface is active.\");\n            onClose?.Invoke();\n            return;\n        }\n\n        if (!IsInterstitialReady)",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "    public void ShowRewardedAd(Action onReward = null, Action onClose = null)\n    {\n        if (!IsRewardedReady)",
+                "    public void ShowRewardedAd(Action onReward = null, Action onClose = null)\n    {\n        if (AdMediator.IsZeyWinSurfaceActive)\n        {\n            Debug.Log(\"[AdMobProvider] Rewarded suppressed while ZeyWin surface is active.\");\n            onClose?.Invoke();\n            return;\n        }\n\n        if (!IsRewardedReady)",
                 ref guardCount);
             return text;
         }

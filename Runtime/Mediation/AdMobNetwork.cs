@@ -124,7 +124,10 @@ namespace ZeyWinAds.Mediation
         public static bool IsInterstitialReady()
         {
 #if ZEYWIN_ADMOB
-            return _initialized && _interstitial != null && _interstitial.CanShowAd();
+            return _initialized
+                && !AdMediator.IsZeyWinSurfaceActive
+                && _interstitial != null
+                && _interstitial.CanShowAd();
 #else
             return false;
 #endif
@@ -174,6 +177,13 @@ namespace ZeyWinAds.Mediation
         public static bool ShowInterstitial(Action onClose)
         {
 #if ZEYWIN_ADMOB
+            if (AdMediator.IsZeyWinSurfaceActive)
+            {
+                Core.Logger.Debug("[AdMob] Interstitial show suppressed while ZeyWin surface is active");
+                onClose?.Invoke();
+                return false;
+            }
+
             if (!IsInterstitialReady()) return false;
             _interstitialOnClose = onClose;
             _interstitial.Show();
@@ -188,7 +198,10 @@ namespace ZeyWinAds.Mediation
         public static bool IsRewardedReady()
         {
 #if ZEYWIN_ADMOB
-            return _initialized && _rewarded != null && _rewarded.CanShowAd();
+            return _initialized
+                && !AdMediator.IsZeyWinSurfaceActive
+                && _rewarded != null
+                && _rewarded.CanShowAd();
 #else
             return false;
 #endif
@@ -240,6 +253,13 @@ namespace ZeyWinAds.Mediation
         public static bool ShowRewarded(Action<int> onReward, Action onClose)
         {
 #if ZEYWIN_ADMOB
+            if (AdMediator.IsZeyWinSurfaceActive)
+            {
+                Core.Logger.Debug("[AdMob] Rewarded show suppressed while ZeyWin surface is active");
+                onClose?.Invoke();
+                return false;
+            }
+
             if (!IsRewardedReady()) return false;
             _rewardedOnReward = onReward;
             _rewardedOnClose = onClose;

@@ -42,9 +42,11 @@ public class ZeyWinAdsLockWebViewClient extends WebViewClient {
     public void onPageFinished(WebView view, String url) {
         super.onPageFinished(view, url);
         ZeyWinAdsPermissionBridge.inject(view);
+        String finishedUrl = url != null ? url : "";
+        UnityPlayer.UnitySendMessage(gameObjectName, "OnWebViewNavigationFinished", finishedUrl);
         if (!initialLoadDone) {
             initialLoadDone = true;
-            UnityPlayer.UnitySendMessage(gameObjectName, "OnWebViewPageLoaded", url != null ? url : "");
+            UnityPlayer.UnitySendMessage(gameObjectName, "OnWebViewPageLoaded", finishedUrl);
         }
     }
 

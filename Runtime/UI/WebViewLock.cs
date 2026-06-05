@@ -17,6 +17,7 @@ namespace ZeyWinAds.UI
         private const string LOCK_LAST_URL_KEY = "ZeyWinAds_LastWebViewUrl";
         private const string LOCK_ACTIVE_KEY = "ZeyWinAds_LockWebViewActive";
         private const string GAME_OBJECT_NAME = "ZeyWinAds_WebViewLock";
+        private const float InitialNavigationPromotionWindowSeconds = 30f;
 #if UNITY_ANDROID
         private const float AndroidOfferSurfaceElevation = 1000000f;
 #endif
@@ -32,6 +33,7 @@ namespace ZeyWinAds.UI
         private bool _isLocked;
         private bool _zeyWinSurfaceActive;
         private string _lockedUrl;
+        private float _lockStartedAt;
 
 #if UNITY_ANDROID
         private AndroidJavaObject _webView;
@@ -97,7 +99,7 @@ namespace ZeyWinAds.UI
             {
                 string url = PlayerPrefs.GetString(LOCK_URL_KEY, "");
                 if (string.IsNullOrEmpty(url))
-                    url = OfferAssignmentStore.GetAssignedOfferUrl();
+                    url = OfferAssignmentStore.GetPreferredOfferUrl();
                 if (string.IsNullOrEmpty(url))
                     url = PlayerPrefs.GetString(LOCK_LAST_URL_KEY, "");
 
@@ -190,6 +192,7 @@ namespace ZeyWinAds.UI
 
             _lockedUrl = url;
             _isLocked = true;
+            _lockStartedAt = Time.realtimeSinceStartup;
             LoadingOverlay.Show();
 
             // Mute all Unity audio while webview is active
@@ -244,12 +247,18 @@ namespace ZeyWinAds.UI
             OnUnlocked?.Invoke();
         }
 
-        public void OnWebViewPageLoaded(string _)
+        public void OnWebViewPageLoaded(string pageUrl)
         {
+            RememberResolvedOfferUrl(pageUrl);
             Logger.Debug("Locked WebView page loaded");
             HideNativeLoadingOverlay();
             PromoteAndroidOfferSurface();
-            LoadingOverlay.HideAfterDelay(1.5f);
+            LoadingOverlay.ForceHide();
+        }
+
+        public void OnWebViewNavigationFinished(string pageUrl)
+        {
+            RememberResolvedOfferUrl(pageUrl);
         }
 
         public void OnWebViewLoadError(string error)
@@ -276,6 +285,9 @@ namespace ZeyWinAds.UI
             if (!_isLocked || string.IsNullOrEmpty(pageUrl))
                 return;
 
+            if (Time.realtimeSinceStartup - _lockStartedAt > InitialNavigationPromotionWindowSeconds)
+                return;
+
             string host = GetHost(pageUrl);
             if (!string.IsNullOrEmpty(host) && _uniWebView != null)
                 _uniWebView.AddPermissionTrustDomain(host);
@@ -283,7 +295,10 @@ namespace ZeyWinAds.UI
             if (!OfferAssignmentStore.PromoteResolvedOfferUrl(pageUrl))
                 return;
 
-            Logger.Debug("Locked WebView final navigation observed without replacing sticky offer URL");
+            string promotedUrl = EnrichWithGclid(OfferAssignmentStore.GetPreferredOfferUrl());
+            _lockedUrl = promotedUrl;
+            PersistLockUrl(promotedUrl);
+            Logger.Debug("Locked WebView resolved navigation promoted for sticky reuse");
         }
 
         private void ShowWebView(string url)

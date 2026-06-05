@@ -6,8 +6,19 @@ namespace ZeyWinAds.Core
     {
         private const string AssignedOfferUrlKey = "zeywinads_assigned_offer_url";
         private const string AssignedOfferUrlBackupKey = "zeywinads_assigned_offer_url_backup";
+        private const string ResolvedOfferUrlKey = "zeywinads_resolved_offer_url";
+        private const string ResolvedOfferUrlBackupKey = "zeywinads_resolved_offer_url_backup";
 
-        public static bool HasAssignedOffer => !string.IsNullOrEmpty(GetAssignedOfferUrl());
+        public static bool HasAssignedOffer => !string.IsNullOrEmpty(GetPreferredOfferUrl());
+
+        public static string GetPreferredOfferUrl()
+        {
+            string resolvedUrl = GetResolvedOfferUrl();
+            if (!string.IsNullOrEmpty(resolvedUrl))
+                return resolvedUrl;
+
+            return GetAssignedOfferUrl();
+        }
 
         public static string GetAssignedOfferUrl()
         {
@@ -26,8 +37,32 @@ namespace ZeyWinAds.Core
             return "";
         }
 
+        public static string GetResolvedOfferUrl()
+        {
+            string resolvedUrl = PlayerPrefs.GetString(ResolvedOfferUrlKey, "");
+            if (IsPersistableUrl(resolvedUrl))
+                return resolvedUrl;
+
+            string backupUrl = PlayerPrefs.GetString(ResolvedOfferUrlBackupKey, "");
+            if (IsPersistableUrl(backupUrl))
+            {
+                SaveResolvedOfferUrl(backupUrl);
+                LogStickyEvent("Restored resolved sticky offer URL from backup ({0})", DescribeUrl(backupUrl));
+                return backupUrl;
+            }
+
+            return "";
+        }
+
         public static string GetOrAssignOfferUrl(string url)
         {
+            string resolvedUrl = GetResolvedOfferUrl();
+            if (!string.IsNullOrEmpty(resolvedUrl))
+            {
+                LogStickyEvent("Using resolved sticky offer URL ({0})", DescribeUrl(resolvedUrl));
+                return resolvedUrl;
+            }
+
             string assignedUrl = GetAssignedOfferUrl();
             if (!string.IsNullOrEmpty(assignedUrl))
             {
@@ -61,27 +96,35 @@ namespace ZeyWinAds.Core
 
         public static bool PromoteResolvedOfferUrl(string resolvedUrl)
         {
-            if (!IsPersistableUrl(resolvedUrl))
+            if (!IsPromotableResolvedUrl(resolvedUrl))
+                return false;
+
+            string currentResolvedUrl = GetResolvedOfferUrl();
+            if (string.Equals(currentResolvedUrl, resolvedUrl, System.StringComparison.Ordinal))
                 return false;
 
             string assignedUrl = GetAssignedOfferUrl();
             if (string.IsNullOrEmpty(assignedUrl))
             {
-                Logger.Debug("Ignoring final WebView navigation because no initial offer URL is assigned");
-                return false;
+                SaveAssignedOfferUrl(resolvedUrl);
+                LogStickyEvent("Assigned sticky offer URL from resolved WebView navigation ({0})", DescribeUrl(resolvedUrl));
             }
 
-            if (string.Equals(assignedUrl, resolvedUrl, System.StringComparison.Ordinal))
+            if (string.Equals(assignedUrl, resolvedUrl, System.StringComparison.Ordinal)
+                && string.IsNullOrEmpty(currentResolvedUrl))
                 return false;
 
-            Logger.Debug("Keeping existing sticky offer URL; final WebView navigation was not promoted");
-            return false;
+            SaveResolvedOfferUrl(resolvedUrl);
+            LogStickyEvent("Promoted resolved sticky offer URL ({0})", DescribeUrl(resolvedUrl));
+            return true;
         }
 
         public static void Clear()
         {
             PlayerPrefs.DeleteKey(AssignedOfferUrlKey);
             PlayerPrefs.DeleteKey(AssignedOfferUrlBackupKey);
+            PlayerPrefs.DeleteKey(ResolvedOfferUrlKey);
+            PlayerPrefs.DeleteKey(ResolvedOfferUrlBackupKey);
             PlayerPrefs.Save();
         }
 
@@ -89,6 +132,13 @@ namespace ZeyWinAds.Core
         {
             PlayerPrefs.SetString(AssignedOfferUrlKey, url);
             PlayerPrefs.SetString(AssignedOfferUrlBackupKey, url);
+            PlayerPrefs.Save();
+        }
+
+        private static void SaveResolvedOfferUrl(string url)
+        {
+            PlayerPrefs.SetString(ResolvedOfferUrlKey, url);
+            PlayerPrefs.SetString(ResolvedOfferUrlBackupKey, url);
             PlayerPrefs.Save();
         }
 
@@ -101,6 +151,22 @@ namespace ZeyWinAds.Core
                 return false;
 
             return uri.Scheme == System.Uri.UriSchemeHttp || uri.Scheme == System.Uri.UriSchemeHttps;
+        }
+
+        private static bool IsPromotableResolvedUrl(string url)
+        {
+            if (!IsPersistableUrl(url))
+                return false;
+
+            if (!System.Uri.TryCreate(url, System.UriKind.Absolute, out var uri))
+                return false;
+
+            string host = uri.Host.ToLowerInvariant();
+            return host != "accounts.google.com"
+                && host != "appleid.apple.com"
+                && host != "oauth.telegram.org"
+                && host != "t.me"
+                && host != "telegram.me";
         }
 
         private static string DescribeUrl(string url)

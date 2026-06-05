@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.7.14
+
+- Suppressed SDK and AdMob fullscreen ad shows while a ZeyWin offer WebView, popup, or banner surface is active.
+- Extended the legacy `AdMobProvider` auto-patcher to guard interstitial and rewarded shows in older games during active ZeyWin offer surfaces.
+- Hid the Java-native loading overlay immediately when WebView page loading completes.
+- Moved the Java-native loader progress bar lower, reduced it to 70% screen width, and halved the money image size.
+
+## 3.7.13
+
+- Promoted early Android WebView redirect URLs into the sticky offer store, so a device reopens the same resolved offer instead of reloading a rotating entry URL on each startup.
+- Android locked WebViews now report every completed navigation back to Unity while the initial redirect chain is active.
+
 ## 3.7.12
 
 - Changed the webview loading overlay to stay visible until the page is loaded and then hide after a 1.5 second delay so the tap-to-webview transition feels immediate without cutting the loader off too early.

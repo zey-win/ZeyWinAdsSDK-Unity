@@ -599,6 +599,13 @@ namespace ZeyWinAds
         /// <param name="onClose">Callback invoked when the ad is closed</param>
         public static void ShowInterstitial(Action onClose = null)
         {
+            if (AdMediator.IsZeyWinSurfaceActive)
+            {
+                Core.Logger.Log("Interstitial skipped while ZeyWin surface is active.");
+                onClose?.Invoke();
+                return;
+            }
+
             if (!AdMediator.CanShowAutoFullscreen(out float remainingSeconds))
             {
                 Core.Logger.Log("Interstitial auto-show skipped by cooldown: {0}s remaining", Mathf.CeilToInt(remainingSeconds));
@@ -695,6 +702,13 @@ namespace ZeyWinAds
         /// <param name="onClose">Callback invoked when the ad is closed</param>
         public static void ShowRewarded(Action<int> onReward, Action onClose = null)
         {
+            if (AdMediator.IsZeyWinSurfaceActive)
+            {
+                Core.Logger.Log("Rewarded skipped while ZeyWin surface is active.");
+                onClose?.Invoke();
+                return;
+            }
+
             // Try to get from preloader first
             BaseAd preloadedAd = AdLoader.Instance.GetPreloadedAd(AdType.Rewarded);
 
