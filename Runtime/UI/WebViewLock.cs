@@ -249,7 +249,7 @@ namespace ZeyWinAds.UI
             Logger.Debug("Locked WebView page loaded");
             HideNativeLoadingOverlay();
             PromoteAndroidOfferSurface();
-            LoadingOverlay.ForceHide();
+            LoadingOverlay.HideAfterDelay(1.5f);
         }
 
         public void OnWebViewLoadError(string error)

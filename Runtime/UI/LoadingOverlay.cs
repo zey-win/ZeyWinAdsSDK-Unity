@@ -1,4 +1,6 @@
+using System.Collections;
 using UnityEngine;
+using ZeyWinAds.Core;
 
 namespace ZeyWinAds.UI
 {
@@ -24,11 +26,26 @@ namespace ZeyWinAds.UI
                 SetNativeOverlayVisible(false);
         }
 
+        public static void HideAfterDelay(float delaySeconds)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            UnityMainThreadDispatcher.Instance.StartCoroutine(HideAfterDelayCoroutine(delaySeconds));
+#endif
+        }
+
         public static void ForceHide()
         {
             _showCount = 0;
             SetNativeOverlayVisible(false);
         }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private static IEnumerator HideAfterDelayCoroutine(float delaySeconds)
+        {
+            yield return new WaitForSecondsRealtime(Mathf.Max(0f, delaySeconds));
+            Hide();
+        }
+#endif
 
         private static void SetNativeOverlayVisible(bool visible)
         {
