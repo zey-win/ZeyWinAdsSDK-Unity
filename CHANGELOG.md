@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.8.0
+
+- Reworked SDK native/banner ad rendering into an adaptive typography card: Roboto/Noto/Helvetica OS font fallback, wrapped text, best-fit sizing, and height/width tuning for different languages and CTA lengths.
+- Added animated banner polish: overshoot entrance, periodic CTA/icon pulse, subtle shake, and moving gold shine across the ad on show/rotation.
+- Added popup typography fallback/wrapping plus a gold flash entrance so SDK popup ads appear from a yellow-gold burst at their own screen position instead of a plain bottom slide.
+- Kept popup-over-banner behavior from 3.7.20: banner UI hides before popup and resumes only after popup close/repeat scheduling.
+- Updated runtime `SdkVersion` reporting to `3.8.0`.
+
 ## 3.7.20
 
 - Made popup timing server-authoritative: `popup_delay_sec` controls the first auto-show and `popup_repeat_sec` controls the next prompt after close/decline; local `ConfigurePopupSchedule` values are fallback only.

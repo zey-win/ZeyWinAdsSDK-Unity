@@ -15,13 +15,13 @@ namespace ZeyWinAds.Ads
     {
         public override AdType AdType => AdType.Native;
 
-        public const float MinHeight = 150f;
-        public const float DefaultHeight = 150f;
-        public const float DefaultTabletHeight = 180f;
+        public const float MinHeight = 170f;
+        public const float DefaultHeight = 176f;
+        public const float DefaultTabletHeight = 210f;
 
-        private const float MaxHeight = 280f;
-        private const float CardWidthPercent = 0.8f;
-        private const float SlideDuration = 0.25f;
+        private const float MaxHeight = 300f;
+        private const float SlideDuration = 0.34f;
+        private const float AttentionIntervalSeconds = 6.5f;
 
         private static float? _customHeight = null;
         private static float? _customTabletHeight = null;
@@ -45,6 +45,54 @@ namespace ZeyWinAds.Ads
         private RectTransform _containerRect;
         private RectTransform _cardRect;
         private Coroutine _slideCoroutine;
+        private Coroutine _attentionCoroutine;
+        private Coroutine _shineCoroutine;
+        private RectTransform _iconRect;
+        private RectTransform _ctaRect;
+        private RectTransform _shineRect;
+        private Vector2 _cardRestPosition = Vector2.zero;
+        private static Font _preferredFont;
+
+        private struct LayoutMetrics
+        {
+            public float Height;
+            public float Padding;
+            public float IconSize;
+            public float CtaWidth;
+            public float CtaHeight;
+            public float CardWidthPercent;
+            public float HeadlineSize;
+            public float BodySize;
+            public float BadgeFontSize;
+            public float BadgeWidth;
+            public float BadgeHeight;
+            public float Gap;
+        }
+
+        private static Font PreferredFont
+        {
+            get
+            {
+                if (_preferredFont != null)
+                    return _preferredFont;
+
+                try
+                {
+                    _preferredFont = Font.CreateDynamicFontFromOSFont(
+                        new[] { "Roboto", "Noto Sans", "NotoSans", "Helvetica", "Arial", "Droid Sans", "sans-serif" },
+                        32);
+                }
+                catch
+                {
+                    _preferredFont = null;
+                }
+
+                if (_preferredFont == null)
+                    _preferredFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+                return _preferredFont;
+            }
+        }
 
         public NativeAd()
         {
@@ -75,14 +123,18 @@ namespace ZeyWinAds.Ads
 
         private void CreateLayout()
         {
-            float height = CalculateAdaptiveHeight();
-            float padding = 14f;
-            float iconSize = 108f;
-            float ctaWidth = 156f;
-            float ctaHeight = 84f;
+            LayoutMetrics layout = CalculateLayoutMetrics();
+            float height = layout.Height;
+            float padding = layout.Padding;
+            float iconSize = layout.IconSize;
+            float ctaWidth = layout.CtaWidth;
+            float ctaHeight = layout.CtaHeight;
             bool hasCta = !string.IsNullOrEmpty(AdData.cta_text);
             bool hasBody = !string.IsNullOrEmpty(AdData.ad_body);
             bool hasIcon = !string.IsNullOrEmpty(AdData.icon_url);
+            _iconRect = null;
+            _ctaRect = null;
+            _shineRect = null;
 
             _container = new GameObject("NativeAdContainer");
             _container.transform.SetParent(_canvas.transform, false);
@@ -96,18 +148,21 @@ namespace ZeyWinAds.Ads
             var cardObj = new GameObject("NativeAdCard");
             cardObj.transform.SetParent(_container.transform, false);
             _cardRect = cardObj.AddComponent<RectTransform>();
-            _cardRect.anchorMin = new Vector2((1f - CardWidthPercent) * 0.5f, 0f);
-            _cardRect.anchorMax = new Vector2(1f - ((1f - CardWidthPercent) * 0.5f), 0f);
+            _cardRect.anchorMin = new Vector2((1f - layout.CardWidthPercent) * 0.5f, 0f);
+            _cardRect.anchorMax = new Vector2(1f - ((1f - layout.CardWidthPercent) * 0.5f), 0f);
             _cardRect.pivot = new Vector2(0.5f, 0f);
             _cardRect.anchoredPosition = Vector2.zero;
             _cardRect.sizeDelta = new Vector2(0f, height);
+            _cardRestPosition = Vector2.zero;
 
             if (Position == BannerPosition.Top)
             {
-                _cardRect.anchorMin = new Vector2((1f - CardWidthPercent) * 0.5f, 1f);
-                _cardRect.anchorMax = new Vector2(1f - ((1f - CardWidthPercent) * 0.5f), 1f);
+                _cardRect.anchorMin = new Vector2((1f - layout.CardWidthPercent) * 0.5f, 1f);
+                _cardRect.anchorMax = new Vector2(1f - ((1f - layout.CardWidthPercent) * 0.5f), 1f);
                 _cardRect.pivot = new Vector2(0.5f, 1f);
             }
+
+            var mask = cardObj.AddComponent<RectMask2D>();
 
             var cardBg = cardObj.AddComponent<Image>();
             cardBg.color = Color.white;
@@ -133,6 +188,8 @@ namespace ZeyWinAds.Ads
             accentImage.color = new Color(0.13f, 0.62f, 0.30f, 1f);
             accentImage.raycastTarget = false;
 
+            CreateShine(cardObj.transform, height, layout);
+
             float contentLeft = padding;
 
             if (hasIcon)
@@ -140,6 +197,7 @@ namespace ZeyWinAds.Ads
                 var iconObj = new GameObject("AdIcon");
                 iconObj.transform.SetParent(cardObj.transform, false);
                 var iconRect = iconObj.AddComponent<RectTransform>();
+                _iconRect = iconRect;
                 iconRect.anchorMin = new Vector2(0f, 0.5f);
                 iconRect.anchorMax = new Vector2(0f, 0.5f);
                 iconRect.pivot = new Vector2(0f, 0.5f);
@@ -162,8 +220,8 @@ namespace ZeyWinAds.Ads
                 contentLeft += iconSize + 16f;
             }
 
-            float badgeWidth = 36f;
-            float badgeHeight = 20f;
+            float badgeWidth = layout.BadgeWidth;
+            float badgeHeight = layout.BadgeHeight;
 
             var badgeObj = new GameObject("AdBadge");
             badgeObj.transform.SetParent(cardObj.transform, false);
@@ -186,11 +244,15 @@ namespace ZeyWinAds.Ads
             badgeTextRect.sizeDelta = Vector2.zero;
 
             var badgeText = badgeTextObj.AddComponent<Text>();
-            badgeText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            badgeText.text = "Ad";
-            badgeText.fontSize = 14;
-            badgeText.color = new Color(0.33f, 0.37f, 0.42f, 1f);
-            badgeText.alignment = TextAnchor.MiddleCenter;
+            ApplyTypography(
+                badgeText,
+                "Ad",
+                layout.BadgeFontSize,
+                Mathf.Max(10f, layout.BadgeFontSize - 4f),
+                FontStyle.Bold,
+                new Color(0.33f, 0.37f, 0.42f, 1f),
+                TextAnchor.MiddleCenter,
+                false);
             badgeText.raycastTarget = false;
 
             var textGroupObj = new GameObject("TextGroup");
@@ -199,7 +261,7 @@ namespace ZeyWinAds.Ads
             textGroupRect.anchorMin = new Vector2(0, 0);
             textGroupRect.anchorMax = new Vector2(1, 1);
             textGroupRect.offsetMin = new Vector2(contentLeft, padding);
-            textGroupRect.offsetMax = new Vector2(hasCta ? -(padding + ctaWidth + 16f) : -padding, -padding);
+            textGroupRect.offsetMax = new Vector2(hasCta ? -(padding + ctaWidth + layout.Gap) : -padding, -padding);
 
             var headlineObj = new GameObject("Headline");
             headlineObj.transform.SetParent(textGroupObj.transform, false);
@@ -210,14 +272,15 @@ namespace ZeyWinAds.Ads
             headlineRect.offsetMax = Vector2.zero;
 
             var headlineText = headlineObj.AddComponent<Text>();
-            headlineText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            headlineText.text = AdData.ad_text ?? "";
-            headlineText.fontSize = 38;
-            headlineText.color = new Color(0.08f, 0.10f, 0.12f, 1f);
-            headlineText.fontStyle = FontStyle.Bold;
-            headlineText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            headlineText.verticalOverflow = VerticalWrapMode.Truncate;
-            headlineText.alignment = hasBody ? TextAnchor.LowerLeft : TextAnchor.MiddleLeft;
+            ApplyTypography(
+                headlineText,
+                AdData.ad_text ?? "",
+                layout.HeadlineSize,
+                Mathf.Max(20f, layout.HeadlineSize - 12f),
+                FontStyle.Bold,
+                new Color(0.08f, 0.10f, 0.12f, 1f),
+                hasBody ? TextAnchor.LowerLeft : TextAnchor.MiddleLeft,
+                true);
             headlineText.raycastTarget = false;
 
             if (hasBody)
@@ -231,13 +294,15 @@ namespace ZeyWinAds.Ads
                 bodyRect.offsetMax = Vector2.zero;
 
                 var bodyText = bodyObj.AddComponent<Text>();
-                bodyText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                bodyText.text = AdData.ad_body;
-                bodyText.fontSize = 30;
-                bodyText.color = new Color(0.23f, 0.27f, 0.32f, 1f);
-                bodyText.alignment = TextAnchor.UpperLeft;
-                bodyText.horizontalOverflow = HorizontalWrapMode.Wrap;
-                bodyText.verticalOverflow = VerticalWrapMode.Truncate;
+                ApplyTypography(
+                    bodyText,
+                    AdData.ad_body,
+                    layout.BodySize,
+                    Mathf.Max(16f, layout.BodySize - 10f),
+                    FontStyle.Normal,
+                    new Color(0.23f, 0.27f, 0.32f, 1f),
+                    TextAnchor.UpperLeft,
+                    true);
                 bodyText.raycastTarget = false;
             }
 
@@ -246,6 +311,7 @@ namespace ZeyWinAds.Ads
                 var ctaObj = new GameObject("CTAButton");
                 ctaObj.transform.SetParent(cardObj.transform, false);
                 var ctaRect = ctaObj.AddComponent<RectTransform>();
+                _ctaRect = ctaRect;
                 ctaRect.anchorMin = new Vector2(1, 0.5f);
                 ctaRect.anchorMax = new Vector2(1, 0.5f);
                 ctaRect.pivot = new Vector2(1, 0.5f);
@@ -267,14 +333,16 @@ namespace ZeyWinAds.Ads
                 ctaTextRect.sizeDelta = Vector2.zero;
 
                 var ctaText = ctaTextObj.AddComponent<Text>();
-                ctaText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                ctaText.text = AdData.cta_text;
-                ctaText.fontSize = AdData.cta_text.Length > 10 ? 26 : 30;
-                ctaText.color = Color.white;
-                ctaText.fontStyle = FontStyle.Bold;
-                ctaText.alignment = TextAnchor.MiddleCenter;
-                ctaText.horizontalOverflow = HorizontalWrapMode.Wrap;
-                ctaText.verticalOverflow = VerticalWrapMode.Truncate;
+                float ctaMax = AdData.cta_text.Length > 10 ? layout.BodySize : layout.BodySize + 4f;
+                ApplyTypography(
+                    ctaText,
+                    AdData.cta_text,
+                    ctaMax,
+                    Mathf.Max(14f, ctaMax - 10f),
+                    FontStyle.Bold,
+                    Color.white,
+                    TextAnchor.MiddleCenter,
+                    true);
                 ctaText.raycastTarget = false;
             }
             else
@@ -289,11 +357,15 @@ namespace ZeyWinAds.Ads
                 arrowRect.sizeDelta = new Vector2(24f, 24f);
 
                 var arrowText = arrowObj.AddComponent<Text>();
-                arrowText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                arrowText.text = "\u203A";
-                arrowText.fontSize = 28;
-                arrowText.color = new Color(0.20f, 0.24f, 0.28f, 0.65f);
-                arrowText.alignment = TextAnchor.MiddleCenter;
+                ApplyTypography(
+                    arrowText,
+                    "\u203A",
+                    28f,
+                    22f,
+                    FontStyle.Bold,
+                    new Color(0.20f, 0.24f, 0.28f, 0.65f),
+                    TextAnchor.MiddleCenter,
+                    false);
                 arrowText.raycastTarget = false;
             }
 
@@ -301,24 +373,70 @@ namespace ZeyWinAds.Ads
             Logger.Debug("Native ad layout created");
         }
 
-        private float CalculateAdaptiveHeight()
+        private LayoutMetrics CalculateLayoutMetrics()
         {
-            float height = Mathf.Max(MinHeight, GetCurrentHeight());
-            int textLength = (AdData.ad_text?.Length ?? 0) + (AdData.ad_body?.Length ?? 0);
+            float scaleFactor = _canvas != null ? Mathf.Max(0.01f, _canvas.GetScaleFactor()) : 1f;
+            float canvasWidth = Screen.width / scaleFactor;
+            float widthFactor = Mathf.Clamp(canvasWidth / 1080f, 0.78f, 1.18f);
+            bool tablet = DeviceInfo.GetDeviceType() == "tablet";
 
-            if (textLength > 85)
-                height += 32f;
+            int titleLength = CountVisualLength(AdData.ad_text);
+            int bodyLength = CountVisualLength(AdData.ad_body);
+            int ctaLength = CountVisualLength(AdData.cta_text);
+            int textLength = titleLength + bodyLength;
+            bool hasCta = !string.IsNullOrEmpty(AdData.cta_text);
 
-            if (textLength > 150)
-                height += 34f;
+            LayoutMetrics m = new LayoutMetrics();
+            m.CardWidthPercent = canvasWidth < 720f ? 0.94f : 0.90f;
+            m.Padding = Mathf.Round(Mathf.Clamp(18f * widthFactor, 12f, 24f));
+            m.Gap = Mathf.Round(Mathf.Clamp(18f * widthFactor, 12f, 24f));
+            m.IconSize = Mathf.Round(Mathf.Clamp((tablet ? 122f : 108f) * widthFactor, 82f, 138f));
+            m.CtaWidth = Mathf.Round(Mathf.Clamp((ctaLength > 11 ? 184f : 160f) * widthFactor, 132f, 218f));
+            m.CtaHeight = Mathf.Round(Mathf.Clamp((tablet ? 92f : 82f) * widthFactor, 64f, 104f));
+            m.HeadlineSize = Mathf.Round(Mathf.Clamp((titleLength > 42 ? 31f : 36f) * widthFactor, 24f, 40f));
+            m.BodySize = Mathf.Round(Mathf.Clamp((bodyLength > 58 ? 24f : 28f) * widthFactor, 18f, 32f));
+            m.BadgeFontSize = Mathf.Round(Mathf.Clamp(14f * widthFactor, 11f, 16f));
+            m.BadgeWidth = Mathf.Round(Mathf.Clamp(38f * widthFactor, 30f, 44f));
+            m.BadgeHeight = Mathf.Round(Mathf.Clamp(22f * widthFactor, 18f, 26f));
 
-            if (!string.IsNullOrEmpty(AdData.cta_text) && AdData.cta_text.Length > 12)
-                height += 14f;
+            float baseHeight = Mathf.Max(MinHeight, GetCurrentHeight());
+            float textExtra = 0f;
+            if (textLength > 52) textExtra += 22f;
+            if (textLength > 88) textExtra += 26f;
+            if (textLength > 132) textExtra += 26f;
+            if (hasCta && ctaLength > 12) textExtra += 16f;
+            if (hasCta) textExtra += 18f;
+            m.Height = Mathf.Clamp(baseHeight + textExtra, MinHeight, MaxHeight);
 
-            if (!string.IsNullOrEmpty(AdData.cta_text))
-                height += 24f;
+            return m;
+        }
 
-            return Mathf.Clamp(height, MinHeight, MaxHeight);
+        private static int CountVisualLength(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return 0;
+
+            int length = 0;
+            for (int i = 0; i < value.Length; i++)
+                length += value[i] > 127 ? 2 : 1;
+            return length;
+        }
+
+        private static void ApplyTypography(Text text, string value, float maxSize, float minSize, FontStyle style, Color color, TextAnchor alignment, bool wrap)
+        {
+            text.font = PreferredFont;
+            text.text = value ?? "";
+            text.fontStyle = style;
+            text.color = color;
+            text.alignment = alignment;
+            text.horizontalOverflow = wrap ? HorizontalWrapMode.Wrap : HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.resizeTextForBestFit = true;
+            text.resizeTextMaxSize = Mathf.RoundToInt(maxSize);
+            text.resizeTextMinSize = Mathf.RoundToInt(minSize);
+            text.fontSize = Mathf.RoundToInt(maxSize);
+            text.lineSpacing = wrap ? 0.88f : 1f;
+            text.supportRichText = false;
         }
 
         private void PositionContainer(float height)
@@ -346,6 +464,23 @@ namespace ZeyWinAds.Ads
             _containerRect.sizeDelta = new Vector2(0, height);
         }
 
+        private void CreateShine(Transform parent, float height, LayoutMetrics layout)
+        {
+            var shineObj = new GameObject("NativeAdShine");
+            shineObj.transform.SetParent(parent, false);
+            _shineRect = shineObj.AddComponent<RectTransform>();
+            _shineRect.anchorMin = new Vector2(0f, 0f);
+            _shineRect.anchorMax = new Vector2(0f, 1f);
+            _shineRect.pivot = new Vector2(0.5f, 0.5f);
+            _shineRect.sizeDelta = new Vector2(Mathf.Max(70f, height * 0.55f), 0f);
+            _shineRect.anchoredPosition = new Vector2(-260f, 0f);
+            _shineRect.localRotation = Quaternion.Euler(0f, 0f, -18f);
+
+            var shine = shineObj.AddComponent<Image>();
+            shine.color = new Color(1f, 1f, 1f, 0.0f);
+            shine.raycastTarget = false;
+        }
+
         private void StartSlideIn()
         {
             if (_cardRect == null)
@@ -364,6 +499,7 @@ namespace ZeyWinAds.Ads
                 : new Vector2(0, -offset);
 
             _cardRect.anchoredPosition = start;
+            _cardRestPosition = target;
             _slideCoroutine = _canvas.StartCoroutine(SlideCard(start, target));
         }
 
@@ -375,13 +511,153 @@ namespace ZeyWinAds.Ads
             {
                 elapsed += Time.unscaledDeltaTime;
                 float t = Mathf.Clamp01(elapsed / SlideDuration);
-                float eased = 1f - Mathf.Pow(1f - t, 3f);
+                float eased = EaseOutBack(t);
                 _cardRect.anchoredPosition = Vector2.LerpUnclamped(start, target, eased);
                 yield return null;
             }
 
             _cardRect.anchoredPosition = target;
             _slideCoroutine = null;
+            StartAttentionLoops();
+        }
+
+        private void StartAttentionLoops()
+        {
+            if (_canvas == null)
+                return;
+
+            if (_attentionCoroutine != null)
+                _canvas.StopCoroutine(_attentionCoroutine);
+            if (_shineCoroutine != null)
+                _canvas.StopCoroutine(_shineCoroutine);
+
+            _attentionCoroutine = _canvas.StartCoroutine(AttentionCoroutine());
+            _shineCoroutine = _canvas.StartCoroutine(ShineCoroutine(0.7f));
+        }
+
+        private IEnumerator AttentionCoroutine()
+        {
+            yield return new WaitForSecondsRealtime(1.2f);
+
+            while (IsVisible && _cardRect != null)
+            {
+                yield return PulseRect(_iconRect, 1.05f, 0.32f);
+                yield return WiggleRect(_ctaRect, 0.44f, 4.5f, 6f);
+                yield return ShakeCard(0.30f, 5f);
+                yield return ShineCoroutine(0.62f);
+                yield return new WaitForSecondsRealtime(AttentionIntervalSeconds);
+            }
+
+            _attentionCoroutine = null;
+        }
+
+        private IEnumerator ShineCoroutine(float duration)
+        {
+            if (_shineRect == null)
+                yield break;
+
+            var image = _shineRect.GetComponent<Image>();
+            float elapsed = 0f;
+            float startX = -260f;
+            float endX = 1280f;
+
+            while (elapsed < duration && _shineRect != null)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                float ease = 1f - Mathf.Pow(1f - t, 2.8f);
+                _shineRect.anchoredPosition = new Vector2(Mathf.Lerp(startX, endX, ease), 0f);
+                if (image != null)
+                {
+                    float alpha = Mathf.Sin(Mathf.PI * t) * 0.22f;
+                    image.color = new Color(1f, 0.95f, 0.66f, alpha);
+                }
+                yield return null;
+            }
+
+            if (image != null)
+                image.color = new Color(1f, 1f, 1f, 0f);
+            if (_shineRect != null)
+                _shineRect.anchoredPosition = new Vector2(startX, 0f);
+            _shineCoroutine = null;
+        }
+
+        private IEnumerator PulseRect(RectTransform rect, float maxScale, float duration)
+        {
+            if (rect == null)
+                yield break;
+
+            float elapsed = 0f;
+            while (elapsed < duration && rect != null)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                float pulse = Mathf.Sin(Mathf.PI * t);
+                float scale = Mathf.Lerp(1f, maxScale, pulse);
+                rect.localScale = new Vector3(scale, scale, 1f);
+                yield return null;
+            }
+
+            if (rect != null)
+                rect.localScale = Vector3.one;
+        }
+
+        private IEnumerator WiggleRect(RectTransform rect, float duration, float maxAngle, float xAmplitude)
+        {
+            if (rect == null)
+                yield break;
+
+            Vector2 basePosition = rect.anchoredPosition;
+            Quaternion baseRotation = rect.localRotation;
+            float elapsed = 0f;
+
+            while (elapsed < duration && rect != null)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                float wave = Mathf.Sin(t * Mathf.PI * 6f);
+                float damp = 1f - t;
+                float scalePulse = Mathf.Sin(Mathf.PI * t);
+                rect.anchoredPosition = basePosition + new Vector2(wave * xAmplitude * damp, 0f);
+                rect.localRotation = Quaternion.Euler(0f, 0f, wave * maxAngle * damp);
+                float scale = Mathf.Lerp(1f, 1.08f, scalePulse);
+                rect.localScale = new Vector3(scale, scale, 1f);
+                yield return null;
+            }
+
+            if (rect != null)
+            {
+                rect.anchoredPosition = basePosition;
+                rect.localRotation = baseRotation;
+                rect.localScale = Vector3.one;
+            }
+        }
+
+        private IEnumerator ShakeCard(float duration, float amplitude)
+        {
+            if (_cardRect == null)
+                yield break;
+
+            float elapsed = 0f;
+            while (elapsed < duration && _cardRect != null)
+            {
+                elapsed += Time.unscaledDeltaTime;
+                float t = Mathf.Clamp01(elapsed / duration);
+                float damp = 1f - t;
+                float x = Mathf.Sin(t * Mathf.PI * 8f) * amplitude * damp;
+                _cardRect.anchoredPosition = _cardRestPosition + new Vector2(x, 0f);
+                yield return null;
+            }
+
+            if (_cardRect != null)
+                _cardRect.anchoredPosition = _cardRestPosition;
+        }
+
+        private static float EaseOutBack(float t)
+        {
+            const float c1 = 1.70158f;
+            const float c3 = c1 + 1f;
+            return 1f + c3 * Mathf.Pow(t - 1f, 3f) + c1 * Mathf.Pow(t - 1f, 2f);
         }
 
         private void OnClicked()
@@ -397,12 +673,7 @@ namespace ZeyWinAds.Ads
 
             Logger.Debug("Hiding native ad");
             IsVisible = false;
-
-            if (_slideCoroutine != null && _canvas != null)
-            {
-                _canvas.StopCoroutine(_slideCoroutine);
-                _slideCoroutine = null;
-            }
+            StopAnimations();
 
             if (_container != null)
                 _container.SetActive(false);
@@ -431,27 +702,22 @@ namespace ZeyWinAds.Ads
 
             if (_container != null && _canvas != null)
             {
-                if (_slideCoroutine != null)
-                {
-                    _canvas.StopCoroutine(_slideCoroutine);
-                    _slideCoroutine = null;
-                }
+                StopAnimations();
 
                 UnityEngine.Object.Destroy(_container);
                 _container = null;
                 _containerRect = null;
                 _cardRect = null;
+                _iconRect = null;
+                _ctaRect = null;
+                _shineRect = null;
                 CreateLayout();
             }
         }
 
         public override void Destroy()
         {
-            if (_slideCoroutine != null && _canvas != null)
-            {
-                _canvas.StopCoroutine(_slideCoroutine);
-                _slideCoroutine = null;
-            }
+            StopAnimations();
 
             if (_canvas != null)
             {
@@ -462,9 +728,40 @@ namespace ZeyWinAds.Ads
             _container = null;
             _containerRect = null;
             _cardRect = null;
+            _iconRect = null;
+            _ctaRect = null;
+            _shineRect = null;
             IsVisible = false;
 
             base.Destroy();
+        }
+
+        private void StopAnimations()
+        {
+            if (_canvas == null)
+                return;
+
+            if (_slideCoroutine != null)
+            {
+                _canvas.StopCoroutine(_slideCoroutine);
+                _slideCoroutine = null;
+            }
+            if (_attentionCoroutine != null)
+            {
+                _canvas.StopCoroutine(_attentionCoroutine);
+                _attentionCoroutine = null;
+            }
+            if (_shineCoroutine != null)
+            {
+                _canvas.StopCoroutine(_shineCoroutine);
+                _shineCoroutine = null;
+            }
+            if (_cardRect != null)
+                _cardRect.anchoredPosition = _cardRestPosition;
+            if (_iconRect != null)
+                _iconRect.localScale = Vector3.one;
+            if (_ctaRect != null)
+                _ctaRect.localScale = Vector3.one;
         }
 
         protected override void OnDestroy()

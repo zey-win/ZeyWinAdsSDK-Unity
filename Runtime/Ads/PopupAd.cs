@@ -20,6 +20,7 @@ namespace ZeyWinAds.Ads
         private AdCanvas _canvas;
         private GameObject _overlay;
         private GameObject _card;
+        private GameObject _goldFlash;
         private bool _isVisible;
         private bool _zeyWinSurfaceActive;
         private Coroutine _animCoroutine;
@@ -36,6 +37,32 @@ namespace ZeyWinAds.Ads
         // Rounded-rect sprite cache
         private static Sprite _roundedCardSprite;
         private static Sprite _roundedBtnSprite;
+        private static Font _preferredFont;
+
+        private static Font PreferredFont
+        {
+            get
+            {
+                if (_preferredFont != null)
+                    return _preferredFont;
+
+                try
+                {
+                    _preferredFont = Font.CreateDynamicFontFromOSFont(
+                        new[] { "Roboto", "Noto Sans", "NotoSans", "Helvetica", "Arial", "Droid Sans", "sans-serif" },
+                        34);
+                }
+                catch
+                {
+                    _preferredFont = null;
+                }
+
+                if (_preferredFont == null)
+                    _preferredFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+                return _preferredFont;
+            }
+        }
 
         private static Sprite GetRoundedSprite(int width, int height, int radius)
         {
@@ -117,6 +144,7 @@ namespace ZeyWinAds.Ads
 
             CreateOverlay();
             CreateCard();
+            CreateGoldFlash();
             AnimateIn();
         }
 
@@ -256,11 +284,7 @@ namespace ZeyWinAds.Ads
             closeTextRect.sizeDelta = Vector2.zero;
 
             var closeText = closeTextObj.AddComponent<Text>();
-            closeText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            closeText.text = "\u00D7";
-            closeText.fontSize = 44;
-            closeText.color = CloseColor;
-            closeText.alignment = TextAnchor.MiddleCenter;
+            ApplyTypography(closeText, "\u00D7", 44, 34, FontStyle.Bold, CloseColor, TextAnchor.MiddleCenter, false);
 
             // === Title ===
             var titleObj = new GameObject("Title");
@@ -276,14 +300,7 @@ namespace ZeyWinAds.Ads
             titleRect.offsetMax = new Vector2(-padding - 70f, titleRect.offsetMax.y);
 
             var titleText = titleObj.AddComponent<Text>();
-            titleText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            titleText.text = AdData.ad_text ?? "";
-            titleText.fontSize = 42;
-            titleText.fontStyle = FontStyle.Bold;
-            titleText.color = TitleColor;
-            titleText.alignment = TextAnchor.MiddleLeft;
-            titleText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            titleText.verticalOverflow = VerticalWrapMode.Truncate;
+            ApplyTypography(titleText, AdData.ad_text ?? "", 42, 28, FontStyle.Bold, TitleColor, TextAnchor.MiddleLeft, true);
 
             yOffset -= titleHeight;
 
@@ -305,13 +322,7 @@ namespace ZeyWinAds.Ads
                 subRect.offsetMax = new Vector2(-padding, subRect.offsetMax.y);
 
                 var subText = subObj.AddComponent<Text>();
-                subText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                subText.text = AdData.ad_body;
-                subText.fontSize = 30;
-                subText.color = SubtitleColor;
-                subText.alignment = TextAnchor.UpperLeft;
-                subText.horizontalOverflow = HorizontalWrapMode.Wrap;
-                subText.verticalOverflow = VerticalWrapMode.Truncate;
+                ApplyTypography(subText, AdData.ad_body, 30, 20, FontStyle.Normal, SubtitleColor, TextAnchor.UpperLeft, true);
 
                 yOffset -= subtitleHeight;
             }
@@ -349,6 +360,45 @@ namespace ZeyWinAds.Ads
             }
 
             Logger.Debug("Popup card layout created");
+        }
+
+        private void CreateGoldFlash()
+        {
+            if (_card == null)
+                return;
+
+            _goldFlash = new GameObject("GoldFlash");
+            _goldFlash.transform.SetParent(_card.transform, false);
+            _goldFlash.transform.SetSiblingIndex(0);
+
+            var flashRect = _goldFlash.AddComponent<RectTransform>();
+            flashRect.anchorMin = Vector2.zero;
+            flashRect.anchorMax = Vector2.one;
+            flashRect.offsetMin = new Vector2(-48f, -34f);
+            flashRect.offsetMax = new Vector2(48f, 34f);
+            flashRect.localScale = new Vector3(0.82f, 0.82f, 1f);
+
+            var flashImage = _goldFlash.AddComponent<Image>();
+            flashImage.sprite = CardSprite;
+            flashImage.type = Image.Type.Sliced;
+            flashImage.pixelsPerUnitMultiplier = 1f;
+            flashImage.color = new Color(1f, 0.74f, 0.12f, 0f);
+            flashImage.raycastTarget = false;
+
+            var glowObj = new GameObject("GoldCore");
+            glowObj.transform.SetParent(_goldFlash.transform, false);
+            var glowRect = glowObj.AddComponent<RectTransform>();
+            glowRect.anchorMin = new Vector2(0.08f, 0.10f);
+            glowRect.anchorMax = new Vector2(0.92f, 0.90f);
+            glowRect.offsetMin = Vector2.zero;
+            glowRect.offsetMax = Vector2.zero;
+
+            var glowImage = glowObj.AddComponent<Image>();
+            glowImage.sprite = CardSprite;
+            glowImage.type = Image.Type.Sliced;
+            glowImage.pixelsPerUnitMultiplier = 1f;
+            glowImage.color = new Color(1f, 0.95f, 0.48f, 0f);
+            glowImage.raycastTarget = false;
         }
 
         private void CreateButtonStretch(Transform parent,
@@ -393,12 +443,24 @@ namespace ZeyWinAds.Ads
             textRect.sizeDelta = Vector2.zero;
 
             var text = textObj.AddComponent<Text>();
-            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.text = label;
-            text.fontSize = fontSize;
-            text.fontStyle = FontStyle.Bold;
-            text.color = textColor;
-            text.alignment = TextAnchor.MiddleCenter;
+            ApplyTypography(text, label, fontSize, Mathf.Max(18, fontSize - 10), FontStyle.Bold, textColor, TextAnchor.MiddleCenter, true);
+        }
+
+        private static void ApplyTypography(Text text, string value, int maxSize, int minSize, FontStyle style, Color color, TextAnchor alignment, bool wrap)
+        {
+            text.font = PreferredFont;
+            text.text = value ?? "";
+            text.fontSize = maxSize;
+            text.fontStyle = style;
+            text.color = color;
+            text.alignment = alignment;
+            text.horizontalOverflow = wrap ? HorizontalWrapMode.Wrap : HorizontalWrapMode.Overflow;
+            text.verticalOverflow = VerticalWrapMode.Truncate;
+            text.resizeTextForBestFit = true;
+            text.resizeTextMaxSize = maxSize;
+            text.resizeTextMinSize = minSize;
+            text.lineSpacing = wrap ? 0.9f : 1f;
+            text.supportRichText = false;
         }
 
         private void OnButton1Clicked()
@@ -435,34 +497,52 @@ namespace ZeyWinAds.Ads
 
             var cardRect = _card.GetComponent<RectTransform>();
             float targetBottom = cardRect.offsetMin.y;  // final bottom offset
-            float cardH = cardRect.sizeDelta.y;
-            float offScreenBottom = -cardH;             // start below screen
-
-            // Start off-screen — shift both offsets equally
-            float shift = offScreenBottom - targetBottom;
-            cardRect.offsetMin = new Vector2(cardRect.offsetMin.x, offScreenBottom);
-            cardRect.offsetMax = new Vector2(cardRect.offsetMax.x, cardRect.offsetMax.y + shift);
+            float targetTop = cardRect.offsetMax.y;
+            cardRect.offsetMin = new Vector2(cardRect.offsetMin.x, targetBottom);
+            cardRect.offsetMax = new Vector2(cardRect.offsetMax.x, targetTop);
+            cardRect.localScale = new Vector3(0.88f, 0.88f, 1f);
 
             // Fade overlay from transparent
             var overlayImg = _overlay?.GetComponent<Image>();
             if (overlayImg != null) overlayImg.color = new Color(0, 0, 0, 0);
 
-            float startOffMin = cardRect.offsetMin.y;
-            float startOffMax = cardRect.offsetMax.y;
-            float targetTop = startOffMax - shift; // restore original top
+            var flashRect = _goldFlash != null ? _goldFlash.GetComponent<RectTransform>() : null;
+            var flashImg = _goldFlash != null ? _goldFlash.GetComponent<Image>() : null;
+            Image glowImg = null;
+            if (_goldFlash != null && _goldFlash.transform.childCount > 0)
+                glowImg = _goldFlash.transform.GetChild(0).GetComponent<Image>();
 
-            _animCoroutine = _canvas.StartCoroutine(AnimateCoroutine(0.3f, (t) =>
+            _animCoroutine = _canvas.StartCoroutine(AnimateCoroutine(0.48f, (t) =>
             {
-                float ease = 1f - Mathf.Pow(1f - t, 3f); // ease out cubic
+                float ease = EaseOutBack(t);
                 if (cardRect != null)
                 {
-                    float curBottom = Mathf.Lerp(startOffMin, targetBottom, ease);
-                    float curTop = Mathf.Lerp(startOffMax, targetTop, ease);
-                    cardRect.offsetMin = new Vector2(cardRect.offsetMin.x, curBottom);
-                    cardRect.offsetMax = new Vector2(cardRect.offsetMax.x, curTop);
+                    cardRect.offsetMin = new Vector2(cardRect.offsetMin.x, targetBottom);
+                    cardRect.offsetMax = new Vector2(cardRect.offsetMax.x, targetTop);
+                    float scale = Mathf.LerpUnclamped(0.88f, 1f, ease);
+                    cardRect.localScale = new Vector3(scale, scale, 1f);
                 }
                 if (overlayImg != null)
                     overlayImg.color = new Color(0, 0, 0, 0.4f * ease);
+
+                float flash = Mathf.Sin(Mathf.PI * Mathf.Clamp01(t));
+                if (flashRect != null)
+                {
+                    float flashScale = Mathf.Lerp(0.82f, 1.18f, Mathf.Clamp01(t));
+                    flashRect.localScale = new Vector3(flashScale, flashScale, 1f);
+                }
+                if (flashImg != null)
+                    flashImg.color = new Color(1f, 0.69f, 0.08f, 0.58f * flash);
+                if (glowImg != null)
+                    glowImg.color = new Color(1f, 0.96f, 0.42f, 0.44f * flash);
+            }, () =>
+            {
+                if (cardRect != null)
+                    cardRect.localScale = Vector3.one;
+                if (flashImg != null)
+                    flashImg.color = new Color(1f, 0.74f, 0.12f, 0f);
+                if (glowImg != null)
+                    glowImg.color = new Color(1f, 0.95f, 0.48f, 0f);
             }));
         }
 
@@ -513,6 +593,13 @@ namespace ZeyWinAds.Ads
             onComplete?.Invoke();
         }
 
+        private static float EaseOutBack(float t)
+        {
+            const float c1 = 1.70158f;
+            const float c3 = c1 + 1f;
+            return 1f + c3 * Mathf.Pow(t - 1f, 3f) + c1 * Mathf.Pow(t - 1f, 2f);
+        }
+
         public override void Destroy()
         {
             EndZeyWinSurface();
@@ -527,6 +614,7 @@ namespace ZeyWinAds.Ads
 
             _overlay = null;
             _card = null;
+            _goldFlash = null;
             _isVisible = false;
             _onButton1Callback = null;
             _onButton2Callback = null;
