@@ -2,6 +2,10 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.7.11
+
+- Replaced the Java-native loader's drawn money pack with the provided `money.png` bitmap and removed the 90 degree rotation so the loader uses the original upright artwork.
+
 ## 3.7.10
 
 - Made the Java-native loader progress view screen-width adaptive so the rotated money pack can protrude outside the progress bar without the bar or icon being clipped on narrow/high-density Android phones.
