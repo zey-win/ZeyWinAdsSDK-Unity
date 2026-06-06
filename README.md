@@ -5,7 +5,7 @@
 # ZeyWin Ads SDK for Unity
 
 ![Unity](https://img.shields.io/badge/Unity-2020.3%2B-222?logo=unity)
-![Version](https://img.shields.io/badge/version-3.9.2-40c9ff)
+![Version](https://img.shields.io/badge/version-3.9.3-40c9ff)
 ![License](https://img.shields.io/badge/license-MIT-47f59b)
 ![Android](https://img.shields.io/badge/Android-API%2021%2B-3ddc84)
 ![iOS](https://img.shields.io/badge/iOS-11%2B-lightgrey)
@@ -86,7 +86,7 @@ The repository includes `tools/zeywin-fleet-configure.sh`, a TSV-driven runner f
 tools/zeywin-fleet-configure.sh \
   --root /Volumes/Work/games \
   --config /path/to/fleet-config.tsv \
-  --sdk-ref v3.9.2 \
+  --sdk-ref v3.9.3 \
   --unity-path /Applications/Unity/Hub/Editor/6000.0.71f1/Unity.app/Contents/MacOS/Unity \
   --require-unity6
 ```
@@ -169,9 +169,9 @@ public class AdExample : MonoBehaviour
 
 ## Automated Native Banner
 
-`ShowNative(BannerPosition.Top)` and `ShowNative(BannerPosition.Bottom)` render an SDK-owned native banner for connected games. The banner is a white card, 80% of the screen width, with a minimum height of 150 px and adaptive height for longer headlines, body text, and CTA labels.
+`ShowNative(BannerPosition.Top)` and `ShowNative(BannerPosition.Bottom)` render an SDK-owned native banner for connected games. The banner is an SDK-owned card with adaptive typography, lower bottom placement for short three-line creative text, and stable height for longer headlines, body text, and CTA labels.
 
-The card slides in from the requested edge, respects the device safe area, and only the white card captures taps. Empty space around it remains transparent so game UI outside the banner stays interactive.
+The card slides in from the requested edge, respects the device safe area, and only the card captures taps. Empty space around it remains transparent so game UI outside the banner stays interactive. When the ad has both an icon and CTA, the SDK rotates two native banner layouts every 15 seconds: icon-leading and CTA-leading.
 
 On tap, the SDK calls the same click flow used by other ZeyWin ads. If the ad response includes `store_url` with a Google Play URL, the SDK registers the referral click and opens Google Play for the target app. If `store_url` is missing, it falls back to `click_url`.
 
@@ -205,7 +205,7 @@ On tap, the SDK calls the same click flow used by other ZeyWin ads. If the ad re
 - **InterstitialAd** — full-screen ads (ZeyWin → AdMob fallback)
 - **RewardedAd** — full-screen ads with rewards (ZeyWin → AdMob fallback)
 - **BannerAd** — banner ads, top/bottom (ZeyWin → AdMob fallback)
-- **NativeAd** — automated native banner, top/bottom, white 80% width card, Google Play redirect via `store_url`
+- **NativeAd** — automated native banner, top/bottom, adaptive layout rotation, Google Play redirect via `store_url`
 - **PopupAd** — ZeyWin-only
 
 ## Requirements

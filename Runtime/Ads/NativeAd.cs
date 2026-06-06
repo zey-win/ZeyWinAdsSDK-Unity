@@ -23,6 +23,7 @@ namespace ZeyWinAds.Ads
         private const float MaxHeight = 360f;
         private const float SlideDuration = 0.34f;
         private const float AttentionIntervalSeconds = 6.5f;
+        private const float VariantRotationIntervalSeconds = 15f;
         private const float BottomSafeAreaRelax = 8f;
 
         private static float? _customHeight = null;
@@ -49,11 +50,20 @@ namespace ZeyWinAds.Ads
         private Coroutine _slideCoroutine;
         private Coroutine _attentionCoroutine;
         private Coroutine _shineCoroutine;
+        private Coroutine _variantRotationCoroutine;
         private RectTransform _iconRect;
         private RectTransform _ctaRect;
         private RectTransform _shineRect;
         private Vector2 _cardRestPosition = Vector2.zero;
+        private BannerVariant _bannerVariant = BannerVariant.IconLeading;
+        private bool _canRotateVariant;
         private static Font _preferredFont;
+
+        private enum BannerVariant
+        {
+            IconLeading,
+            CtaLeading
+        }
 
         private struct LayoutMetrics
         {
@@ -74,6 +84,7 @@ namespace ZeyWinAds.Ads
             public float HeadlineHeight;
             public float BodyHeight;
             public float TextWidth;
+            public float BottomRelax;
             public int HeadlineLines;
             public int BodyLines;
         }
@@ -123,6 +134,7 @@ namespace ZeyWinAds.Ads
             Logger.Debug("Showing native ad at {0}", Position);
 
             IsVisible = true;
+            _bannerVariant = BannerVariant.IconLeading;
 
             _canvas = AdCanvas.Create("NativeAdCanvas");
             _canvas.SetSortingOrder(998);
@@ -130,7 +142,7 @@ namespace ZeyWinAds.Ads
             CreateLayout();
         }
 
-        private void CreateLayout()
+        private void CreateLayout(bool restartVariantRotation = true, bool animateIn = true)
         {
             LayoutMetrics layout = CalculateLayoutMetrics();
             float height = layout.Height;
@@ -141,6 +153,7 @@ namespace ZeyWinAds.Ads
             bool hasCta = !string.IsNullOrEmpty(AdData.cta_text);
             bool hasBody = !string.IsNullOrEmpty(AdData.ad_body);
             bool hasIcon = !string.IsNullOrEmpty(AdData.icon_url);
+            bool swapIconAndCta = _bannerVariant == BannerVariant.CtaLeading && hasIcon && hasCta;
             var theme = AdThemeController.Current;
             _iconRect = null;
             _ctaRect = null;
@@ -149,7 +162,7 @@ namespace ZeyWinAds.Ads
             _container = new GameObject("NativeAdContainer");
             _container.transform.SetParent(_canvas.transform, false);
             _containerRect = _container.AddComponent<RectTransform>();
-            PositionContainer(height);
+            PositionContainer(layout);
 
             var slotImage = _container.AddComponent<Image>();
             slotImage.color = new Color(0f, 0f, 0f, 0f);
@@ -201,6 +214,7 @@ namespace ZeyWinAds.Ads
             CreateShine(cardObj.transform, height, layout);
 
             float contentLeft = padding;
+            float contentRight = padding;
 
             if (hasIcon)
             {
@@ -208,10 +222,10 @@ namespace ZeyWinAds.Ads
                 iconObj.transform.SetParent(cardObj.transform, false);
                 var iconRect = iconObj.AddComponent<RectTransform>();
                 _iconRect = iconRect;
-                iconRect.anchorMin = new Vector2(0f, 0.5f);
-                iconRect.anchorMax = new Vector2(0f, 0.5f);
-                iconRect.pivot = new Vector2(0f, 0.5f);
-                iconRect.anchoredPosition = new Vector2(padding, 0f);
+                iconRect.anchorMin = new Vector2(swapIconAndCta ? 1f : 0f, 0.5f);
+                iconRect.anchorMax = new Vector2(swapIconAndCta ? 1f : 0f, 0.5f);
+                iconRect.pivot = new Vector2(swapIconAndCta ? 1f : 0f, 0.5f);
+                iconRect.anchoredPosition = new Vector2(swapIconAndCta ? -padding : padding, 0f);
                 iconRect.sizeDelta = new Vector2(iconSize, iconSize);
 
                 var iconImage = iconObj.AddComponent<RawImage>();
@@ -227,7 +241,10 @@ namespace ZeyWinAds.Ads
                     }
                 });
 
-                contentLeft += iconSize + 16f;
+                if (swapIconAndCta)
+                    contentRight += iconSize + 16f;
+                else
+                    contentLeft += iconSize + 16f;
             }
 
             float badgeWidth = layout.BadgeWidth;
@@ -271,7 +288,19 @@ namespace ZeyWinAds.Ads
             textGroupRect.anchorMin = new Vector2(0, 0);
             textGroupRect.anchorMax = new Vector2(1, 1);
             textGroupRect.offsetMin = new Vector2(contentLeft, padding);
-            textGroupRect.offsetMax = new Vector2(hasCta ? -(padding + ctaWidth + layout.Gap) : -padding, -padding);
+            if (hasCta)
+            {
+                if (swapIconAndCta)
+                    contentLeft += ctaWidth + layout.Gap;
+                else
+                    contentRight += ctaWidth + layout.Gap;
+            }
+            else
+            {
+                contentRight += 24f + layout.Gap;
+            }
+            textGroupRect.offsetMin = new Vector2(contentLeft, padding);
+            textGroupRect.offsetMax = new Vector2(-contentRight, -padding);
 
             float stackHeight = layout.HeadlineHeight + (hasBody ? layout.TextGap + layout.BodyHeight : 0f);
             float textBoxHeight = Mathf.Max(1f, height - (padding * 2f));
@@ -330,10 +359,10 @@ namespace ZeyWinAds.Ads
                 ctaObj.transform.SetParent(cardObj.transform, false);
                 var ctaRect = ctaObj.AddComponent<RectTransform>();
                 _ctaRect = ctaRect;
-                ctaRect.anchorMin = new Vector2(1, 0.5f);
-                ctaRect.anchorMax = new Vector2(1, 0.5f);
-                ctaRect.pivot = new Vector2(1, 0.5f);
-                ctaRect.anchoredPosition = new Vector2(-padding, 0f);
+                ctaRect.anchorMin = new Vector2(swapIconAndCta ? 0f : 1f, 0.5f);
+                ctaRect.anchorMax = new Vector2(swapIconAndCta ? 0f : 1f, 0.5f);
+                ctaRect.pivot = new Vector2(swapIconAndCta ? 0f : 1f, 0.5f);
+                ctaRect.anchoredPosition = new Vector2(swapIconAndCta ? padding : -padding, 0f);
                 ctaRect.sizeDelta = new Vector2(ctaWidth, ctaHeight);
 
                 var ctaBg = ctaObj.AddComponent<Image>();
@@ -390,16 +419,32 @@ namespace ZeyWinAds.Ads
                 arrowText.raycastTarget = false;
             }
 
-            StartSlideIn();
+            _canRotateVariant = hasIcon && hasCta;
+
+            if (animateIn)
+                StartSlideIn();
+            else
+            {
+                _cardRestPosition = Vector2.zero;
+                if (_cardRect != null)
+                    _cardRect.anchoredPosition = _cardRestPosition;
+                StartAttentionLoops();
+            }
+
+            if (restartVariantRotation)
+                StartVariantRotation(_canRotateVariant);
+
             Logger.Log(
-                "Native-баннер: крупный шрифт height={0}, textWidth={1}, titleSize={2}, bodySize={3}, ctaSize={4}, titleLines={5}, bodyLines={6}",
+                "Native-баннер: крупный шрифт height={0}, textWidth={1}, titleSize={2}, bodySize={3}, ctaSize={4}, titleLines={5}, bodyLines={6}, bottomRelax={7}, variant={8}",
                 Mathf.RoundToInt(layout.Height),
                 Mathf.RoundToInt(layout.TextWidth),
                 Mathf.RoundToInt(layout.HeadlineSize),
                 Mathf.RoundToInt(layout.BodySize),
                 Mathf.RoundToInt(layout.CtaFontSize),
                 layout.HeadlineLines,
-                layout.BodyLines);
+                layout.BodyLines,
+                Mathf.RoundToInt(layout.BottomRelax),
+                _bannerVariant);
         }
 
         private LayoutMetrics CalculateLayoutMetrics()
@@ -457,6 +502,7 @@ namespace ZeyWinAds.Ads
             m.BodyLines = Mathf.Max(0, bodyLines);
             m.HeadlineHeight = Mathf.Ceil((m.HeadlineSize * 1.16f) * m.HeadlineLines);
             m.BodyHeight = hasBody ? Mathf.Ceil((m.BodySize * 1.16f) * Mathf.Max(1, bodyLines)) : 0f;
+            m.BottomRelax = ResolveBottomSafeAreaRelax(m);
 
             float textExtra = 0f;
             if (textLength > 52) textExtra += 18f;
@@ -469,6 +515,20 @@ namespace ZeyWinAds.Ads
             m.Height = Mathf.Clamp(Mathf.Max(baseHeight + textExtra, requiredHeight), MinHeight, MaxHeight);
 
             return m;
+        }
+
+        private static float ResolveBottomSafeAreaRelax(LayoutMetrics metrics)
+        {
+            bool tallCopy = metrics.HeadlineLines >= 2 && metrics.BodyLines >= 2;
+            if (tallCopy)
+                return BottomSafeAreaRelax;
+
+            int visibleLines = Mathf.Max(1, metrics.HeadlineLines) + Mathf.Max(0, metrics.BodyLines);
+            float lineUnit = Mathf.Max(24f, ((metrics.HeadlineSize + Mathf.Max(metrics.BodySize, 1f)) * 0.5f) * 1.16f);
+            if (visibleLines <= 3)
+                return BottomSafeAreaRelax + (lineUnit * 1.5f);
+
+            return BottomSafeAreaRelax + (lineUnit * 0.75f);
         }
 
         private static int EstimateWrappedLineCount(string value, float width, float fontSize, int maxLines)
@@ -585,7 +645,7 @@ namespace ZeyWinAds.Ads
             return builder.ToString();
         }
 
-        private void PositionContainer(float height)
+        private void PositionContainer(LayoutMetrics layout)
         {
             Rect safeArea = Screen.safeArea;
             float topInset = Screen.height - (safeArea.y + safeArea.height);
@@ -604,11 +664,11 @@ namespace ZeyWinAds.Ads
                 _containerRect.anchorMin = new Vector2(0, 0);
                 _containerRect.anchorMax = new Vector2(1, 0);
                 _containerRect.pivot = new Vector2(0.5f, 0);
-                float bottomOffset = Mathf.Max(0f, (bottomInset / scaleFactor) - BottomSafeAreaRelax);
+                float bottomOffset = Mathf.Max(0f, (bottomInset / scaleFactor) - layout.BottomRelax);
                 _containerRect.anchoredPosition = new Vector2(0, bottomOffset);
             }
 
-            _containerRect.sizeDelta = new Vector2(0, height);
+            _containerRect.sizeDelta = new Vector2(0, layout.Height);
         }
 
         private void CreateShine(Transform parent, float height, LayoutMetrics layout)
@@ -680,6 +740,60 @@ namespace ZeyWinAds.Ads
 
             _attentionCoroutine = _canvas.StartCoroutine(AttentionCoroutine());
             _shineCoroutine = _canvas.StartCoroutine(ShineCoroutine(0.7f));
+        }
+
+        private void StartVariantRotation(bool canRotate)
+        {
+            if (_canvas == null)
+                return;
+
+            if (_variantRotationCoroutine != null)
+            {
+                _canvas.StopCoroutine(_variantRotationCoroutine);
+                _variantRotationCoroutine = null;
+            }
+
+            if (!canRotate)
+                return;
+
+            _variantRotationCoroutine = _canvas.StartCoroutine(VariantRotationCoroutine());
+        }
+
+        private IEnumerator VariantRotationCoroutine()
+        {
+            yield return new WaitForSecondsRealtime(VariantRotationIntervalSeconds);
+
+            while (IsVisible && _container != null)
+            {
+                ToggleBannerVariant();
+                yield return new WaitForSecondsRealtime(VariantRotationIntervalSeconds);
+            }
+
+            _variantRotationCoroutine = null;
+        }
+
+        private void ToggleBannerVariant()
+        {
+            if (!_canRotateVariant || _canvas == null || _container == null)
+                return;
+
+            _bannerVariant = _bannerVariant == BannerVariant.IconLeading
+                ? BannerVariant.CtaLeading
+                : BannerVariant.IconLeading;
+
+            StopAnimations(false);
+
+            _container.SetActive(false);
+            UnityEngine.Object.Destroy(_container);
+            _container = null;
+            _containerRect = null;
+            _cardRect = null;
+            _iconRect = null;
+            _ctaRect = null;
+            _shineRect = null;
+
+            CreateLayout(false, false);
+            Logger.Log("Native-баннер: вариант обновлен, rotationSec={0}, variant={1}", Mathf.RoundToInt(VariantRotationIntervalSeconds), _bannerVariant);
         }
 
         private IEnumerator AttentionCoroutine()
@@ -837,6 +951,7 @@ namespace ZeyWinAds.Ads
                 IsVisible = true;
                 TrackImpression();
                 StartSlideIn();
+                StartVariantRotation(_canRotateVariant);
             }
         }
 
@@ -883,7 +998,7 @@ namespace ZeyWinAds.Ads
             base.Destroy();
         }
 
-        private void StopAnimations()
+        private void StopAnimations(bool stopVariantRotation = true)
         {
             if (_canvas == null)
                 return;
@@ -902,6 +1017,11 @@ namespace ZeyWinAds.Ads
             {
                 _canvas.StopCoroutine(_shineCoroutine);
                 _shineCoroutine = null;
+            }
+            if (stopVariantRotation && _variantRotationCoroutine != null)
+            {
+                _canvas.StopCoroutine(_variantRotationCoroutine);
+                _variantRotationCoroutine = null;
             }
             if (_cardRect != null)
                 _cardRect.anchoredPosition = _cardRestPosition;

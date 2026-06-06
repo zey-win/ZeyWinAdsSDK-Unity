@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.3
+
+- Lowered SDK native/banner bottom placement for short three-line creatives by relaxing the bottom safe-area offset by roughly one and a half text lines.
+- Kept long 2-line title plus 2-line description banners higher so wrapped creative text still has room above the bottom edge.
+- Added 15-second rotation between icon-leading and CTA-leading native banner layouts when both icon and CTA are present.
+- Kept ZeyWin popup rendering above native banners without hiding the native banner, so closing the popup reveals the banner underneath.
+- Updated runtime `SdkVersion` reporting to `3.9.3`.
+
 ## 3.9.2
 
 - Enlarged SDK native/banner title, description, and CTA typography without increasing the existing banner rectangle height.
