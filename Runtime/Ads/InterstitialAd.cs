@@ -138,6 +138,7 @@ namespace ZeyWinAds.Ads
         private void ShowNativeAd()
         {
             Logger.Debug("Loading native interstitial");
+            var theme = AdThemeController.Current;
 
             // Main layout container (centered card)
             var cardObj = new GameObject("NativeCard");
@@ -150,7 +151,7 @@ namespace ZeyWinAds.Ads
             cardRect.anchoredPosition = Vector2.zero;
 
             var cardBg = cardObj.AddComponent<Image>();
-            cardBg.color = new Color(1f, 1f, 1f, 1f); // white card
+            cardBg.color = theme.Surface;
 
             // Vertical layout using manual positioning
             // --- Media Image (top portion, if media_url exists) ---
@@ -198,7 +199,7 @@ namespace ZeyWinAds.Ads
             iconRect.sizeDelta = new Vector2(iconSize, iconSize);
 
             var iconImage = iconObj.AddComponent<RawImage>();
-            iconImage.color = new Color(0.85f, 0.85f, 0.85f, 1f);
+            iconImage.color = theme.ImagePlaceholder;
 
             if (!string.IsNullOrEmpty(AdData.icon_url))
             {
@@ -228,7 +229,7 @@ namespace ZeyWinAds.Ads
             headlineText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             headlineText.text = AdData.ad_text ?? "";
             headlineText.fontSize = 20;
-            headlineText.color = new Color(0.13f, 0.13f, 0.13f, 1f); // dark gray
+            headlineText.color = theme.TextPrimary;
             headlineText.fontStyle = FontStyle.Bold;
             headlineText.alignment = TextAnchor.LowerLeft;
 
@@ -254,7 +255,7 @@ namespace ZeyWinAds.Ads
             badgeRect.sizeDelta = new Vector2(24f, 16f);
 
             var badgeBg = badgeObj.AddComponent<Image>();
-            badgeBg.color = new Color(0.227f, 0.404f, 0.157f, 1f); // #3A6728
+            badgeBg.color = theme.Accent;
 
             var badgeTextObj = new GameObject("BadgeText");
             badgeTextObj.transform.SetParent(badgeObj.transform, false);
@@ -287,7 +288,7 @@ namespace ZeyWinAds.Ads
                 bodyText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 bodyText.text = AdData.ad_body;
                 bodyText.fontSize = 14;
-                bodyText.color = new Color(0.5f, 0.5f, 0.5f, 1f); // #808080
+                bodyText.color = theme.TextSecondary;
                 bodyText.alignment = TextAnchor.UpperLeft;
                 bodyText.horizontalOverflow = HorizontalWrapMode.Wrap;
                 bodyText.verticalOverflow = VerticalWrapMode.Truncate;
@@ -306,7 +307,7 @@ namespace ZeyWinAds.Ads
             ctaRect.anchoredPosition = Vector2.zero;
 
             var ctaBg = ctaObj.AddComponent<Image>();
-            ctaBg.color = new Color(0.259f, 0.522f, 0.957f, 1f); // #4285f4
+            ctaBg.color = theme.PrimaryButton;
 
             var ctaButton = ctaObj.AddComponent<UnityEngine.UI.Button>();
             ctaButton.targetGraphic = ctaBg;
@@ -324,7 +325,7 @@ namespace ZeyWinAds.Ads
             ctaText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             ctaText.text = ctaLabel;
             ctaText.fontSize = 18;
-            ctaText.color = Color.white;
+            ctaText.color = theme.PrimaryButtonText;
             ctaText.fontStyle = FontStyle.Bold;
             ctaText.alignment = TextAnchor.MiddleCenter;
 

@@ -195,6 +195,7 @@ namespace ZeyWinAds.Ads
         private void ShowNativeAd()
         {
             Logger.Debug("Loading rewarded native");
+            var theme = AdThemeController.Current;
 
             // Use same layout as interstitial native, with timer for reward
             float duration = AdData.duration_sec > 0 ? AdData.duration_sec : ImageDurationSeconds;
@@ -209,7 +210,7 @@ namespace ZeyWinAds.Ads
             cardRect.sizeDelta = Vector2.zero;
 
             var cardBg = cardObj.AddComponent<Image>();
-            cardBg.color = Color.white;
+            cardBg.color = theme.Surface;
 
             float pad = 16f;
             float contentTop = 0f;
@@ -251,7 +252,7 @@ namespace ZeyWinAds.Ads
             iconRect.sizeDelta = new Vector2(iconSize, iconSize);
 
             var iconImage = iconObj.AddComponent<RawImage>();
-            iconImage.color = new Color(0.85f, 0.85f, 0.85f, 1f);
+            iconImage.color = theme.ImagePlaceholder;
 
             if (!string.IsNullOrEmpty(AdData.icon_url))
             {
@@ -279,7 +280,7 @@ namespace ZeyWinAds.Ads
             headlineText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             headlineText.text = AdData.ad_text ?? "";
             headlineText.fontSize = 20;
-            headlineText.color = new Color(0.13f, 0.13f, 0.13f, 1f);
+            headlineText.color = theme.TextPrimary;
             headlineText.fontStyle = FontStyle.Bold;
             headlineText.alignment = TextAnchor.LowerLeft;
 
@@ -294,7 +295,7 @@ namespace ZeyWinAds.Ads
             badgeRect.sizeDelta = new Vector2(24f, 16f);
 
             var badgeBg = badgeObj.AddComponent<Image>();
-            badgeBg.color = new Color(0.227f, 0.404f, 0.157f, 1f);
+            badgeBg.color = theme.Accent;
 
             var badgeTextObj = new GameObject("BadgeText");
             badgeTextObj.transform.SetParent(badgeObj.transform, false);
@@ -326,7 +327,7 @@ namespace ZeyWinAds.Ads
                 bodyText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 bodyText.text = AdData.ad_body;
                 bodyText.fontSize = 14;
-                bodyText.color = new Color(0.5f, 0.5f, 0.5f, 1f);
+                bodyText.color = theme.TextSecondary;
                 bodyText.alignment = TextAnchor.UpperLeft;
             }
 
@@ -340,7 +341,7 @@ namespace ZeyWinAds.Ads
             ctaRect.sizeDelta = Vector2.zero;
 
             var ctaBg = ctaObj.AddComponent<Image>();
-            ctaBg.color = new Color(0.259f, 0.522f, 0.957f, 1f);
+            ctaBg.color = theme.PrimaryButton;
 
             var ctaButton = ctaObj.AddComponent<UnityEngine.UI.Button>();
             ctaButton.targetGraphic = ctaBg;
@@ -357,7 +358,7 @@ namespace ZeyWinAds.Ads
             ctaText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             ctaText.text = ctaLabel;
             ctaText.fontSize = 18;
-            ctaText.color = Color.white;
+            ctaText.color = theme.PrimaryButtonText;
             ctaText.fontStyle = FontStyle.Bold;
             ctaText.alignment = TextAnchor.MiddleCenter;
 
@@ -563,6 +564,8 @@ namespace ZeyWinAds.Ads
 
         private void ShowRewardPanel()
         {
+            var theme = AdThemeController.Current;
+
             // Semi-transparent overlay
             var overlay = new GameObject("RewardOverlay");
             overlay.transform.SetParent(_canvas.transform, false);
@@ -571,7 +574,7 @@ namespace ZeyWinAds.Ads
             overlayRect.anchorMax = Vector2.one;
             overlayRect.sizeDelta = Vector2.zero;
             var overlayImage = overlay.AddComponent<Image>();
-            overlayImage.color = new Color(0, 0, 0, 0.7f);
+            overlayImage.color = theme.Overlay;
 
             _rewardPanel = new GameObject("RewardPanel");
             _rewardPanel.transform.SetParent(overlay.transform, false);
@@ -586,7 +589,7 @@ namespace ZeyWinAds.Ads
 
             // Panel background
             var panelImage = _rewardPanel.AddComponent<Image>();
-            panelImage.color = new Color(0.12f, 0.12f, 0.14f, 1f);
+            panelImage.color = theme.Surface;
 
             // Layout
             var layout = _rewardPanel.AddComponent<VerticalLayoutGroup>();
@@ -611,7 +614,7 @@ namespace ZeyWinAds.Ads
             checkCircleRect.anchorMax = new Vector2(0.5f, 0.5f);
             checkCircleRect.sizeDelta = new Vector2(80, 80);
             var checkCircleImage = checkCircle.AddComponent<Image>();
-            checkCircleImage.color = new Color(0.18f, 0.8f, 0.44f, 1f); // Green
+            checkCircleImage.color = theme.PrimaryButton;
 
             var checkText = new GameObject("CheckText");
             checkText.transform.SetParent(checkCircle.transform, false);
@@ -622,7 +625,7 @@ namespace ZeyWinAds.Ads
             var checkLabel = checkText.AddComponent<Text>();
             checkLabel.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             checkLabel.fontSize = 48;
-            checkLabel.color = Color.white;
+            checkLabel.color = theme.PrimaryButtonText;
             checkLabel.alignment = TextAnchor.MiddleCenter;
             checkLabel.text = "\u2713"; // Checkmark
 
@@ -633,7 +636,7 @@ namespace ZeyWinAds.Ads
             titleText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             titleText.fontSize = 28;
             titleText.fontStyle = FontStyle.Bold;
-            titleText.color = Color.white;
+            titleText.color = theme.TextPrimary;
             titleText.alignment = TextAnchor.MiddleCenter;
             titleText.text = "Reward Earned!";
             var titleLayout = titleObj.AddComponent<LayoutElement>();
@@ -645,7 +648,7 @@ namespace ZeyWinAds.Ads
             var subtitleText = subtitleObj.AddComponent<Text>();
             subtitleText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             subtitleText.fontSize = 18;
-            subtitleText.color = new Color(0.7f, 0.7f, 0.7f);
+            subtitleText.color = theme.TextSecondary;
             subtitleText.alignment = TextAnchor.MiddleCenter;
             subtitleText.text = "Thanks for watching";
             var subtitleLayout = subtitleObj.AddComponent<LayoutElement>();
@@ -662,7 +665,7 @@ namespace ZeyWinAds.Ads
             buttonObj.transform.SetParent(_rewardPanel.transform, false);
 
             var buttonImage = buttonObj.AddComponent<Image>();
-            buttonImage.color = new Color(0.18f, 0.8f, 0.44f, 1f); // Green
+            buttonImage.color = theme.PrimaryButton;
 
             _claimButton = buttonObj.AddComponent<Button>();
             _claimButton.targetGraphic = buttonImage;
@@ -670,8 +673,8 @@ namespace ZeyWinAds.Ads
 
             // Button hover colors
             var colors = _claimButton.colors;
-            colors.highlightedColor = new Color(0.22f, 0.9f, 0.5f, 1f);
-            colors.pressedColor = new Color(0.14f, 0.65f, 0.36f, 1f);
+            colors.highlightedColor = theme.PrimaryButtonHighlight;
+            colors.pressedColor = theme.PrimaryButtonPressed;
             _claimButton.colors = colors;
 
             var buttonLayout = buttonObj.AddComponent<LayoutElement>();
@@ -690,7 +693,7 @@ namespace ZeyWinAds.Ads
             buttonText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             buttonText.fontSize = 22;
             buttonText.fontStyle = FontStyle.Bold;
-            buttonText.color = Color.white;
+            buttonText.color = theme.PrimaryButtonText;
             buttonText.alignment = TextAnchor.MiddleCenter;
             buttonText.text = "CLAIM";
         }

@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.0
+
+- Added SDK-owned ad theme detection for light/dark system themes, with Remote Config override through `zeywin_ad_theme_mode=system|light|dark`.
+- Recolored SDK banner, native banner, popup, fullscreen containers, close controls, CTA buttons, badges, and rewarded panels from the resolved ad theme palette.
+- Made the AdMob fullscreen safety backdrop theme-aware while still fully covering the game behind Google fullscreen ads.
+- Updated runtime `SdkVersion` reporting to `3.9.0`.
+
 ## 3.8.4
 
 - Made SDK native/banner CTA text wrap inside the green button instead of shrinking into one line, and matched CTA height to the app icon height for balanced layout.

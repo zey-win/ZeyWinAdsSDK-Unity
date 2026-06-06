@@ -25,15 +25,6 @@ namespace ZeyWinAds.Ads
         private bool _zeyWinSurfaceActive;
         private Coroutine _animCoroutine;
 
-        // Colors matching the screenshot
-        private static readonly Color CardBg = new Color(0.93f, 0.95f, 0.96f, 1f);       // light gray-blue
-        private static readonly Color TitleColor = new Color(0.06f, 0.16f, 0.33f, 1f);    // dark navy
-        private static readonly Color SubtitleColor = new Color(0.30f, 0.35f, 0.42f, 1f); // gray
-        private static readonly Color Btn1Bg = new Color(0.78f, 0.84f, 0.89f, 1f);        // light blue-gray
-        private static readonly Color Btn1Text = new Color(0.25f, 0.35f, 0.45f, 1f);      // dark blue-gray
-        private static readonly Color Btn2Bg = new Color(0.47f, 0.72f, 0.10f, 1f);        // green
-        private static readonly Color CloseColor = new Color(0.50f, 0.55f, 0.60f, 1f);    // gray X
-
         // Rounded-rect sprite cache
         private static Sprite _roundedCardSprite;
         private static Sprite _roundedBtnSprite;
@@ -150,6 +141,7 @@ namespace ZeyWinAds.Ads
 
         private void CreateOverlay()
         {
+            var theme = AdThemeController.Current;
             _overlay = new GameObject("Overlay");
             _overlay.transform.SetParent(_canvas.transform, false);
 
@@ -159,19 +151,20 @@ namespace ZeyWinAds.Ads
             rect.sizeDelta = Vector2.zero;
 
             var img = _overlay.AddComponent<Image>();
-            img.color = new Color(0, 0, 0, 0.4f);
+            img.color = theme.Overlay;
 
             var btn = _overlay.AddComponent<Button>();
             btn.targetGraphic = img;
             var colors = btn.colors;
-            colors.highlightedColor = new Color(0, 0, 0, 0.4f);
-            colors.pressedColor = new Color(0, 0, 0, 0.4f);
+            colors.highlightedColor = theme.Overlay;
+            colors.pressedColor = theme.Overlay;
             btn.colors = colors;
             btn.onClick.AddListener(Close);
         }
 
         private void CreateCard()
         {
+            var theme = AdThemeController.Current;
             float cardMarginH = 36f;   // horizontal margin from screen edges
             float cardMarginB = 30f;   // bottom margin — makes the card "float"
             float cardWidth = 1080f - cardMarginH * 2; // full width minus margins
@@ -212,7 +205,7 @@ namespace ZeyWinAds.Ads
 
             // Card background with rounded corners
             var cardBg = _card.AddComponent<Image>();
-            cardBg.color = CardBg;
+            cardBg.color = theme.Surface;
             cardBg.sprite = CardSprite;
             cardBg.type = Image.Type.Sliced;
             cardBg.pixelsPerUnitMultiplier = 1f;
@@ -244,7 +237,7 @@ namespace ZeyWinAds.Ads
                 rawImgRect.sizeDelta = Vector2.zero;
 
                 var rawImg = imgObj.AddComponent<RawImage>();
-                rawImg.color = new Color(0.85f, 0.87f, 0.90f, 1f);
+                rawImg.color = theme.ImagePlaceholder;
 
                 _canvas.LoadImage(AdData.media_url, (tex) =>
                 {
@@ -284,7 +277,7 @@ namespace ZeyWinAds.Ads
             closeTextRect.sizeDelta = Vector2.zero;
 
             var closeText = closeTextObj.AddComponent<Text>();
-            ApplyTypography(closeText, "\u00D7", 44, 34, FontStyle.Bold, CloseColor, TextAnchor.MiddleCenter, false);
+            ApplyTypography(closeText, "\u00D7", 44, 34, FontStyle.Bold, theme.CloseText, TextAnchor.MiddleCenter, false);
 
             // === Title ===
             var titleObj = new GameObject("Title");
@@ -300,7 +293,7 @@ namespace ZeyWinAds.Ads
             titleRect.offsetMax = new Vector2(-padding - 70f, titleRect.offsetMax.y);
 
             var titleText = titleObj.AddComponent<Text>();
-            ApplyTypography(titleText, AdData.ad_text ?? "", 42, 28, FontStyle.Bold, TitleColor, TextAnchor.MiddleLeft, true);
+            ApplyTypography(titleText, AdData.ad_text ?? "", 42, 28, FontStyle.Bold, theme.TextPrimary, TextAnchor.MiddleLeft, true);
 
             yOffset -= titleHeight;
 
@@ -322,7 +315,7 @@ namespace ZeyWinAds.Ads
                 subRect.offsetMax = new Vector2(-padding, subRect.offsetMax.y);
 
                 var subText = subObj.AddComponent<Text>();
-                ApplyTypography(subText, AdData.ad_body, 30, 20, FontStyle.Normal, SubtitleColor, TextAnchor.UpperLeft, true);
+                ApplyTypography(subText, AdData.ad_body, 30, 20, FontStyle.Normal, theme.TextSecondary, TextAnchor.UpperLeft, true);
 
                 yOffset -= subtitleHeight;
             }
@@ -337,7 +330,7 @@ namespace ZeyWinAds.Ads
                     padding, btnGap / 2f, yOffset, btnHeight,
                     0f, 0.5f,
                     AdData.cta_text ?? "Button 1", 30,
-                    Btn1Bg, Btn1Text,
+                    theme.SecondaryButton, theme.SecondaryButtonText,
                     OnButton1Clicked);
 
                 // Button 2 (right — green): right half
@@ -345,7 +338,7 @@ namespace ZeyWinAds.Ads
                     btnGap / 2f, padding, yOffset, btnHeight,
                     0.5f, 1f,
                     AdData.cta_text_2, 30,
-                    Btn2Bg, Color.white,
+                    theme.PrimaryButton, theme.PrimaryButtonText,
                     OnButton2Clicked);
             }
             else
@@ -355,7 +348,7 @@ namespace ZeyWinAds.Ads
                     padding, padding, yOffset, btnHeight,
                     0f, 1f,
                     AdData.cta_text ?? "OK", 30,
-                    Btn2Bg, Color.white,
+                    theme.PrimaryButton, theme.PrimaryButtonText,
                     OnButton1Clicked);
             }
 
@@ -428,8 +421,8 @@ namespace ZeyWinAds.Ads
             var button = btnObj.AddComponent<Button>();
             button.targetGraphic = btnImg;
             var colors = button.colors;
-            colors.highlightedColor = bgColor * 0.9f;
-            colors.pressedColor = bgColor * 0.8f;
+            colors.highlightedColor = Color.Lerp(bgColor, Color.white, AdThemeController.Current.IsDark ? 0.10f : 0.06f);
+            colors.pressedColor = Color.Lerp(bgColor, Color.black, AdThemeController.Current.IsDark ? 0.18f : 0.12f);
             colors.highlightedColor = new Color(colors.highlightedColor.r, colors.highlightedColor.g, colors.highlightedColor.b, 1f);
             colors.pressedColor = new Color(colors.pressedColor.r, colors.pressedColor.g, colors.pressedColor.b, 1f);
             button.colors = colors;
@@ -494,6 +487,7 @@ namespace ZeyWinAds.Ads
         private void AnimateIn()
         {
             if (_card == null) return;
+            var theme = AdThemeController.Current;
 
             var cardRect = _card.GetComponent<RectTransform>();
             float targetBottom = cardRect.offsetMin.y;  // final bottom offset
@@ -504,7 +498,7 @@ namespace ZeyWinAds.Ads
 
             // Fade overlay from transparent
             var overlayImg = _overlay?.GetComponent<Image>();
-            if (overlayImg != null) overlayImg.color = new Color(0, 0, 0, 0);
+            if (overlayImg != null) overlayImg.color = new Color(theme.Overlay.r, theme.Overlay.g, theme.Overlay.b, 0f);
 
             var flashRect = _goldFlash != null ? _goldFlash.GetComponent<RectTransform>() : null;
             var flashImg = _goldFlash != null ? _goldFlash.GetComponent<Image>() : null;
@@ -523,7 +517,7 @@ namespace ZeyWinAds.Ads
                     cardRect.localScale = new Vector3(scale, scale, 1f);
                 }
                 if (overlayImg != null)
-                    overlayImg.color = new Color(0, 0, 0, 0.4f * ease);
+                    overlayImg.color = new Color(theme.Overlay.r, theme.Overlay.g, theme.Overlay.b, theme.Overlay.a * ease);
 
                 float flash = Mathf.Sin(Mathf.PI * Mathf.Clamp01(t));
                 if (flashRect != null)
@@ -563,6 +557,7 @@ namespace ZeyWinAds.Ads
             float endTop = startTop + shift;
 
             var overlayImg = _overlay?.GetComponent<Image>();
+            var theme = AdThemeController.Current;
 
             _animCoroutine = _canvas.StartCoroutine(AnimateCoroutine(0.2f, (t) =>
             {
@@ -575,7 +570,7 @@ namespace ZeyWinAds.Ads
                     cardRect.offsetMax = new Vector2(cardRect.offsetMax.x, curTop);
                 }
                 if (overlayImg != null)
-                    overlayImg.color = new Color(0, 0, 0, 0.4f * (1f - ease));
+                    overlayImg.color = new Color(theme.Overlay.r, theme.Overlay.g, theme.Overlay.b, theme.Overlay.a * (1f - ease));
             }, onComplete));
         }
 

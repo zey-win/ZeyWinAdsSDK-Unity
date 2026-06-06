@@ -3,6 +3,7 @@ using System.Collections;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
+using ZeyWinAds.Core;
 using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.UI
@@ -107,9 +108,10 @@ namespace ZeyWinAds.UI
             rectTransform.sizeDelta = Vector2.zero;
             rectTransform.anchoredPosition = Vector2.zero;
 
-            // Dark background
+            var theme = AdThemeController.Current;
+
             var image = container.AddComponent<Image>();
-            image.color = new Color(0, 0, 0, 0.95f);
+            image.color = theme.FullscreenBackground;
 
             return container;
         }
@@ -137,9 +139,10 @@ namespace ZeyWinAds.UI
             rectTransform.anchoredPosition = new Vector2(-40 - rightInset / scaleFactor, -40 - topInset / scaleFactor);
             rectTransform.sizeDelta = new Vector2(100, 100);
 
-            // Button background
+            var theme = AdThemeController.Current;
+
             var buttonImage = buttonObj.AddComponent<Image>();
-            buttonImage.color = new Color(0.2f, 0.2f, 0.2f, 0.8f);
+            buttonImage.color = new Color(theme.SecondaryButton.r, theme.SecondaryButton.g, theme.SecondaryButton.b, 0.92f);
 
             // Make it circular
             // Note: For a truly circular button, you'd use a sprite mask or custom shader
@@ -162,7 +165,7 @@ namespace ZeyWinAds.UI
             var text = textObj.AddComponent<Text>();
             text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
             text.fontSize = 56;
-            text.color = Color.white;
+            text.color = theme.SecondaryButtonText;
             text.alignment = TextAnchor.MiddleCenter;
             text.text = "\u00D7"; // Multiplication sign as X
 

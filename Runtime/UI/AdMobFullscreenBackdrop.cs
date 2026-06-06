@@ -5,7 +5,7 @@ using Logger = ZeyWinAds.Core.Logger;
 namespace ZeyWinAds.UI
 {
     /// <summary>
-    /// Covers the Unity game with a solid black surface while Google Mobile Ads
+    /// Covers the Unity game with an opaque themed surface while Google Mobile Ads
     /// renders a fullscreen interstitial or rewarded ad above Unity.
     /// </summary>
     internal static class AdMobFullscreenBackdrop
@@ -13,15 +13,17 @@ namespace ZeyWinAds.UI
         private const int SortingOrder = 32000;
 
         private static GameObject _root;
+        private static Image _image;
         private static int _depth;
 
         public static void Show(string reason)
         {
             _depth++;
             Ensure();
+            ApplyTheme();
             if (_root != null && !_root.activeSelf)
                 _root.SetActive(true);
-            Logger.Debug("[AdMob] Fullscreen black backdrop shown: {0}", SafeReason(reason));
+            Logger.Debug("[AdMob] Fullscreen themed backdrop shown: {0}", SafeReason(reason));
         }
 
         public static void Hide(string reason)
@@ -31,7 +33,7 @@ namespace ZeyWinAds.UI
 
             if (_depth == 0 && _root != null)
                 _root.SetActive(false);
-            Logger.Debug("[AdMob] Fullscreen black backdrop hidden: {0}", SafeReason(reason));
+            Logger.Debug("[AdMob] Fullscreen themed backdrop hidden: {0}", SafeReason(reason));
         }
 
         public static void ForceHide(string reason)
@@ -39,7 +41,7 @@ namespace ZeyWinAds.UI
             _depth = 0;
             if (_root != null)
                 _root.SetActive(false);
-            Logger.Debug("[AdMob] Fullscreen black backdrop force hidden: {0}", SafeReason(reason));
+            Logger.Debug("[AdMob] Fullscreen themed backdrop force hidden: {0}", SafeReason(reason));
         }
 
         private static void Ensure()
@@ -73,6 +75,15 @@ namespace ZeyWinAds.UI
             var image = blocker.AddComponent<Image>();
             image.color = Color.black;
             image.raycastTarget = true;
+            _image = image;
+        }
+
+        private static void ApplyTheme()
+        {
+            if (_image == null)
+                return;
+
+            _image.color = global::ZeyWinAds.Core.AdThemeController.Current.AdMobFullscreenBackground;
         }
 
         private static string SafeReason(string reason)

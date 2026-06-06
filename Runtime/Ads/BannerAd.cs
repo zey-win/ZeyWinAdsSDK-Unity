@@ -189,7 +189,7 @@ namespace ZeyWinAds.Ads
 
             // Background
             var background = _bannerContainer.AddComponent<Image>();
-            background.color = new Color(0.1f, 0.1f, 0.1f, 1f);
+            background.color = AdThemeController.Current.SurfacePressed;
 
             // Click area
             _clickArea = _bannerContainer.AddComponent<Button>();

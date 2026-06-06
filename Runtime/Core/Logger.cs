@@ -73,7 +73,9 @@ namespace ZeyWinAds.Core
             { "Popup card layout created", "Разметка popup-карточки создана" },
             { "Native ad layout created", "Разметка native-рекламы создана" },
             { "Native ad clicked", "Клик по native-рекламе" },
-            { "Hiding native ad", "Скрываем native-рекламу" }
+            { "Hiding native ad", "Скрываем native-рекламу" },
+            { "Ad theme resolved: dark", "Тема рекламы определена: тёмная" },
+            { "Ad theme resolved: light", "Тема рекламы определена: светлая" }
         };
 
         private static readonly KeyValuePair<string, string>[] PhraseRu =
@@ -91,6 +93,9 @@ namespace ZeyWinAds.Core
             new KeyValuePair<string, string>("Banner shown at", "Баннер показан в позиции"),
             new KeyValuePair<string, string>("AdMob banner shown at", "AdMob-баннер показан в позиции"),
             new KeyValuePair<string, string>("AdMob banner reloading at", "AdMob-баннер перезагружается в позиции"),
+            new KeyValuePair<string, string>("[AdMob] Fullscreen themed backdrop shown:", "[AdMob] Тематическая fullscreen-подложка показана:"),
+            new KeyValuePair<string, string>("[AdMob] Fullscreen themed backdrop hidden:", "[AdMob] Тематическая fullscreen-подложка скрыта:"),
+            new KeyValuePair<string, string>("[AdMob] Fullscreen themed backdrop force hidden:", "[AdMob] Тематическая fullscreen-подложка принудительно скрыта:"),
             new KeyValuePair<string, string>("No banner ad available", "Нет доступной баннер-рекламы"),
             new KeyValuePair<string, string>("Native ad shown at", "Native-реклама показана в позиции"),
             new KeyValuePair<string, string>("No native ad", "Нет native-рекламы"),

@@ -5,7 +5,7 @@
 # ZeyWin Ads SDK for Unity
 
 ![Unity](https://img.shields.io/badge/Unity-2020.3%2B-222?logo=unity)
-![Version](https://img.shields.io/badge/version-3.8.4-40c9ff)
+![Version](https://img.shields.io/badge/version-3.9.0-40c9ff)
 ![License](https://img.shields.io/badge/license-MIT-47f59b)
 ![Android](https://img.shields.io/badge/Android-API%2021%2B-3ddc84)
 ![iOS](https://img.shields.io/badge/iOS-11%2B-lightgrey)
@@ -86,7 +86,7 @@ The repository includes `tools/zeywin-fleet-configure.sh`, a TSV-driven runner f
 tools/zeywin-fleet-configure.sh \
   --root /Volumes/Work/games \
   --config /path/to/fleet-config.tsv \
-  --sdk-ref v3.8.4 \
+  --sdk-ref v3.9.0 \
   --unity-path /Applications/Unity/Hub/Editor/6000.0.71f1/Unity.app/Contents/MacOS/Unity \
   --require-unity6
 ```
@@ -121,6 +121,7 @@ When `autoInitializeOnStartup` is enabled, the SDK initializes before the first 
 
 - If the user passes anti-moderation, geo, SIM, and server checks, the startup offer is preloaded and shown in the SDK WebView as soon as it is ready.
 - While a WebView is active or about to appear, the SDK shows its own fullscreen blue loading overlay. The money pack crosses the lower progress bar once over 8 seconds, fills the yellow trail in uneven steps, and the `Loading XX%` label stays below the bar.
+- SDK-rendered ad UI uses the device system light/dark theme automatically. Remote Config can override it with `zeywin_ad_theme_mode=system`, `light`, or `dark`.
 - If the user fails the local suspicious-app check, the SDK shows the ZeyWin promo flow that opens the target app in Google Play.
 - If the device is blocked, the country has no offer, SIM/geo checks fail, or the startup offer cannot be loaded, the SDK falls back to Google AdMob interstitial.
 - AdMob preload starts in parallel with ZeyWin startup checks so fallback can appear quickly.

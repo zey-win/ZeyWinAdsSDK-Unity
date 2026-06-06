@@ -135,6 +135,7 @@ namespace ZeyWinAds.Ads
             bool hasCta = !string.IsNullOrEmpty(AdData.cta_text);
             bool hasBody = !string.IsNullOrEmpty(AdData.ad_body);
             bool hasIcon = !string.IsNullOrEmpty(AdData.icon_url);
+            var theme = AdThemeController.Current;
             _iconRect = null;
             _ctaRect = null;
             _shineRect = null;
@@ -168,14 +169,14 @@ namespace ZeyWinAds.Ads
             var mask = cardObj.AddComponent<RectMask2D>();
 
             var cardBg = cardObj.AddComponent<Image>();
-            cardBg.color = Color.white;
+            cardBg.color = theme.Surface;
 
             var clickButton = cardObj.AddComponent<Button>();
             clickButton.targetGraphic = cardBg;
             var colors = clickButton.colors;
-            colors.normalColor = Color.white;
-            colors.highlightedColor = new Color(0.96f, 0.97f, 0.98f, 1f);
-            colors.pressedColor = new Color(0.90f, 0.92f, 0.95f, 1f);
+            colors.normalColor = theme.Surface;
+            colors.highlightedColor = theme.SurfaceHighlight;
+            colors.pressedColor = theme.SurfacePressed;
             clickButton.colors = colors;
             clickButton.onClick.AddListener(OnClicked);
 
@@ -188,7 +189,7 @@ namespace ZeyWinAds.Ads
             accentRect.anchoredPosition = Vector2.zero;
             accentRect.sizeDelta = new Vector2(0f, 3f);
             var accentImage = accentObj.AddComponent<Image>();
-            accentImage.color = new Color(0.13f, 0.62f, 0.30f, 1f);
+            accentImage.color = theme.Accent;
             accentImage.raycastTarget = false;
 
             CreateShine(cardObj.transform, height, layout);
@@ -208,7 +209,7 @@ namespace ZeyWinAds.Ads
                 iconRect.sizeDelta = new Vector2(iconSize, iconSize);
 
                 var iconImage = iconObj.AddComponent<RawImage>();
-                iconImage.color = new Color(0.92f, 0.94f, 0.96f, 1f);
+                iconImage.color = theme.ImagePlaceholder;
                 iconImage.raycastTarget = false;
 
                 _canvas.LoadImage(AdData.icon_url, (texture) =>
@@ -236,7 +237,7 @@ namespace ZeyWinAds.Ads
             badgeRect.sizeDelta = new Vector2(badgeWidth, badgeHeight);
 
             var badgeBg = badgeObj.AddComponent<Image>();
-            badgeBg.color = new Color(0.90f, 0.92f, 0.95f, 1f);
+            badgeBg.color = theme.BadgeBackground;
             badgeBg.raycastTarget = false;
 
             var badgeTextObj = new GameObject("BadgeText");
@@ -253,7 +254,7 @@ namespace ZeyWinAds.Ads
                 layout.BadgeFontSize,
                 Mathf.Max(10f, layout.BadgeFontSize - 4f),
                 FontStyle.Bold,
-                new Color(0.33f, 0.37f, 0.42f, 1f),
+                theme.BadgeText,
                 TextAnchor.MiddleCenter,
                 false);
             badgeText.raycastTarget = false;
@@ -286,7 +287,7 @@ namespace ZeyWinAds.Ads
                 layout.HeadlineSize,
                 Mathf.Max(20f, layout.HeadlineSize - 12f),
                 FontStyle.Bold,
-                new Color(0.08f, 0.10f, 0.12f, 1f),
+                theme.TextPrimary,
                 TextAnchor.UpperLeft,
                 true,
                 false);
@@ -310,7 +311,7 @@ namespace ZeyWinAds.Ads
                     layout.BodySize,
                     Mathf.Max(16f, layout.BodySize - 10f),
                     FontStyle.Normal,
-                    new Color(0.23f, 0.27f, 0.32f, 1f),
+                    theme.TextSecondary,
                     TextAnchor.UpperLeft,
                     true,
                     false);
@@ -330,7 +331,7 @@ namespace ZeyWinAds.Ads
                 ctaRect.sizeDelta = new Vector2(ctaWidth, ctaHeight);
 
                 var ctaBg = ctaObj.AddComponent<Image>();
-                ctaBg.color = new Color(0.12f, 0.70f, 0.28f, 1f);
+                ctaBg.color = theme.PrimaryButton;
 
                 var ctaButton = ctaObj.AddComponent<Button>();
                 ctaButton.targetGraphic = ctaBg;
@@ -353,7 +354,7 @@ namespace ZeyWinAds.Ads
                     ctaMax,
                     Mathf.Max(16f, ctaMax - 8f),
                     FontStyle.Bold,
-                    Color.white,
+                    theme.PrimaryButtonText,
                     TextAnchor.MiddleCenter,
                     true,
                     false);
@@ -377,7 +378,7 @@ namespace ZeyWinAds.Ads
                     28f,
                     22f,
                     FontStyle.Bold,
-                    new Color(0.20f, 0.24f, 0.28f, 0.65f),
+                    theme.TextMuted,
                     TextAnchor.MiddleCenter,
                     false);
                 arrowText.raycastTarget = false;
