@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.5
+
+- Fixed the legacy `AdManager` popup handler patch so popup ads pause the banner timer and hide only AdMob, leaving the ZeyWin native banner alive underneath the popup.
+- Kept the ordinary game `HideBanner()` method untouched so explicit banner shutdown still hides both networks.
+- Updated runtime `SdkVersion` reporting to `3.9.5`.
+
 ## 3.9.4
 
 - Added an SDK-side legacy `AdManager` banner rotation patcher so old games keep the ZeyWin native banner visible instead of switching into an empty AdMob interval after 15+15 seconds.

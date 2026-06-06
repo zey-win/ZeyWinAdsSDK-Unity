@@ -131,9 +131,24 @@ namespace ZeyWinAds.Editor
                 "    }",
                 ref changes);
 
-            text = ReplaceOnce(text,
-                "        HideBanner(AdNetwork.ZeyWin);\n        HideBanner(AdNetwork.AdMob);",
-                "        HideBanner(AdNetwork.AdMob);",
+            text = ReplaceMethod(text,
+                "    private void HandleZeyWinAdWillShow(AdType adType)",
+                "    private void HandleZeyWinAdWillShow(AdType adType)\n" +
+                "    {\n" +
+                "        if (adType != AdType.Popup)\n" +
+                "            return;\n\n" +
+                "        Debug.Log(\"[BannerRotation] ZeyWin popup will show -> pause timer; native banner stays underneath\");\n\n" +
+                "        _isPopupShowing = true;\n\n" +
+                "        if (!AdsEnabled)\n" +
+                "            return;\n\n" +
+                "        if (!_bannerRequestedVisible)\n" +
+                "            return;\n\n" +
+                "        if (_bannersHiddenForPopup)\n" +
+                "            return;\n\n" +
+                "        _bannersHiddenForPopup = true;\n\n" +
+                "        PauseBannerRotationTimer();\n" +
+                "        HideBanner(AdNetwork.AdMob);\n" +
+                "    }",
                 ref changes);
 
             if (text == original)
