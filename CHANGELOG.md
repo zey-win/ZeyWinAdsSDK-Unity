@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.8.3
+
+- Fixed SDK native/banner ad typography so title and description use adaptive word wrapping instead of shrinking into a single clipped line.
+- Widened the mobile native/banner card to the full screen width, reserved stable right-side CTA space, and calculates title/body row heights from available text width.
+- Updated runtime `SdkVersion` reporting to `3.8.3`.
+
 ## 3.8.2
 
 - Fixed Android editor compilation for SDK WebView frame-rate setup by exposing the WebView frame-rate bridge during Android batch builds while keeping the native Java call device-only.

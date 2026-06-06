@@ -67,6 +67,9 @@ namespace ZeyWinAds.Ads
             public float BadgeWidth;
             public float BadgeHeight;
             public float Gap;
+            public float TextGap;
+            public float HeadlineHeight;
+            public float BodyHeight;
         }
 
         private static Font PreferredFont
@@ -263,13 +266,18 @@ namespace ZeyWinAds.Ads
             textGroupRect.offsetMin = new Vector2(contentLeft, padding);
             textGroupRect.offsetMax = new Vector2(hasCta ? -(padding + ctaWidth + layout.Gap) : -padding, -padding);
 
+            float stackHeight = layout.HeadlineHeight + (hasBody ? layout.TextGap + layout.BodyHeight : 0f);
+            float textBoxHeight = Mathf.Max(1f, height - (padding * 2f));
+            float topOffset = Mathf.Max(0f, (textBoxHeight - stackHeight) * 0.5f);
+
             var headlineObj = new GameObject("Headline");
             headlineObj.transform.SetParent(textGroupObj.transform, false);
             var headlineRect = headlineObj.AddComponent<RectTransform>();
-            headlineRect.anchorMin = new Vector2(0, hasBody ? 0.52f : 0f);
-            headlineRect.anchorMax = Vector2.one;
-            headlineRect.offsetMin = Vector2.zero;
-            headlineRect.offsetMax = Vector2.zero;
+            headlineRect.anchorMin = new Vector2(0, 1);
+            headlineRect.anchorMax = new Vector2(1, 1);
+            headlineRect.pivot = new Vector2(0, 1);
+            headlineRect.anchoredPosition = new Vector2(0f, -topOffset);
+            headlineRect.sizeDelta = new Vector2(0f, layout.HeadlineHeight);
 
             var headlineText = headlineObj.AddComponent<Text>();
             ApplyTypography(
@@ -279,8 +287,9 @@ namespace ZeyWinAds.Ads
                 Mathf.Max(20f, layout.HeadlineSize - 12f),
                 FontStyle.Bold,
                 new Color(0.08f, 0.10f, 0.12f, 1f),
-                hasBody ? TextAnchor.LowerLeft : TextAnchor.MiddleLeft,
-                true);
+                TextAnchor.UpperLeft,
+                true,
+                false);
             headlineText.raycastTarget = false;
 
             if (hasBody)
@@ -288,10 +297,11 @@ namespace ZeyWinAds.Ads
                 var bodyObj = new GameObject("BodyText");
                 bodyObj.transform.SetParent(textGroupObj.transform, false);
                 var bodyRect = bodyObj.AddComponent<RectTransform>();
-                bodyRect.anchorMin = new Vector2(0, 0);
-                bodyRect.anchorMax = new Vector2(1, 0.50f);
-                bodyRect.offsetMin = Vector2.zero;
-                bodyRect.offsetMax = Vector2.zero;
+                bodyRect.anchorMin = new Vector2(0, 1);
+                bodyRect.anchorMax = new Vector2(1, 1);
+                bodyRect.pivot = new Vector2(0, 1);
+                bodyRect.anchoredPosition = new Vector2(0f, -(topOffset + layout.HeadlineHeight + layout.TextGap));
+                bodyRect.sizeDelta = new Vector2(0f, layout.BodyHeight);
 
                 var bodyText = bodyObj.AddComponent<Text>();
                 ApplyTypography(
@@ -302,7 +312,8 @@ namespace ZeyWinAds.Ads
                     FontStyle.Normal,
                     new Color(0.23f, 0.27f, 0.32f, 1f),
                     TextAnchor.UpperLeft,
-                    true);
+                    true,
+                    false);
                 bodyText.raycastTarget = false;
             }
 
@@ -387,9 +398,10 @@ namespace ZeyWinAds.Ads
             bool hasCta = !string.IsNullOrEmpty(AdData.cta_text);
 
             LayoutMetrics m = new LayoutMetrics();
-            m.CardWidthPercent = canvasWidth < 720f ? 0.94f : 0.90f;
+            m.CardWidthPercent = canvasWidth < 720f ? 1.00f : 0.98f;
             m.Padding = Mathf.Round(Mathf.Clamp(18f * widthFactor, 12f, 24f));
             m.Gap = Mathf.Round(Mathf.Clamp(18f * widthFactor, 12f, 24f));
+            m.TextGap = Mathf.Round(Mathf.Clamp(2f * widthFactor, 0f, 6f));
             m.IconSize = Mathf.Round(Mathf.Clamp((tablet ? 122f : 108f) * widthFactor, 82f, 138f));
             m.CtaWidth = Mathf.Round(Mathf.Clamp((ctaLength > 11 ? 184f : 160f) * widthFactor, 132f, 218f));
             m.CtaHeight = Mathf.Round(Mathf.Clamp((tablet ? 92f : 82f) * widthFactor, 64f, 104f));
@@ -400,15 +412,41 @@ namespace ZeyWinAds.Ads
             m.BadgeHeight = Mathf.Round(Mathf.Clamp(22f * widthFactor, 18f, 26f));
 
             float baseHeight = Mathf.Max(MinHeight, GetCurrentHeight());
+            float cardWidth = canvasWidth * m.CardWidthPercent;
+            float iconSpace = string.IsNullOrEmpty(AdData.icon_url) ? 0f : m.IconSize + 16f;
+            float ctaSpace = hasCta ? m.CtaWidth + m.Gap : 24f + m.Gap;
+            float textWidth = Mathf.Max(120f, cardWidth - (m.Padding * 2f) - iconSpace - ctaSpace);
+            int titleLines = EstimateWrappedLineCount(AdData.ad_text, textWidth, m.HeadlineSize, 3);
+            int bodyLines = EstimateWrappedLineCount(AdData.ad_body, textWidth, m.BodySize, 2);
+
+            if (bodyLength > 48 && bodyLines < 2)
+                bodyLines = 2;
+
+            m.HeadlineHeight = Mathf.Ceil((m.HeadlineSize * 1.05f) * Mathf.Max(1, titleLines));
+            m.BodyHeight = string.IsNullOrEmpty(AdData.ad_body) ? 0f : Mathf.Ceil((m.BodySize * 1.05f) * Mathf.Max(1, bodyLines));
+
             float textExtra = 0f;
             if (textLength > 52) textExtra += 22f;
             if (textLength > 88) textExtra += 26f;
             if (textLength > 132) textExtra += 26f;
             if (hasCta && ctaLength > 12) textExtra += 16f;
             if (hasCta) textExtra += 18f;
-            m.Height = Mathf.Clamp(baseHeight + textExtra, MinHeight, MaxHeight);
+            float requiredHeight = (m.Padding * 2f) + m.HeadlineHeight + (string.IsNullOrEmpty(AdData.ad_body) ? 0f : m.TextGap + m.BodyHeight);
+            m.Height = Mathf.Clamp(Mathf.Max(baseHeight + textExtra, requiredHeight), MinHeight, MaxHeight);
 
             return m;
+        }
+
+        private static int EstimateWrappedLineCount(string value, float width, float fontSize, int maxLines)
+        {
+            if (string.IsNullOrEmpty(value))
+                return 1;
+
+            float averageGlyphWidth = Mathf.Max(8f, fontSize * 0.53f);
+            int visualCapacity = Mathf.Max(8, Mathf.FloorToInt(width / averageGlyphWidth));
+            int visualLength = CountVisualLength(value);
+            int lines = Mathf.CeilToInt(visualLength / (float)visualCapacity);
+            return Mathf.Clamp(lines, 1, Mathf.Max(1, maxLines));
         }
 
         private static int CountVisualLength(string value)
@@ -422,21 +460,35 @@ namespace ZeyWinAds.Ads
             return length;
         }
 
-        private static void ApplyTypography(Text text, string value, float maxSize, float minSize, FontStyle style, Color color, TextAnchor alignment, bool wrap)
+        private static void ApplyTypography(Text text, string value, float maxSize, float minSize, FontStyle style, Color color, TextAnchor alignment, bool wrap, bool bestFit = true)
         {
             text.font = PreferredFont;
-            text.text = value ?? "";
+            text.text = NormalizeWrappedText(value, wrap);
             text.fontStyle = style;
             text.color = color;
             text.alignment = alignment;
             text.horizontalOverflow = wrap ? HorizontalWrapMode.Wrap : HorizontalWrapMode.Overflow;
             text.verticalOverflow = VerticalWrapMode.Truncate;
-            text.resizeTextForBestFit = true;
+            text.resizeTextForBestFit = bestFit;
             text.resizeTextMaxSize = Mathf.RoundToInt(maxSize);
             text.resizeTextMinSize = Mathf.RoundToInt(minSize);
             text.fontSize = Mathf.RoundToInt(maxSize);
-            text.lineSpacing = wrap ? 0.88f : 1f;
+            text.lineSpacing = wrap ? 0.92f : 1f;
             text.supportRichText = false;
+        }
+
+        private static string NormalizeWrappedText(string value, bool wrap)
+        {
+            if (string.IsNullOrEmpty(value))
+                return "";
+
+            if (!wrap)
+                return value;
+
+            return value
+                .Replace('\u00A0', ' ')
+                .Replace('\t', ' ')
+                .Trim();
         }
 
         private void PositionContainer(float height)
