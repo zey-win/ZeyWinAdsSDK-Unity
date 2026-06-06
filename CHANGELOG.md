@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.1
+
+- Fixed SDK native/banner ad layout so long localized titles and descriptions wrap into stable multi-line blocks instead of compressing or drawing under the CTA.
+- Collapsed repeated whitespace and inserted invisible soft-break points in long words so Ukrainian/Russian/English copy can adapt to narrow screens without visual gaps.
+- Recalculated banner height, text width, and CTA width from the actual device canvas so the icon, wrapped copy, and CTA button stay in separate non-overlapping columns.
+- Updated runtime `SdkVersion` reporting to `3.9.1`.
+
 ## 3.9.0
 
 - Added SDK-owned ad theme detection for light/dark system themes, with Remote Config override through `zeywin_ad_theme_mode=system|light|dark`.

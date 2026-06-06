@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 using ZeyWinAds.Core;
@@ -19,7 +20,7 @@ namespace ZeyWinAds.Ads
         public const float DefaultHeight = 176f;
         public const float DefaultTabletHeight = 210f;
 
-        private const float MaxHeight = 300f;
+        private const float MaxHeight = 360f;
         private const float SlideDuration = 0.34f;
         private const float AttentionIntervalSeconds = 6.5f;
 
@@ -70,6 +71,9 @@ namespace ZeyWinAds.Ads
             public float TextGap;
             public float HeadlineHeight;
             public float BodyHeight;
+            public float TextWidth;
+            public int HeadlineLines;
+            public int BodyLines;
         }
 
         private static Font PreferredFont
@@ -385,7 +389,13 @@ namespace ZeyWinAds.Ads
             }
 
             StartSlideIn();
-            Logger.Debug("Native ad layout created");
+            Logger.Debug(
+                "Native ad adaptive layout: height={0}, textWidth={1}, titleLines={2}, bodyLines={3}, ctaWidth={4}",
+                Mathf.RoundToInt(layout.Height),
+                Mathf.RoundToInt(layout.TextWidth),
+                layout.HeadlineLines,
+                layout.BodyLines,
+                Mathf.RoundToInt(layout.CtaWidth));
         }
 
         private LayoutMetrics CalculateLayoutMetrics()
@@ -395,47 +405,62 @@ namespace ZeyWinAds.Ads
             float widthFactor = Mathf.Clamp(canvasWidth / 1080f, 0.78f, 1.18f);
             bool tablet = DeviceInfo.GetDeviceType() == "tablet";
 
-            int titleLength = CountVisualLength(AdData.ad_text);
-            int bodyLength = CountVisualLength(AdData.ad_body);
-            int ctaLength = CountVisualLength(AdData.cta_text);
+            string title = NormalizeWrappedText(AdData.ad_text, true);
+            string body = NormalizeWrappedText(AdData.ad_body, true);
+            string cta = NormalizeWrappedText(AdData.cta_text, true);
+            int titleLength = CountVisualLength(title);
+            int bodyLength = CountVisualLength(body);
+            int ctaLength = CountVisualLength(cta);
             int textLength = titleLength + bodyLength;
-            bool hasCta = !string.IsNullOrEmpty(AdData.cta_text);
+            bool hasBody = !string.IsNullOrEmpty(body);
+            bool hasCta = !string.IsNullOrEmpty(cta);
 
             LayoutMetrics m = new LayoutMetrics();
             m.CardWidthPercent = canvasWidth < 720f ? 1.00f : 0.98f;
             m.Padding = Mathf.Round(Mathf.Clamp(18f * widthFactor, 12f, 24f));
             m.Gap = Mathf.Round(Mathf.Clamp(18f * widthFactor, 12f, 24f));
-            m.TextGap = Mathf.Round(Mathf.Clamp(2f * widthFactor, 0f, 6f));
+            m.TextGap = Mathf.Round(Mathf.Clamp(6f * widthFactor, 3f, 8f));
             m.IconSize = Mathf.Round(Mathf.Clamp((tablet ? 122f : 108f) * widthFactor, 82f, 138f));
-            m.CtaWidth = Mathf.Round(Mathf.Clamp((ctaLength > 11 ? 214f : 178f) * widthFactor, 150f, 246f));
-            m.CtaHeight = m.IconSize;
-            m.HeadlineSize = Mathf.Round(Mathf.Clamp((titleLength > 42 ? 31f : 36f) * widthFactor, 24f, 40f));
-            m.BodySize = Mathf.Round(Mathf.Clamp((bodyLength > 58 ? 24f : 28f) * widthFactor, 18f, 32f));
+            m.HeadlineSize = Mathf.Round(Mathf.Clamp((titleLength > 88 ? 29f : titleLength > 52 ? 32f : 37f) * widthFactor, 23f, 40f));
+            m.BodySize = Mathf.Round(Mathf.Clamp((bodyLength > 76 ? 23f : bodyLength > 44 ? 25f : 29f) * widthFactor, 18f, 32f));
             m.BadgeFontSize = Mathf.Round(Mathf.Clamp(14f * widthFactor, 11f, 16f));
             m.BadgeWidth = Mathf.Round(Mathf.Clamp(38f * widthFactor, 30f, 44f));
             m.BadgeHeight = Mathf.Round(Mathf.Clamp(22f * widthFactor, 18f, 26f));
 
             float baseHeight = Mathf.Max(MinHeight, GetCurrentHeight());
             float cardWidth = canvasWidth * m.CardWidthPercent;
+            float usableWidth = Mathf.Max(1f, cardWidth - (m.Padding * 2f));
             float iconSpace = string.IsNullOrEmpty(AdData.icon_url) ? 0f : m.IconSize + 16f;
+            float preferredCtaWidth = Mathf.Clamp((ctaLength > 14 ? 224f : ctaLength > 9 ? 194f : 176f) * widthFactor, 138f, 250f);
+            float maxCtaWidth = Mathf.Clamp(usableWidth * (textLength > 92 ? 0.22f : 0.25f), 130f, 250f);
+            m.CtaWidth = hasCta ? Mathf.Round(Mathf.Min(preferredCtaWidth, maxCtaWidth)) : 0f;
+            m.CtaHeight = m.IconSize;
+
             float ctaSpace = hasCta ? m.CtaWidth + m.Gap : 24f + m.Gap;
-            float textWidth = Mathf.Max(120f, cardWidth - (m.Padding * 2f) - iconSpace - ctaSpace);
-            int titleLines = EstimateWrappedLineCount(AdData.ad_text, textWidth, m.HeadlineSize, 3);
-            int bodyLines = EstimateWrappedLineCount(AdData.ad_body, textWidth, m.BodySize, 2);
+            float textWidth = Mathf.Max(120f, usableWidth - iconSpace - ctaSpace);
+            m.TextWidth = textWidth;
+
+            int maxTitleLines = titleLength > 118 ? 4 : 3;
+            int maxBodyLines = bodyLength > 96 ? 3 : 2;
+            int titleLines = EstimateWrappedLineCount(title, textWidth, m.HeadlineSize, maxTitleLines);
+            int bodyLines = hasBody ? EstimateWrappedLineCount(body, textWidth, m.BodySize, maxBodyLines) : 0;
 
             if (bodyLength > 48 && bodyLines < 2)
                 bodyLines = 2;
 
-            m.HeadlineHeight = Mathf.Ceil((m.HeadlineSize * 1.05f) * Mathf.Max(1, titleLines));
-            m.BodyHeight = string.IsNullOrEmpty(AdData.ad_body) ? 0f : Mathf.Ceil((m.BodySize * 1.05f) * Mathf.Max(1, bodyLines));
+            m.HeadlineLines = Mathf.Max(1, titleLines);
+            m.BodyLines = Mathf.Max(0, bodyLines);
+            m.HeadlineHeight = Mathf.Ceil((m.HeadlineSize * 1.16f) * m.HeadlineLines);
+            m.BodyHeight = hasBody ? Mathf.Ceil((m.BodySize * 1.16f) * Mathf.Max(1, bodyLines)) : 0f;
 
             float textExtra = 0f;
-            if (textLength > 52) textExtra += 22f;
-            if (textLength > 88) textExtra += 26f;
+            if (textLength > 52) textExtra += 18f;
+            if (textLength > 88) textExtra += 22f;
             if (textLength > 132) textExtra += 26f;
-            if (hasCta && ctaLength > 12) textExtra += 16f;
-            if (hasCta) textExtra += 18f;
-            float requiredHeight = (m.Padding * 2f) + m.HeadlineHeight + (string.IsNullOrEmpty(AdData.ad_body) ? 0f : m.TextGap + m.BodyHeight);
+            if (hasCta && ctaLength > 12) textExtra += 12f;
+
+            float textStackHeight = m.HeadlineHeight + (hasBody ? m.TextGap + m.BodyHeight : 0f);
+            float requiredHeight = (m.Padding * 2f) + Mathf.Max(m.IconSize, m.CtaHeight, textStackHeight);
             m.Height = Mathf.Clamp(Mathf.Max(baseHeight + textExtra, requiredHeight), MinHeight, MaxHeight);
 
             return m;
@@ -489,10 +514,70 @@ namespace ZeyWinAds.Ads
             if (!wrap)
                 return value;
 
-            return value
+            string normalized = value
                 .Replace('\u00A0', ' ')
                 .Replace('\t', ' ')
+                .Replace('\r', ' ')
+                .Replace('\n', ' ')
                 .Trim();
+
+            return InsertSoftBreaks(CollapseWhitespace(normalized));
+        }
+
+        private static string CollapseWhitespace(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return "";
+
+            var builder = new StringBuilder(value.Length);
+            bool previousWasSpace = false;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                bool isSpace = char.IsWhiteSpace(c);
+                if (isSpace)
+                {
+                    if (!previousWasSpace)
+                        builder.Append(' ');
+                    previousWasSpace = true;
+                }
+                else
+                {
+                    builder.Append(c);
+                    previousWasSpace = false;
+                }
+            }
+
+            return builder.ToString().Trim();
+        }
+
+        private static string InsertSoftBreaks(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+                return "";
+
+            var builder = new StringBuilder(value.Length + 8);
+            int runLength = 0;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                builder.Append(c);
+
+                if (char.IsWhiteSpace(c) || c == '-' || c == '/' || c == '_' || c == '.')
+                {
+                    runLength = 0;
+                    continue;
+                }
+
+                runLength += c > 127 ? 2 : 1;
+                if (runLength >= 18)
+                {
+                    builder.Append('\u200B');
+                    runLength = 0;
+                }
+            }
+
+            return builder.ToString();
         }
 
         private void PositionContainer(float height)
