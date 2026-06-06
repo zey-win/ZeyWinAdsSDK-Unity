@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.6
+
+- Hardened the SDK perceived-smoothness post-effect against early Android render frames where Unity can call `OnRenderImage` before a valid source/history texture exists.
+- Fell back to a normal blit when the smoothness history render texture cannot be created, preventing startup `NullReferenceException` logs.
+- Updated runtime `SdkVersion` reporting to `3.9.6`.
+
 ## 3.9.5
 
 - Fixed the legacy `AdManager` popup handler patch so popup ads pause the banner timer and hide only AdMob, leaving the ZeyWin native banner alive underneath the popup.

@@ -61,23 +61,31 @@ namespace ZeyWinAds.Core
 
         private void OnRenderImage(RenderTexture source, RenderTexture destination)
         {
+            if (source == null || destination == null || source.width <= 0 || source.height <= 0)
+                return;
+
             if (_material == null || !RemoteConfigBridge.GetBool("zeywin_perceived_smoothness_enabled", true))
             {
                 Graphics.Blit(source, destination);
                 return;
             }
 
-            EnsureHistory(source);
+            if (!EnsureHistory(source))
+            {
+                Graphics.Blit(source, destination);
+                return;
+            }
+
             _material.SetTexture("_HistoryTex", _history);
             _material.SetFloat("_Blend", ResolveBlend());
             Graphics.Blit(source, destination, _material);
             Graphics.Blit(source, _history);
         }
 
-        private void EnsureHistory(RenderTexture source)
+        private bool EnsureHistory(RenderTexture source)
         {
             if (_history != null && _history.width == source.width && _history.height == source.height)
-                return;
+                return true;
 
             ReleaseHistory();
             _history = new RenderTexture(source.width, source.height, 0, source.format)
@@ -85,7 +93,15 @@ namespace ZeyWinAds.Core
                 hideFlags = HideFlags.HideAndDontSave
             };
             _history.Create();
+
+            if (!_history.IsCreated())
+            {
+                ReleaseHistory();
+                return false;
+            }
+
             Graphics.Blit(source, _history);
+            return true;
         }
 
         private static float ResolveBlend()
