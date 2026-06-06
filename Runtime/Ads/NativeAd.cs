@@ -4,6 +4,7 @@ using System.Text;
 using UnityEngine;
 using UnityEngine.UI;
 using ZeyWinAds.Core;
+using ZeyWinAds.Mediation;
 using ZeyWinAds.UI;
 using Logger = ZeyWinAds.Core.Logger;
 
@@ -135,6 +136,7 @@ namespace ZeyWinAds.Ads
 
             IsVisible = true;
             _bannerVariant = BannerVariant.IconLeading;
+            AdMediator.OnZeyWinBannerShown();
 
             _canvas = AdCanvas.Create("NativeAdCanvas");
             _canvas.SetSortingOrder(998);
@@ -519,16 +521,20 @@ namespace ZeyWinAds.Ads
 
         private static float ResolveBottomSafeAreaRelax(LayoutMetrics metrics)
         {
+            bool noWrappedCopy = metrics.HeadlineLines <= 1 && metrics.BodyLines <= 1;
             bool tallCopy = metrics.HeadlineLines >= 2 && metrics.BodyLines >= 2;
-            if (tallCopy)
-                return BottomSafeAreaRelax;
-
             int visibleLines = Mathf.Max(1, metrics.HeadlineLines) + Mathf.Max(0, metrics.BodyLines);
             float lineUnit = Mathf.Max(24f, ((metrics.HeadlineSize + Mathf.Max(metrics.BodySize, 1f)) * 0.5f) * 1.16f);
-            if (visibleLines <= 3)
-                return BottomSafeAreaRelax + (lineUnit * 1.5f);
+            if (noWrappedCopy)
+                return BottomSafeAreaRelax + (lineUnit * 2.25f);
 
-            return BottomSafeAreaRelax + (lineUnit * 0.75f);
+            if (tallCopy)
+                return BottomSafeAreaRelax + (lineUnit * 0.9f);
+
+            if (visibleLines <= 3)
+                return BottomSafeAreaRelax + (lineUnit * 1.85f);
+
+            return BottomSafeAreaRelax + (lineUnit * 1.1f);
         }
 
         private static int EstimateWrappedLineCount(string value, float width, float fontSize, int maxLines)
@@ -935,6 +941,7 @@ namespace ZeyWinAds.Ads
             Logger.Debug("Hiding native ad");
             IsVisible = false;
             StopAnimations();
+            AdMediator.HideBanner();
 
             if (_container != null)
                 _container.SetActive(false);
@@ -949,6 +956,7 @@ namespace ZeyWinAds.Ads
             {
                 _container.SetActive(true);
                 IsVisible = true;
+                AdMediator.OnZeyWinBannerShown();
                 TrackImpression();
                 StartSlideIn();
                 StartVariantRotation(_canRotateVariant);
@@ -994,6 +1002,7 @@ namespace ZeyWinAds.Ads
             _ctaRect = null;
             _shineRect = null;
             IsVisible = false;
+            AdMediator.HideBanner();
 
             base.Destroy();
         }
@@ -1038,6 +1047,7 @@ namespace ZeyWinAds.Ads
         protected override void OnClose()
         {
             IsVisible = false;
+            AdMediator.HideBanner();
             base.OnClose();
         }
     }

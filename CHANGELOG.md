@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.4
+
+- Added an SDK-side legacy `AdManager` banner rotation patcher so old games keep the ZeyWin native banner visible instead of switching into an empty AdMob interval after 15+15 seconds.
+- Registered SDK native banners with the mediator while they are visible, which keeps AdMob banner/fullscreen suppression aligned with the real banner surface.
+- Added line-count-based bottom placement: one-line title/body banners drop lowest, mixed three-line banners drop lower, and 2-line plus 2-line creatives keep extra room.
+- Updated runtime `SdkVersion` reporting to `3.9.4`.
+
 ## 3.9.3
 
 - Lowered SDK native/banner bottom placement for short three-line creatives by relaxing the bottom safe-area offset by roughly one and a half text lines.

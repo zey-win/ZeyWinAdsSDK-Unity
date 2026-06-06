@@ -54,6 +54,7 @@ namespace ZeyWinAds.Editor
             PatchAndroidManifest(settings, args);
             LegacyOfferBootLoadingOverlayPatcher.Apply(logWhenNoChanges: false);
             LegacyAdMobProviderPatcher.Apply(logWhenNoChanges: false);
+            LegacyAdManagerBannerPatcher.Apply(logWhenNoChanges: false);
 
             EditorUtility.SetDirty(settings);
             AssetDatabase.SaveAssets();

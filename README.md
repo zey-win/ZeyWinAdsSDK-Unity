@@ -5,7 +5,7 @@
 # ZeyWin Ads SDK for Unity
 
 ![Unity](https://img.shields.io/badge/Unity-2020.3%2B-222?logo=unity)
-![Version](https://img.shields.io/badge/version-3.9.3-40c9ff)
+![Version](https://img.shields.io/badge/version-3.9.4-40c9ff)
 ![License](https://img.shields.io/badge/license-MIT-47f59b)
 ![Android](https://img.shields.io/badge/Android-API%2021%2B-3ddc84)
 ![iOS](https://img.shields.io/badge/iOS-11%2B-lightgrey)
@@ -37,6 +37,7 @@ On first import the SDK will automatically add and configure:
 - SDK-owned Android WebView offers with a topmost Java loading screen, 3-second fade-out, runtime camera prompt bridge, and Google/Apple/Telegram login navigation support
 - Android autorotation, HTTP/browser queries, deeplink intent-filter, WebView camera/microphone permissions, and native notification permission prompt
 - AdMob banner suppression while ZeyWin banners, popups, or WebView offers are active
+- Legacy game-side `AdManager` banner rotation patching so SDK native banners stay visible instead of falling into empty AdMob intervals
 
 Unity will reload and resolve the packages for you.
 
@@ -86,7 +87,7 @@ The repository includes `tools/zeywin-fleet-configure.sh`, a TSV-driven runner f
 tools/zeywin-fleet-configure.sh \
   --root /Volumes/Work/games \
   --config /path/to/fleet-config.tsv \
-  --sdk-ref v3.9.3 \
+  --sdk-ref v3.9.4 \
   --unity-path /Applications/Unity/Hub/Editor/6000.0.71f1/Unity.app/Contents/MacOS/Unity \
   --require-unity6
 ```
