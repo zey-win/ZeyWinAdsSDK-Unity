@@ -116,6 +116,21 @@ namespace ZeyWinAds.Mediation
             AdMobNetwork.ShowInterstitial(onClose);
         }
 
+        public static void BeginAdMobFullscreenSurface(string reason)
+        {
+            global::ZeyWinAds.UI.AdMobFullscreenBackdrop.Show(reason);
+        }
+
+        public static void EndAdMobFullscreenSurface(string reason)
+        {
+            global::ZeyWinAds.UI.AdMobFullscreenBackdrop.Hide(reason);
+        }
+
+        public static void ForceHideAdMobFullscreenSurface(string reason)
+        {
+            global::ZeyWinAds.UI.AdMobFullscreenBackdrop.ForceHide(reason);
+        }
+
         // ---------------- Rewarded ----------------
 
         public static bool IsRewardedReady()
@@ -234,6 +249,7 @@ namespace ZeyWinAds.Mediation
         public static void Reset()
         {
             AdMobNetwork.DestroyAll();
+            ForceHideAdMobFullscreenSurface("mediator_reset");
             ActiveBannerSource = BannerSource.None;
             _zeyWinSurfaceDepth = 0;
             _lastAutoFullscreenShownAt = Time.realtimeSinceStartup;

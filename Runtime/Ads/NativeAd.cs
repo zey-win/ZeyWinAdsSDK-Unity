@@ -342,18 +342,21 @@ namespace ZeyWinAds.Ads
                 ctaTextRect.anchorMin = Vector2.zero;
                 ctaTextRect.anchorMax = Vector2.one;
                 ctaTextRect.sizeDelta = Vector2.zero;
+                ctaTextRect.offsetMin = new Vector2(10f, 6f);
+                ctaTextRect.offsetMax = new Vector2(-10f, -6f);
 
                 var ctaText = ctaTextObj.AddComponent<Text>();
-                float ctaMax = AdData.cta_text.Length > 10 ? layout.BodySize : layout.BodySize + 4f;
+                float ctaMax = layout.BodySize + 2f;
                 ApplyTypography(
                     ctaText,
                     AdData.cta_text,
                     ctaMax,
-                    Mathf.Max(14f, ctaMax - 10f),
+                    Mathf.Max(16f, ctaMax - 8f),
                     FontStyle.Bold,
                     Color.white,
                     TextAnchor.MiddleCenter,
-                    true);
+                    true,
+                    false);
                 ctaText.raycastTarget = false;
             }
             else
@@ -403,8 +406,8 @@ namespace ZeyWinAds.Ads
             m.Gap = Mathf.Round(Mathf.Clamp(18f * widthFactor, 12f, 24f));
             m.TextGap = Mathf.Round(Mathf.Clamp(2f * widthFactor, 0f, 6f));
             m.IconSize = Mathf.Round(Mathf.Clamp((tablet ? 122f : 108f) * widthFactor, 82f, 138f));
-            m.CtaWidth = Mathf.Round(Mathf.Clamp((ctaLength > 11 ? 184f : 160f) * widthFactor, 132f, 218f));
-            m.CtaHeight = Mathf.Round(Mathf.Clamp((tablet ? 92f : 82f) * widthFactor, 64f, 104f));
+            m.CtaWidth = Mathf.Round(Mathf.Clamp((ctaLength > 11 ? 214f : 178f) * widthFactor, 150f, 246f));
+            m.CtaHeight = m.IconSize;
             m.HeadlineSize = Mathf.Round(Mathf.Clamp((titleLength > 42 ? 31f : 36f) * widthFactor, 24f, 40f));
             m.BodySize = Mathf.Round(Mathf.Clamp((bodyLength > 58 ? 24f : 28f) * widthFactor, 18f, 32f));
             m.BadgeFontSize = Mathf.Round(Mathf.Clamp(14f * widthFactor, 11f, 16f));

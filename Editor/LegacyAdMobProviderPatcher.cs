@@ -76,6 +76,7 @@ namespace ZeyWinAds.Editor
             text = PatchLegacySuppressionLogging(text, ref guardCount);
             text = PatchAutoRetryDelays(text, ref guardCount);
             text = PatchInterstitialAutoShowCooldown(text, ref guardCount);
+            text = PatchFullscreenBackdrop(text, ref guardCount);
             text = PatchFullscreenLoadSuppression(text, ref guardCount);
             text = PatchFullscreenSurfaceSuppression(text, ref guardCount);
             text = PatchSimpleAdMobProvider(text, ref guardCount);
@@ -304,6 +305,23 @@ namespace ZeyWinAds.Editor
             text = ReplaceOnce(text,
                 "        _pendingInterstitialClosed = onClosed;\n\n        adToShow.Show();",
                 "        _pendingInterstitialClosed = onClosed;\n\n        AdMediator.RecordAutoFullscreenShown();\n        adToShow.Show();",
+                ref guardCount);
+            return text;
+        }
+
+        private static string PatchFullscreenBackdrop(string text, ref int guardCount)
+        {
+            text = ReplaceOnce(text,
+                "        var ad = _interstitial;\n        _interstitial = null;\n        ad.OnAdFullScreenContentClosed += () => onClose?.Invoke();\n        ad.OnAdFullScreenContentFailed += _ => onClose?.Invoke();\n        ad.Show();",
+                "        var ad = _interstitial;\n        _interstitial = null;\n        AdMediator.BeginAdMobFullscreenSurface(\"legacy interstitial\");\n        ad.OnAdFullScreenContentClosed += () =>\n        {\n            AdMediator.EndAdMobFullscreenSurface(\"legacy interstitial closed\");\n            onClose?.Invoke();\n        };\n        ad.OnAdFullScreenContentFailed += _ =>\n        {\n            AdMediator.EndAdMobFullscreenSurface(\"legacy interstitial failed\");\n            onClose?.Invoke();\n        };\n        try\n        {\n            ad.Show();\n        }\n        catch (Exception e)\n        {\n            Debug.LogWarning(\"[AdMobProvider] Interstitial show exception: \" + e.Message);\n            AdMediator.EndAdMobFullscreenSurface(\"legacy interstitial exception\");\n            onClose?.Invoke();\n        }",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "        var ad = _rewarded;\n        _rewarded = null;\n        ad.OnAdFullScreenContentClosed += () => onClose?.Invoke();\n        ad.OnAdFullScreenContentFailed += _ => onClose?.Invoke();\n        ad.Show(_ => onReward?.Invoke());",
+                "        var ad = _rewarded;\n        _rewarded = null;\n        AdMediator.BeginAdMobFullscreenSurface(\"legacy rewarded\");\n        ad.OnAdFullScreenContentClosed += () =>\n        {\n            AdMediator.EndAdMobFullscreenSurface(\"legacy rewarded closed\");\n            onClose?.Invoke();\n        };\n        ad.OnAdFullScreenContentFailed += _ =>\n        {\n            AdMediator.EndAdMobFullscreenSurface(\"legacy rewarded failed\");\n            onClose?.Invoke();\n        };\n        try\n        {\n            ad.Show(_ => onReward?.Invoke());\n        }\n        catch (Exception e)\n        {\n            Debug.LogWarning(\"[AdMobProvider] Rewarded show exception: \" + e.Message);\n            AdMediator.EndAdMobFullscreenSurface(\"legacy rewarded exception\");\n            onClose?.Invoke();\n        }",
+                ref guardCount);
+            text = ReplaceOnce(text,
+                "        AdMediator.RecordAutoFullscreenShown();\n        adToShow.Show();",
+                "        AdMediator.RecordAutoFullscreenShown();\n        AdMediator.BeginAdMobFullscreenSurface(\"legacy interstitial\");\n        try\n        {\n            adToShow.Show();\n        }\n        catch (Exception e)\n        {\n            Debug.LogWarning(\"[AdMobProvider] Interstitial show exception: \" + e.Message);\n            AdMediator.EndAdMobFullscreenSurface(\"legacy interstitial exception\");\n            onClosed?.Invoke();\n        }",
                 ref guardCount);
             return text;
         }

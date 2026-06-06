@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.8.4
+
+- Made SDK native/banner CTA text wrap inside the green button instead of shrinking into one line, and matched CTA height to the app icon height for balanced layout.
+- Added an SDK-owned black fullscreen backdrop behind AdMob interstitial and rewarded ads so the game is not visible through Google fullscreen surfaces.
+- Extended the legacy `AdMobProvider.cs` auto-patcher so older direct-AdMob games also show the SDK black backdrop while fullscreen AdMob ads are open.
+- Updated runtime `SdkVersion` reporting to `3.8.4`.
+
 ## 3.8.3
 
 - Fixed SDK native/banner ad typography so title and description use adaptive word wrapping instead of shrinking into a single clipped line.
