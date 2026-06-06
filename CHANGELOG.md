@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.2
+
+- Enlarged SDK native/banner title, description, and CTA typography without increasing the existing banner rectangle height.
+- Raised best-fit minimum font sizes so Unity cannot shrink localized banner text back into tiny copy on phones.
+- Moved bottom native/banner placement slightly lower when Android safe area allows it, while keeping the banner inside the safe area.
+- Added visible runtime logging for native/banner typography metrics so phone logcat can prove the active SDK layout version.
+- Updated runtime `SdkVersion` reporting to `3.9.2`.
+
 ## 3.9.1
 
 - Fixed SDK native/banner ad layout so long localized titles and descriptions wrap into stable multi-line blocks instead of compressing or drawing under the CTA.

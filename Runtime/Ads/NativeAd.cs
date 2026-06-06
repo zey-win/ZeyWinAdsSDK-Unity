@@ -23,6 +23,7 @@ namespace ZeyWinAds.Ads
         private const float MaxHeight = 360f;
         private const float SlideDuration = 0.34f;
         private const float AttentionIntervalSeconds = 6.5f;
+        private const float BottomSafeAreaRelax = 8f;
 
         private static float? _customHeight = null;
         private static float? _customTabletHeight = null;
@@ -64,6 +65,7 @@ namespace ZeyWinAds.Ads
             public float CardWidthPercent;
             public float HeadlineSize;
             public float BodySize;
+            public float CtaFontSize;
             public float BadgeFontSize;
             public float BadgeWidth;
             public float BadgeHeight;
@@ -289,7 +291,7 @@ namespace ZeyWinAds.Ads
                 headlineText,
                 AdData.ad_text ?? "",
                 layout.HeadlineSize,
-                Mathf.Max(20f, layout.HeadlineSize - 12f),
+                Mathf.Max(30f, layout.HeadlineSize - 8f),
                 FontStyle.Bold,
                 theme.TextPrimary,
                 TextAnchor.UpperLeft,
@@ -313,7 +315,7 @@ namespace ZeyWinAds.Ads
                     bodyText,
                     AdData.ad_body,
                     layout.BodySize,
-                    Mathf.Max(16f, layout.BodySize - 10f),
+                    Mathf.Max(24f, layout.BodySize - 7f),
                     FontStyle.Normal,
                     theme.TextSecondary,
                     TextAnchor.UpperLeft,
@@ -351,12 +353,12 @@ namespace ZeyWinAds.Ads
                 ctaTextRect.offsetMax = new Vector2(-10f, -6f);
 
                 var ctaText = ctaTextObj.AddComponent<Text>();
-                float ctaMax = layout.BodySize + 2f;
+                float ctaMax = layout.CtaFontSize;
                 ApplyTypography(
                     ctaText,
                     AdData.cta_text,
                     ctaMax,
-                    Mathf.Max(16f, ctaMax - 8f),
+                    Mathf.Max(24f, ctaMax - 6f),
                     FontStyle.Bold,
                     theme.PrimaryButtonText,
                     TextAnchor.MiddleCenter,
@@ -389,13 +391,15 @@ namespace ZeyWinAds.Ads
             }
 
             StartSlideIn();
-            Logger.Debug(
-                "Native ad adaptive layout: height={0}, textWidth={1}, titleLines={2}, bodyLines={3}, ctaWidth={4}",
+            Logger.Log(
+                "Native-баннер: крупный шрифт height={0}, textWidth={1}, titleSize={2}, bodySize={3}, ctaSize={4}, titleLines={5}, bodyLines={6}",
                 Mathf.RoundToInt(layout.Height),
                 Mathf.RoundToInt(layout.TextWidth),
+                Mathf.RoundToInt(layout.HeadlineSize),
+                Mathf.RoundToInt(layout.BodySize),
+                Mathf.RoundToInt(layout.CtaFontSize),
                 layout.HeadlineLines,
-                layout.BodyLines,
-                Mathf.RoundToInt(layout.CtaWidth));
+                layout.BodyLines);
         }
 
         private LayoutMetrics CalculateLayoutMetrics()
@@ -421,8 +425,9 @@ namespace ZeyWinAds.Ads
             m.Gap = Mathf.Round(Mathf.Clamp(18f * widthFactor, 12f, 24f));
             m.TextGap = Mathf.Round(Mathf.Clamp(6f * widthFactor, 3f, 8f));
             m.IconSize = Mathf.Round(Mathf.Clamp((tablet ? 122f : 108f) * widthFactor, 82f, 138f));
-            m.HeadlineSize = Mathf.Round(Mathf.Clamp((titleLength > 88 ? 29f : titleLength > 52 ? 32f : 37f) * widthFactor, 23f, 40f));
-            m.BodySize = Mathf.Round(Mathf.Clamp((bodyLength > 76 ? 23f : bodyLength > 44 ? 25f : 29f) * widthFactor, 18f, 32f));
+            m.HeadlineSize = Mathf.Round(Mathf.Clamp((titleLength > 118 ? 34f : titleLength > 88 ? 37f : titleLength > 52 ? 41f : 48f) * widthFactor, 32f, 52f));
+            m.BodySize = Mathf.Round(Mathf.Clamp((bodyLength > 96 ? 29f : bodyLength > 76 ? 31f : bodyLength > 44 ? 34f : 38f) * widthFactor, 26f, 42f));
+            m.CtaFontSize = Mathf.Round(Mathf.Clamp((ctaLength > 14 ? 31f : ctaLength > 9 ? 35f : 39f) * widthFactor, 28f, 42f));
             m.BadgeFontSize = Mathf.Round(Mathf.Clamp(14f * widthFactor, 11f, 16f));
             m.BadgeWidth = Mathf.Round(Mathf.Clamp(38f * widthFactor, 30f, 44f));
             m.BadgeHeight = Mathf.Round(Mathf.Clamp(22f * widthFactor, 18f, 26f));
@@ -502,7 +507,7 @@ namespace ZeyWinAds.Ads
             text.resizeTextMaxSize = Mathf.RoundToInt(maxSize);
             text.resizeTextMinSize = Mathf.RoundToInt(minSize);
             text.fontSize = Mathf.RoundToInt(maxSize);
-            text.lineSpacing = wrap ? 0.92f : 1f;
+            text.lineSpacing = wrap ? 0.98f : 1f;
             text.supportRichText = false;
         }
 
@@ -599,7 +604,8 @@ namespace ZeyWinAds.Ads
                 _containerRect.anchorMin = new Vector2(0, 0);
                 _containerRect.anchorMax = new Vector2(1, 0);
                 _containerRect.pivot = new Vector2(0.5f, 0);
-                _containerRect.anchoredPosition = new Vector2(0, bottomInset / scaleFactor);
+                float bottomOffset = Mathf.Max(0f, (bottomInset / scaleFactor) - BottomSafeAreaRelax);
+                _containerRect.anchoredPosition = new Vector2(0, bottomOffset);
             }
 
             _containerRect.sizeDelta = new Vector2(0, height);
