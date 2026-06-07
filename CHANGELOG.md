@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.11
+
+- Removed legacy local `installreferrer-*.aar` / `play-install-referrer-*.aar` files during AdMob bootstrap when the SDK installs modern Google Mobile Ads through OpenUPM.
+- Prevented Unity 6 Android builds from failing with duplicate `com.android.installreferrer` classes in older games that carried a local Install Referrer AAR.
+- Updated runtime `SdkVersion` reporting to `3.9.11`.
+
 ## 3.9.10
 
 - Added SDK-side protection for imported TextMesh Pro Examples & Extras scripts: the files stay in the project, but compile only when `ZEYWIN_TMP_EXAMPLES_ENABLED` is explicitly defined.

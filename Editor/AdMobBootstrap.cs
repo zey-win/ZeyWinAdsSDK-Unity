@@ -20,7 +20,7 @@ namespace ZeyWinAds.Editor
     [InitializeOnLoad]
     public static class AdMobBootstrap
     {
-        private const string MarkerKey = "ZeyWinAds_AdMobBootstrap_Done";
+        private const string MarkerKey = "ZeyWinAds_AdMobBootstrap_Done_v2";
         private const string RegistryName = "package.openupm.com";
         private const string RegistryUrl = "https://package.openupm.com";
         private const string DisableEnv = "ZEYWIN_DISABLE_ADMOB_BOOTSTRAP";
@@ -28,6 +28,7 @@ namespace ZeyWinAds.Editor
         private const string AdMobVersion = "11.2.0";
         private const string EdmPackage = "com.google.external-dependency-manager";
         private const string EdmVersion = "1.2.187";
+        private const string AndroidPluginsPath = "Assets/Plugins/Android";
 
         static AdMobBootstrap()
         {
@@ -98,6 +99,11 @@ namespace ZeyWinAds.Editor
             bool modified = false;
             bool legacyAdMobAssetsPresent = LegacyAdMobAssetsPresent();
 
+            if (!legacyAdMobAssetsPresent && RemoveLegacyInstallReferrerAars())
+            {
+                modified = true;
+            }
+
             if (legacyAdMobAssetsPresent)
             {
                 string cleaned = RemoveDependency(content, AdMobPackage);
@@ -150,6 +156,43 @@ namespace ZeyWinAds.Editor
             string assetsRoot = Application.dataPath;
             return File.Exists(Path.Combine(assetsRoot, "GoogleMobileAds", "GoogleMobileAds.Core.dll"))
                 || File.Exists(Path.Combine(assetsRoot, "GoogleMobileAds", "Editor", "GoogleMobileAdsSettings.cs"));
+        }
+
+        private static bool RemoveLegacyInstallReferrerAars()
+        {
+            string pluginsPath = Path.GetFullPath(Path.Combine(Application.dataPath, "Plugins", "Android"));
+            if (!Directory.Exists(pluginsPath))
+                return false;
+
+            bool removedAny = false;
+            string[] files = Directory.GetFiles(pluginsPath, "*.aar", SearchOption.AllDirectories);
+            foreach (string file in files)
+            {
+                string name = Path.GetFileName(file);
+                if (!name.StartsWith("installreferrer-", StringComparison.OrdinalIgnoreCase) &&
+                    !name.StartsWith("play-install-referrer-", StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    File.Delete(file);
+                    string metaPath = file + ".meta";
+                    if (File.Exists(metaPath))
+                        File.Delete(metaPath);
+
+                    removedAny = true;
+                    string relative = AndroidPluginsPath + file.Substring(pluginsPath.Length).Replace('\\', '/');
+                    Debug.Log($"[ZeyWinAds] Removed legacy local {relative}; Google Mobile Ads resolves installreferrer from Maven.");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[ZeyWinAds] Could not remove legacy installreferrer AAR '{file}': {e.Message}");
+                }
+            }
+
+            return removedAny;
         }
 
         private static bool IsDisabledForCi()
