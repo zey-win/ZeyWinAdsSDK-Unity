@@ -25,8 +25,9 @@ namespace ZeyWinAds.Editor
         private const string RegistryUrl = "https://package.openupm.com";
         private const string DisableEnv = "ZEYWIN_DISABLE_ADMOB_BOOTSTRAP";
         private const string AdMobPackage = "com.google.ads.mobile";
-        private const string AdMobVersion = "9.4.0";
+        private const string AdMobVersion = "11.2.0";
         private const string EdmPackage = "com.google.external-dependency-manager";
+        private const string EdmVersion = "1.2.187";
 
         static AdMobBootstrap()
         {
@@ -108,18 +109,24 @@ namespace ZeyWinAds.Editor
                 }
             }
 
-            string edmCleaned = RemoveDependency(content, EdmPackage);
-            if (edmCleaned != content)
+            if (!legacyAdMobAssetsPresent)
             {
-                content = edmCleaned;
-                modified = true;
-                Debug.Log("[ZeyWinAds] Removed unsupported com.google.external-dependency-manager package dependency.");
+                string adMobUpdated = UpsertDependency(content, AdMobPackage, AdMobVersion);
+                if (adMobUpdated != content)
+                {
+                    content = adMobUpdated;
+                    modified = true;
+                }
             }
 
-            if (!legacyAdMobAssetsPresent && !content.Contains($"\"{AdMobPackage}\""))
+            if (!legacyAdMobAssetsPresent)
             {
-                content = AddDependency(content, AdMobPackage, AdMobVersion);
-                modified = true;
+                string edmUpdated = UpsertDependency(content, EdmPackage, EdmVersion);
+                if (edmUpdated != content)
+                {
+                    content = edmUpdated;
+                    modified = true;
+                }
             }
 
             string scoped = legacyAdMobAssetsPresent
@@ -155,24 +162,10 @@ namespace ZeyWinAds.Editor
 
         private static string AddDependency(string manifest, string package, string version)
         {
-            int depsIdx = manifest.IndexOf("\"dependencies\"", StringComparison.Ordinal);
-            if (depsIdx < 0)
+            if (!TryFindDependenciesBlock(manifest, out int braceIdx, out int closeIdx))
             {
                 Debug.LogWarning("[ZeyWinAds] manifest.json is missing a \"dependencies\" block — " +
                                  $"cannot add {package}. Add it manually.");
-                return manifest;
-            }
-            int braceIdx = manifest.IndexOf('{', depsIdx);
-            if (braceIdx < 0)
-            {
-                Debug.LogWarning($"[ZeyWinAds] malformed manifest.json near \"dependencies\" — cannot add {package}.");
-                return manifest;
-            }
-
-            int closeIdx = FindMatchingBrace(manifest, braceIdx);
-            if (closeIdx < 0)
-            {
-                Debug.LogWarning($"[ZeyWinAds] malformed manifest.json dependencies block — cannot add {package}.");
                 return manifest;
             }
 
@@ -183,10 +176,42 @@ namespace ZeyWinAds.Editor
             return manifest.Insert(braceIdx + 1, entry);
         }
 
+        private static string UpsertDependency(string manifest, string package, string version)
+        {
+            if (!TryFindDependenciesBlock(manifest, out int braceIdx, out int closeIdx))
+                return AddDependency(manifest, package, version);
+
+            string key = $"\"{package}\"";
+            int keyIdx = manifest.IndexOf(key, braceIdx, closeIdx - braceIdx, StringComparison.Ordinal);
+            if (keyIdx < 0)
+                return AddDependency(manifest, package, version);
+
+            int colonIdx = manifest.IndexOf(':', keyIdx, closeIdx - keyIdx);
+            if (colonIdx < 0)
+                return manifest;
+
+            int valueStart = manifest.IndexOf('"', colonIdx + 1, closeIdx - colonIdx - 1);
+            if (valueStart < 0)
+                return manifest;
+
+            int valueEnd = manifest.IndexOf('"', valueStart + 1, closeIdx - valueStart - 1);
+            if (valueEnd < 0)
+                return manifest;
+
+            string current = manifest.Substring(valueStart + 1, valueEnd - valueStart - 1);
+            if (current == version)
+                return manifest;
+
+            return manifest.Substring(0, valueStart + 1) + version + manifest.Substring(valueEnd);
+        }
+
         private static string RemoveDependency(string manifest, string package)
         {
+            if (!TryFindDependenciesBlock(manifest, out int braceIdx, out int closeIdx))
+                return manifest;
+
             string key = $"\"{package}\"";
-            int keyIdx = manifest.IndexOf(key, StringComparison.Ordinal);
+            int keyIdx = manifest.IndexOf(key, braceIdx, closeIdx - braceIdx, StringComparison.Ordinal);
             if (keyIdx < 0)
                 return manifest;
 
@@ -200,6 +225,23 @@ namespace ZeyWinAds.Editor
                 lineEnd += 1;
 
             return NormalizeDanglingCommas(manifest.Remove(lineStart, lineEnd - lineStart));
+        }
+
+        private static bool TryFindDependenciesBlock(string manifest, out int braceIdx, out int closeIdx)
+        {
+            braceIdx = -1;
+            closeIdx = -1;
+
+            int depsIdx = manifest.IndexOf("\"dependencies\"", StringComparison.Ordinal);
+            if (depsIdx < 0)
+                return false;
+
+            braceIdx = manifest.IndexOf('{', depsIdx);
+            if (braceIdx < 0)
+                return false;
+
+            closeIdx = FindMatchingBrace(manifest, braceIdx);
+            return closeIdx >= 0;
         }
 
         private static int FindMatchingBrace(string text, int openIdx)
@@ -258,7 +300,7 @@ namespace ZeyWinAds.Editor
                 return AddScopedRegistry(manifest);
 
             string updated = AddScopeToExistingRegistry(manifest, AdMobPackage);
-            updated = RemoveScopeFromExistingRegistry(updated, EdmPackage);
+            updated = AddScopeToExistingRegistry(updated, EdmPackage);
             return updated;
         }
 
@@ -270,7 +312,8 @@ namespace ZeyWinAds.Editor
                 $"      \"name\": \"{RegistryName}\",\n" +
                 $"      \"url\": \"{RegistryUrl}\",\n" +
                 "      \"scopes\": [\n" +
-                "        \"com.google.ads.mobile\"\n" +
+                "        \"com.google.ads.mobile\",\n" +
+                "        \"com.google.external-dependency-manager\"\n" +
                 "      ]\n" +
                 "    }\n" +
                 "  ],";

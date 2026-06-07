@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.9
+
+- Updated the SDK AdMob bootstrap to install the currently available OpenUPM pair: `com.google.ads.mobile@11.2.0` with `com.google.external-dependency-manager@1.2.187`.
+- Restored the EDM scoped registry/dependency for package-manager installs so Unity can resolve Google Mobile Ads transitive dependencies in fresh GitHub Actions builds.
+- Updated runtime `SdkVersion` reporting to `3.9.9`.
+
 ## 3.9.8
 
 - Stopped auto-adding the unsupported `com.google.external-dependency-manager` UPM dependency from the SDK AdMob bootstrap.
