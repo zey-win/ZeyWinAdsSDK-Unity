@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.23
+
+- Fixed AdMob bootstrap detection for legacy `Assets/Plugins/Android/GoogleMobileAdsPlugin.androidlib` projects so the SDK does not add a duplicate OpenUPM Google Mobile Ads package.
+- Updated runtime `SdkVersion` reporting to `3.9.23`.
+
 ## 3.9.22
 
 - Made SDK high-FPS mode opt-in through Remote Config instead of enabling it by default in every game.

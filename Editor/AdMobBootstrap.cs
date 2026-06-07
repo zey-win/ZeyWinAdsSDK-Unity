@@ -155,7 +155,8 @@ namespace ZeyWinAds.Editor
         {
             string assetsRoot = Application.dataPath;
             return File.Exists(Path.Combine(assetsRoot, "GoogleMobileAds", "GoogleMobileAds.Core.dll"))
-                || File.Exists(Path.Combine(assetsRoot, "GoogleMobileAds", "Editor", "GoogleMobileAdsSettings.cs"));
+                || File.Exists(Path.Combine(assetsRoot, "GoogleMobileAds", "Editor", "GoogleMobileAdsSettings.cs"))
+                || Directory.Exists(Path.Combine(assetsRoot, "Plugins", "Android", "GoogleMobileAdsPlugin.androidlib"));
         }
 
         private static bool RemoveLegacyInstallReferrerAars()
