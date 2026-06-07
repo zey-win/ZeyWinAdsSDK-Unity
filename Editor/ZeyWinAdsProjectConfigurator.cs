@@ -71,7 +71,7 @@ namespace ZeyWinAds.Editor
             if (TryGet(args, "companyName", out string companyName))
                 PlayerSettings.companyName = companyName;
 
-            if (TryGetAny(args, out string packageId, "androidPackageId", "packageId", "bundleId", "applicationId"))
+            if (TryGetAny(args, out string packageId, "androidPackageName", "androidPackageId", "packageId", "bundleId", "applicationId"))
             {
                 PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, packageId);
                 PlayerSettings.applicationIdentifier = packageId;
@@ -122,13 +122,13 @@ namespace ZeyWinAds.Editor
             if (TryGetAnyOrEnv(args, out string appId, new[] { "adMobAppId", "admobAppId", "admobAndroidAppId" }, "ADMOB_APP_ID"))
                 settings.admobAppIdAndroid = appId;
 
-            if (TryGetAnyOrEnv(args, out string banner, new[] { "bannerAdUnitId", "adMobBannerAdUnitId", "admobBanner", "admobAndroidBanner" }, "ADMOB_BANNER_AD_UNIT_ID"))
+            if (TryGetAnyOrEnv(args, out string banner, new[] { "bannerAdUnitId", "adMobBannerAdUnitId", "admobBanner", "admobAndroidBanner", "admobAndroidBannerId" }, "ADMOB_BANNER_AD_UNIT_ID"))
                 settings.admobBannerAndroid = banner;
 
-            if (TryGetAnyOrEnv(args, out string interstitial, new[] { "interstitialAdUnitId", "adMobInterstitialAdUnitId", "admobInterstitial", "admobAndroidInterstitial" }, "ADMOB_INTERSTITIAL_AD_UNIT_ID"))
+            if (TryGetAnyOrEnv(args, out string interstitial, new[] { "interstitialAdUnitId", "adMobInterstitialAdUnitId", "admobInterstitial", "admobAndroidInterstitial", "admobAndroidInterstitialId" }, "ADMOB_INTERSTITIAL_AD_UNIT_ID"))
                 settings.admobInterstitialAndroid = interstitial;
 
-            if (TryGetAnyOrEnv(args, out string rewarded, new[] { "rewardedAdUnitId", "adMobRewardedAdUnitId", "admobRewarded", "admobAndroidRewarded" }, "ADMOB_REWARDED_AD_UNIT_ID"))
+            if (TryGetAnyOrEnv(args, out string rewarded, new[] { "rewardedAdUnitId", "adMobRewardedAdUnitId", "admobRewarded", "admobAndroidRewarded", "admobAndroidRewardedId" }, "ADMOB_REWARDED_AD_UNIT_ID"))
                 settings.admobRewardedAndroid = rewarded;
         }
 
@@ -202,7 +202,7 @@ namespace ZeyWinAds.Editor
             EnsureNamespace(manifest, "android", AndroidNs);
             EnsureNamespace(manifest, "tools", ToolsNs);
 
-            if (TryGetAny(args, out string packageId, "androidPackageId", "packageId", "bundleId", "applicationId"))
+            if (TryGetAny(args, out string packageId, "androidPackageName", "androidPackageId", "packageId", "bundleId", "applicationId"))
                 manifest.SetAttribute("package", packageId);
 
             if (TryGetAny(args, out string versionName, "androidVersionName", "versionName"))

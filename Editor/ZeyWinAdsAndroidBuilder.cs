@@ -82,10 +82,22 @@ namespace ZeyWinAds.Editor
             EditorUserBuildSettings.SwitchActiveBuildTarget(BuildTargetGroup.Android, BuildTarget.Android);
             EditorUserBuildSettings.buildAppBundle = buildAppBundle;
 
-            TextMeshProBootstrap.EnsureInstalledAndConfigured();
+            NormalizeFleetArguments(args);
+            ZeyWinAdsProjectConfigurator.Apply(args);
 
             PlayerSettings.SplashScreen.show = false;
             PlayerSettings.SplashScreen.showUnityLogo = false;
+
+            string productName = GetAnyOrEnv(args, null, "ANDROID_PRODUCT_NAME", "productName", "appName", "androidProductName");
+            if (!string.IsNullOrEmpty(productName))
+                PlayerSettings.productName = productName;
+
+            string packageId = GetAnyOrEnv(args, null, "ANDROID_PACKAGE_NAME", "androidPackageName", "androidPackageId", "packageId", "bundleId", "applicationId");
+            if (!string.IsNullOrEmpty(packageId))
+            {
+                PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Android, packageId);
+                PlayerSettings.applicationIdentifier = packageId;
+            }
 
             string versionName = GetAnyOrEnv(args, null, "ANDROID_VERSION_NAME", "androidVersionName", "versionName", "buildVersion");
             if (!string.IsNullOrEmpty(versionName))
@@ -103,6 +115,29 @@ namespace ZeyWinAds.Editor
             PlayerSettings.Android.optimizedFramePacing = ParseBool(optimizedFramePacing, false);
 
             ApplySigning(args);
+        }
+
+        private static void NormalizeFleetArguments(IDictionary<string, string> args)
+        {
+            SetArgFromEnv(args, "productName", "ANDROID_PRODUCT_NAME");
+            SetArgFromEnv(args, "androidPackageName", "ANDROID_PACKAGE_NAME");
+            SetArgFromEnv(args, "androidVersionName", "ANDROID_VERSION_NAME");
+            SetArgFromEnv(args, "androidVersionCode", "ANDROID_VERSION_CODE");
+            SetArgFromEnv(args, "zeywinApiKey", "ZEYWIN_API_KEY");
+            SetArgFromEnv(args, "admobAndroidAppId", "ADMOB_ANDROID_APP_ID");
+            SetArgFromEnv(args, "admobAndroidBannerId", "ADMOB_ANDROID_BANNER_ID");
+            SetArgFromEnv(args, "admobAndroidInterstitialId", "ADMOB_ANDROID_INTERSTITIAL_ID");
+            SetArgFromEnv(args, "admobAndroidRewardedId", "ADMOB_ANDROID_REWARDED_ID");
+        }
+
+        private static void SetArgFromEnv(IDictionary<string, string> args, string key, string envName)
+        {
+            if (args.TryGetValue(key, out string existing) && !string.IsNullOrWhiteSpace(existing))
+                return;
+
+            string value = Environment.GetEnvironmentVariable(envName);
+            if (!string.IsNullOrWhiteSpace(value))
+                args[key] = value;
         }
 
         private static void ApplyArchitectures(string value)

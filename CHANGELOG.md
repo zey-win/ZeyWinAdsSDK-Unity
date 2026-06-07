@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.13
+
+- Updated the Android batchmode builder to run the full ZeyWin project configurator before `BuildPipeline.BuildPlayer`, so fleet builds apply package name, product name, API key, and AdMob IDs even when the game had stale Android manifests.
+- Added CLI aliases for `androidPackageName`, `admobAndroidBannerId`, `admobAndroidInterstitialId`, and `admobAndroidRewardedId`.
+- Updated runtime `SdkVersion` reporting to `3.9.13`.
+
 ## 3.9.12
 
 - Removed the bundled `installreferrer-2.2.aar` from the SDK Android plugins so it no longer duplicates Google Mobile Ads' Maven Install Referrer dependency.
