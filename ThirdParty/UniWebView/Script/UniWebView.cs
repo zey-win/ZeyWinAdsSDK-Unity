@@ -444,16 +444,7 @@ public class UniWebView: MonoBehaviour {
             }
         }
 
-        // Only the new input system is enabled. Related flags: https://docs.unity3d.com/Packages/com.unity.inputsystem@1.0/manual/Installation.html#enabling-the-new-input-backends
-        //
-        // The new input system is not handling touchscreen events nicely as the old one. 
-        // The gesture detection hangs out regularly. Wait for an improvement of Unity.
-        // So we choose to use the old one whenever it is available.
-        #if ENABLE_INPUT_SYSTEM && !ENABLE_LEGACY_INPUT_MANAGER
-        var backDetected = backButtonEnabled && UnityEngine.InputSystem.Keyboard.current.escapeKey.wasPressedThisFrame;
-        #else
         var backDetected = backButtonEnabled && Input.GetKeyUp(KeyCode.Escape);
-        #endif
 
         if (backDetected) {
             UniWebViewLogger.Instance.Info("Received Back button, handling GoBack or close web view.");

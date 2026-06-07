@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.17
+
+- Removed the bundled UniWebView runtime compile-time dependency on `UnityEngine.InputSystem`, keeping SDK builds compatible with games that do not install the Input System package.
+- Kept the Android back-button path on the legacy `Input.GetKeyUp(KeyCode.Escape)` API so WebView close/back behavior remains available without extra package requirements.
+- Updated runtime `SdkVersion` reporting to `3.9.17`.
+
 ## 3.9.16
 
 - Added strict AdMob App ID validation so `com.google.android.gms.ads.APPLICATION_ID` is only written when the value is a real `ca-app-pub-...~...` string.
