@@ -62,10 +62,10 @@ namespace ZeyWinAds.Editor
 
         private static void PatchAndroidManifest(string appId)
         {
-            if (string.IsNullOrEmpty(appId))
+            if (!ZeyWinAdsSettings.IsValidAdMobAppId(appId))
             {
-                Debug.LogWarning("[ZeyWinAds] AdMob Android App ID is empty — manifest not patched. " +
-                                 "AdMob will refuse to initialize.");
+                Debug.LogWarning("[ZeyWinAds] AdMob Android App ID is invalid — manifest not patched. " +
+                                 "Expected ca-app-pub-...~..., existing game AdMob config is preserved.");
                 return;
             }
 

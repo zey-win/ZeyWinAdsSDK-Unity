@@ -124,7 +124,10 @@ namespace ZeyWinAds.Editor
                 settings.enableUmpConsent = ParseBool(enableUmp, settings.enableUmpConsent);
 
             if (TryGetAnyOrEnv(args, out string appId, new[] { "adMobAppId", "admobAppId", "admobAndroidAppId" }, "ADMOB_APP_ID"))
-                settings.admobAppIdAndroid = appId;
+                ApplyAdMobAndroidAppId(settings, appId, "project configuration");
+
+            if (!ZeyWinAdsSettings.IsValidAdMobAppId(settings.admobAppIdAndroid))
+                ApplyAdMobAndroidAppId(settings, ReadExistingGoogleMobileAdsAppId(), "existing Google Mobile Ads configuration");
 
             if (TryGetAnyOrEnv(args, out string banner, new[] { "bannerAdUnitId", "adMobBannerAdUnitId", "admobBanner", "admobAndroidBanner", "admobAndroidBannerId" }, "ADMOB_BANNER_AD_UNIT_ID"))
                 settings.admobBannerAndroid = banner;
@@ -136,9 +139,59 @@ namespace ZeyWinAds.Editor
                 settings.admobRewardedAndroid = rewarded;
         }
 
+        private static void ApplyAdMobAndroidAppId(ZeyWinAdsSettings settings, string appId, string source)
+        {
+            if (string.IsNullOrWhiteSpace(appId))
+                return;
+
+            appId = appId.Trim();
+            if (!ZeyWinAdsSettings.IsValidAdMobAppId(appId))
+            {
+                Debug.LogWarning($"[ZeyWinAds] Ignoring invalid AdMob Android App ID from {source}: {appId}");
+                return;
+            }
+
+            settings.admobAppIdAndroid = appId;
+        }
+
+        private static string ReadExistingGoogleMobileAdsAppId()
+        {
+            string appId = ReadGoogleMobileAdsSettingsAppId();
+            if (ZeyWinAdsSettings.IsValidAdMobAppId(appId))
+                return appId;
+
+            return ReadGoogleMobileAdsAndroidManifestAppId();
+        }
+
+        private static string ReadGoogleMobileAdsSettingsAppId()
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(GoogleMobileAdsSettingsPath);
+            if (asset == null)
+                return null;
+
+            var serialized = new SerializedObject(asset);
+            var androidAppId = serialized.FindProperty("adMobAndroidAppId");
+            return androidAppId?.stringValue;
+        }
+
+        private static string ReadGoogleMobileAdsAndroidManifestAppId()
+        {
+            string fullPath = Path.GetFullPath(GoogleMobileAdsAndroidManifestPath);
+            if (!File.Exists(fullPath))
+                return null;
+
+            var doc = new XmlDocument();
+            doc.Load(fullPath);
+            var manifest = doc.DocumentElement;
+            var application = manifest?.SelectSingleNode("application") as XmlElement;
+            return application == null
+                ? null
+                : FindMetaData(application, AdMobMetaName)?.GetAttribute("value", AndroidNs);
+        }
+
         private static void PatchGoogleMobileAdsSettings(ZeyWinAdsSettings settings)
         {
-            if (string.IsNullOrEmpty(settings.admobAppIdAndroid))
+            if (!ZeyWinAdsSettings.IsValidAdMobAppId(settings.admobAppIdAndroid))
                 return;
 
             var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(GoogleMobileAdsSettingsPath);
@@ -156,7 +209,7 @@ namespace ZeyWinAds.Editor
 
         private static void PatchGoogleMobileAdsAndroidManifest(ZeyWinAdsSettings settings)
         {
-            if (string.IsNullOrEmpty(settings.admobAppIdAndroid))
+            if (!ZeyWinAdsSettings.IsValidAdMobAppId(settings.admobAppIdAndroid))
                 return;
 
             string fullPath = Path.GetFullPath(GoogleMobileAdsAndroidManifestPath);
@@ -195,7 +248,7 @@ namespace ZeyWinAds.Editor
             string assetsRoot = Path.GetFullPath("Assets/GoogleMobileAds");
             string libraryPath = Path.GetFullPath(GoogleMobileAdsAndroidLibraryPath);
             bool hasLegacyGoogleMobileAds = Directory.Exists(assetsRoot) || Directory.Exists(libraryPath);
-            if (!hasLegacyGoogleMobileAds && string.IsNullOrEmpty(settings.admobAppIdAndroid))
+            if (!hasLegacyGoogleMobileAds && !ZeyWinAdsSettings.IsValidAdMobAppId(settings.admobAppIdAndroid))
                 return;
 
             Directory.CreateDirectory(libraryPath);
@@ -295,7 +348,7 @@ namespace ZeyWinAds.Editor
             EnsureStartupProvider(doc, application, args);
             ApplyLaunchThemeToActivity(application);
 
-            if (!string.IsNullOrEmpty(settings.admobAppIdAndroid))
+            if (ZeyWinAdsSettings.IsValidAdMobAppId(settings.admobAppIdAndroid))
             {
                 var meta = FindMetaData(application, AdMobMetaName);
                 if (meta == null)

@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace ZeyWinAds
@@ -120,7 +121,36 @@ namespace ZeyWinAds
         /// </summary>
         public bool IsAdMobConfigured()
         {
-            return enableAdMob && !string.IsNullOrEmpty(GetAppId());
+            return enableAdMob && IsValidAdMobAppId(GetAppId());
+        }
+
+        public static bool IsValidAdMobAppId(string appId)
+        {
+            if (string.IsNullOrWhiteSpace(appId))
+                return false;
+
+            appId = appId.Trim();
+            const string prefix = "ca-app-pub-";
+            if (!appId.StartsWith(prefix, StringComparison.Ordinal))
+                return false;
+
+            int separator = appId.IndexOf('~');
+            if (separator <= prefix.Length || separator >= appId.Length - 1)
+                return false;
+
+            return IsDigits(appId, prefix.Length, separator)
+                && IsDigits(appId, separator + 1, appId.Length);
+        }
+
+        private static bool IsDigits(string value, int start, int end)
+        {
+            for (int i = start; i < end; i++)
+            {
+                if (value[i] < '0' || value[i] > '9')
+                    return false;
+            }
+
+            return true;
         }
     }
 }

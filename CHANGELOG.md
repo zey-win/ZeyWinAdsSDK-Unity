@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.16
+
+- Added strict AdMob App ID validation so `com.google.android.gms.ads.APPLICATION_ID` is only written when the value is a real `ca-app-pub-...~...` string.
+- Preserved existing valid Google Mobile Ads project settings and androidlib manifests when CI or command-line configuration passes an invalid App ID such as `true`.
+- Prevented AdMob fallback initialization from treating invalid App IDs as configured.
+- Updated runtime `SdkVersion` reporting to `3.9.16`.
+
 ## 3.9.15
 
 - Rewrote legacy Google Mobile Ads `packaging_options.gradle` with UTF-8 without BOM before build and after Gradle generation so Gradle 8 does not fail on hidden BOM characters.
