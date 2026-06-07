@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.15
+
+- Rewrote legacy Google Mobile Ads `packaging_options.gradle` with UTF-8 without BOM before build and after Gradle generation so Gradle 8 does not fail on hidden BOM characters.
+- Updated runtime `SdkVersion` reporting to `3.9.15`.
+
 ## 3.9.14
 
 - Repaired legacy Google Mobile Ads androidlib exports by creating missing `packaging_options.gradle`, manifest, and project properties before build and again after Gradle project generation.

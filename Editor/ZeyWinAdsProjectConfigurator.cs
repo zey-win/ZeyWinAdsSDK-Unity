@@ -213,16 +213,13 @@ namespace ZeyWinAds.Editor
             }
 
             string packagingOptionsPath = Path.GetFullPath(GoogleMobileAdsPackagingOptionsPath);
-            if (!File.Exists(packagingOptionsPath))
-            {
-                File.WriteAllText(packagingOptionsPath,
-                    "android {\n" +
-                    "    packagingOptions {\n" +
-                    "        pickFirst \"META-INF/kotlinx_coroutines_core.version\"\n" +
-                    "    }\n" +
-                    "}\n",
-                    Encoding.UTF8);
-            }
+            File.WriteAllText(packagingOptionsPath,
+                "android {\n" +
+                "    packagingOptions {\n" +
+                "        pickFirst \"META-INF/kotlinx_coroutines_core.version\"\n" +
+                "    }\n" +
+                "}\n",
+                new UTF8Encoding(false));
 
             string projectPropertiesPath = Path.GetFullPath(GoogleMobileAdsProjectPropertiesPath);
             if (!File.Exists(projectPropertiesPath))
@@ -230,7 +227,7 @@ namespace ZeyWinAds.Editor
                 File.WriteAllText(projectPropertiesPath,
                     "target=android-31\n" +
                     "android.library=true\n",
-                    Encoding.UTF8);
+                    new UTF8Encoding(false));
             }
         }
 

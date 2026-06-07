@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text;
 using UnityEditor.Android;
 using UnityEngine;
 
@@ -24,7 +25,7 @@ namespace ZeyWinAds.Editor
                     return;
 
                 Directory.CreateDirectory(androidLibPath);
-                EnsureFile(
+                WriteFile(
                     Path.Combine(androidLibPath, "packaging_options.gradle"),
                     "android {\n" +
                     "    packagingOptions {\n" +
@@ -90,8 +91,13 @@ namespace ZeyWinAds.Editor
             if (File.Exists(path))
                 return;
 
+            WriteFile(path, content);
+        }
+
+        private static void WriteFile(string path, string content)
+        {
             Directory.CreateDirectory(Path.GetDirectoryName(path));
-            File.WriteAllText(path, content);
+            File.WriteAllText(path, content, new UTF8Encoding(false));
         }
     }
 }
