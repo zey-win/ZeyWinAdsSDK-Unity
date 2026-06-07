@@ -255,13 +255,14 @@ namespace ZeyWinAds.Editor
 
         private static void EnsureGoogleMobileAdsAndroidLibrary(ZeyWinAdsSettings settings)
         {
-            string assetsRoot = Path.GetFullPath("Assets/GoogleMobileAds");
             string libraryPath = Path.GetFullPath(GoogleMobileAdsAndroidLibraryPath);
-            bool hasLegacyGoogleMobileAds = Directory.Exists(assetsRoot) || Directory.Exists(libraryPath);
-            if (!hasLegacyGoogleMobileAds && !ZeyWinAdsSettings.IsValidAdMobAppId(settings.admobAppIdAndroid))
+            if (!Directory.Exists(libraryPath))
+            {
+                // New projects use the OpenUPM Google Mobile Ads package. Creating
+                // a local GoogleMobileAdsPlugin.androidlib beside that package
+                // produces duplicate Gradle namespaces.
                 return;
-
-            Directory.CreateDirectory(libraryPath);
+            }
 
             string manifestPath = Path.GetFullPath(GoogleMobileAdsAndroidManifestPath);
             if (!File.Exists(manifestPath))

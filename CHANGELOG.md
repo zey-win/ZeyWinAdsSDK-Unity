@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.24
+
+- Stopped the project configurator from creating a local `GoogleMobileAdsPlugin.androidlib` in projects that use the OpenUPM Google Mobile Ads package, preventing duplicate Gradle namespace failures.
+- Updated runtime `SdkVersion` reporting to `3.9.24`.
+
 ## 3.9.23
 
 - Fixed AdMob bootstrap detection for legacy `Assets/Plugins/Android/GoogleMobileAdsPlugin.androidlib` projects so the SDK does not add a duplicate OpenUPM Google Mobile Ads package.
