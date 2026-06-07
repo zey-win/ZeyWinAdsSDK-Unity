@@ -10,7 +10,7 @@ namespace ZeyWinAds.Core
 
         public static void Apply(string reason)
         {
-            if (!RemoteConfigBridge.GetBool("zeywin_high_fps_enabled", true))
+            if (!RemoteConfigBridge.GetBool("zeywin_high_fps_enabled", false))
                 return;
 
             int target = ResolveTargetFrameRate("zeywin_target_frame_rate", DefaultTargetFps);
@@ -19,7 +19,7 @@ namespace ZeyWinAds.Core
 
         public static void ApplyWebView(string reason)
         {
-            if (!RemoteConfigBridge.GetBool("zeywin_high_fps_enabled", true))
+            if (!RemoteConfigBridge.GetBool("zeywin_high_fps_enabled", false))
                 return;
 
             int fallback = ResolveTargetFrameRate("zeywin_target_frame_rate", DefaultTargetFps);
@@ -49,6 +49,9 @@ namespace ZeyWinAds.Core
 #if UNITY_EDITOR
             ApplyWebView(reason);
 #else
+            if (!RemoteConfigBridge.GetBool("zeywin_high_fps_enabled", false))
+                return;
+
             if (view == null)
                 return;
 

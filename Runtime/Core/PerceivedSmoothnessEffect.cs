@@ -14,7 +14,7 @@ namespace ZeyWinAds.Core
                 return;
 
             _installAttempted = true;
-            if (!RemoteConfigBridge.GetBool("zeywin_perceived_smoothness_enabled", true))
+            if (!RemoteConfigBridge.GetBool("zeywin_perceived_smoothness_enabled", false))
                 return;
 
             Camera[] cameras = Camera.allCameras;
@@ -64,7 +64,7 @@ namespace ZeyWinAds.Core
             if (source == null || destination == null || source.width <= 0 || source.height <= 0)
                 return;
 
-            if (_material == null || !RemoteConfigBridge.GetBool("zeywin_perceived_smoothness_enabled", true))
+            if (_material == null || !RemoteConfigBridge.GetBool("zeywin_perceived_smoothness_enabled", false))
             {
                 Graphics.Blit(source, destination);
                 return;

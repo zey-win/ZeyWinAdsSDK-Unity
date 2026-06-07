@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.22
+
+- Made SDK high-FPS mode opt-in through Remote Config instead of enabling it by default in every game.
+- Made the perceived smoothness camera post-effect opt-in through Remote Config so legacy scenes do not render a gray frame after loading.
+- Updated Android WebView frame-rate requests to respect the same `zeywin_high_fps_enabled` gate.
+- Updated runtime `SdkVersion` reporting to `3.9.22`.
+
 ## 3.9.21
 
 - Stopped locked WebView Android back handling from throwing every frame in games that use Input System only.
