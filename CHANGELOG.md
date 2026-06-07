@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.12
+
+- Removed the bundled `installreferrer-2.2.aar` from the SDK Android plugins so it no longer duplicates Google Mobile Ads' Maven Install Referrer dependency.
+- Added `com.android.installreferrer:installreferrer:2.2` to `ZeyWinAdsDependencies.xml`, letting Gradle/EDM4U resolve one Maven-selected Install Referrer version for all SDK and AdMob code.
+- Updated runtime `SdkVersion` reporting to `3.9.12`.
+
 ## 3.9.11
 
 - Removed legacy local `installreferrer-*.aar` / `play-install-referrer-*.aar` files during AdMob bootstrap when the SDK installs modern Google Mobile Ads through OpenUPM.

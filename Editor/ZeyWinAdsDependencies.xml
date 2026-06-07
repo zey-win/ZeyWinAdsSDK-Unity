@@ -2,13 +2,16 @@
   <!--
     ZeyWinAds SDK Android dependencies.
 
-    - installreferrer is bundled as AAR in Runtime/Plugins/Android/ (rare lib, no conflicts).
+    - installreferrer is resolved via Gradle/EDM4U so Google Mobile Ads and
+      ZeyWin use one Maven-selected version instead of duplicate local AARs.
     - Google Play Services are resolved via Gradle/EDM4U (common libs, bundling causes duplicates).
 
     If your project does NOT use EDM4U, add these to your mainTemplate.gradle:
+      implementation 'com.android.installreferrer:installreferrer:2.2'
       implementation 'com.google.android.gms:play-services-ads-identifier:18.0.1'
   -->
   <androidPackages>
+    <androidPackage spec="com.android.installreferrer:installreferrer:2.2" />
     <androidPackage spec="com.google.android.gms:play-services-ads-identifier:18.0.1" />
   </androidPackages>
 </dependencies>
