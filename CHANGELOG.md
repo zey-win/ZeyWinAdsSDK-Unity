@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.10
+
+- Added SDK-side protection for imported TextMesh Pro Examples & Extras scripts: the files stay in the project, but compile only when `ZEYWIN_TMP_EXAMPLES_ENABLED` is explicitly defined.
+- Prevented Unity 6 builds from failing on legacy TMP example scripts such as `TMP_TextSelector_B.cs` and `VertexZoom.cs`.
+- Updated runtime `SdkVersion` reporting to `3.9.10`.
+
 ## 3.9.9
 
 - Updated the SDK AdMob bootstrap to install the currently available OpenUPM pair: `com.google.ads.mobile@11.2.0` with `com.google.external-dependency-manager@1.2.187`.
