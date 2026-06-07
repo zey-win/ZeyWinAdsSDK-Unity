@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.7
+
+- Added Firebase Remote Config switches for SDK-owned native/banner and popup animations, with all animation defaults disabled until explicitly enabled remotely.
+- Gated native/banner slide-in, attention pulse, shine sweep, and 15-second layout rotation through `RemoteConfigBridge`.
+- Gated popup gold flash and enter/exit transitions through `RemoteConfigBridge`, so popups render and close instantly by default.
+- Updated runtime `SdkVersion` reporting to `3.9.7`.
+
 ## 3.9.6
 
 - Hardened the SDK perceived-smoothness post-effect against early Android render frames where Unity can call `OnRenderImage` before a valid source/history texture exists.

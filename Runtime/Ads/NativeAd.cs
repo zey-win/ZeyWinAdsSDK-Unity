@@ -423,7 +423,7 @@ namespace ZeyWinAds.Ads
 
             _canRotateVariant = hasIcon && hasCta;
 
-            if (animateIn)
+            if (animateIn && AdAnimationConfig.NativeBannerSlideEnabled)
                 StartSlideIn();
             else
             {
@@ -699,6 +699,14 @@ namespace ZeyWinAds.Ads
             if (_cardRect == null)
                 return;
 
+            if (!AdAnimationConfig.NativeBannerSlideEnabled)
+            {
+                _cardRestPosition = Vector2.zero;
+                _cardRect.anchoredPosition = _cardRestPosition;
+                StartAttentionLoops();
+                return;
+            }
+
             if (_slideCoroutine != null && _canvas != null)
             {
                 _canvas.StopCoroutine(_slideCoroutine);
@@ -744,8 +752,10 @@ namespace ZeyWinAds.Ads
             if (_shineCoroutine != null)
                 _canvas.StopCoroutine(_shineCoroutine);
 
-            _attentionCoroutine = _canvas.StartCoroutine(AttentionCoroutine());
-            _shineCoroutine = _canvas.StartCoroutine(ShineCoroutine(0.7f));
+            if (AdAnimationConfig.NativeBannerAttentionEnabled)
+                _attentionCoroutine = _canvas.StartCoroutine(AttentionCoroutine());
+            if (AdAnimationConfig.NativeBannerShineEnabled)
+                _shineCoroutine = _canvas.StartCoroutine(ShineCoroutine(0.7f));
         }
 
         private void StartVariantRotation(bool canRotate)
@@ -759,7 +769,7 @@ namespace ZeyWinAds.Ads
                 _variantRotationCoroutine = null;
             }
 
-            if (!canRotate)
+            if (!canRotate || !AdAnimationConfig.NativeBannerVariantRotationEnabled)
                 return;
 
             _variantRotationCoroutine = _canvas.StartCoroutine(VariantRotationCoroutine());
@@ -811,7 +821,8 @@ namespace ZeyWinAds.Ads
                 yield return PulseRect(_iconRect, 1.05f, 0.32f);
                 yield return WiggleRect(_ctaRect, 0.44f, 4.5f, 6f);
                 yield return ShakeCard(0.30f, 5f);
-                yield return ShineCoroutine(0.62f);
+                if (AdAnimationConfig.NativeBannerShineEnabled)
+                    yield return ShineCoroutine(0.62f);
                 yield return new WaitForSecondsRealtime(AttentionIntervalSeconds);
             }
 

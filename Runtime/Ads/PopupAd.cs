@@ -135,8 +135,11 @@ namespace ZeyWinAds.Ads
 
             CreateOverlay();
             CreateCard();
-            CreateGoldFlash();
-            AnimateIn();
+            if (AdAnimationConfig.PopupGoldFlashEnabled)
+                CreateGoldFlash();
+
+            if (AdAnimationConfig.PopupTransitionEnabled)
+                AnimateIn();
         }
 
         private void CreateOverlay()
@@ -476,6 +479,13 @@ namespace ZeyWinAds.Ads
         {
             if (!_isVisible) return;
             _isVisible = false;
+
+            if (!AdAnimationConfig.PopupTransitionEnabled)
+            {
+                OnClose();
+                Destroy();
+                return;
+            }
 
             AnimateOut(() =>
             {
