@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.18
+
+- Ensured Android builds always keep `UnityPlayerActivity` enabled and launchable with a `MAIN`/`LAUNCHER` intent filter when SDK manifest setup adds deeplinks.
+- Added a safe Google test AdMob App ID fallback when AdMob is enabled but no valid Android App ID is provided, preventing startup crashes from `MobileAdsInitProvider`.
+- Updated runtime `SdkVersion` reporting to `3.9.18`.
+
 ## 3.9.17
 
 - Removed the bundled UniWebView runtime compile-time dependency on `UnityEngine.InputSystem`, keeping SDK builds compatible with games that do not install the Input System package.

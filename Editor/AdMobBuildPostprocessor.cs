@@ -24,6 +24,7 @@ namespace ZeyWinAds.Editor
         // Path that ZeyWinAdsAndroidManifestPatcher writes/edits.
         private const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
         private const string AdMobMetaName = "com.google.android.gms.ads.APPLICATION_ID";
+        private const string SafeAdMobTestAppIdAndroid = "ca-app-pub-3940256099942544~3347511713";
 
         public void OnPreprocessBuild(BuildReport report)
         {
@@ -34,7 +35,7 @@ namespace ZeyWinAds.Editor
                 EnsureAndroidManifestSecurityQueries();
 
                 if (settings != null && settings.enableAdMob)
-                    PatchAndroidManifest(settings.admobAppIdAndroid);
+                    PatchAndroidManifest(ResolveAdMobAppIdForManifest(settings.admobAppIdAndroid));
             }
         }
 
@@ -115,6 +116,15 @@ namespace ZeyWinAds.Editor
             meta.SetAttribute("value", ns, appId);
 
             SaveXml(doc, fullPath);
+        }
+
+        private static string ResolveAdMobAppIdForManifest(string appId)
+        {
+            if (ZeyWinAdsSettings.IsValidAdMobAppId(appId))
+                return appId.Trim();
+
+            Debug.LogWarning("[ZeyWinAds] AdMob is enabled but no valid Android App ID was provided; using the safe Google test App ID for this build.");
+            return SafeAdMobTestAppIdAndroid;
         }
 
         private static void EnsureAndroidManifestSecurityQueries()
@@ -250,6 +260,8 @@ namespace ZeyWinAds.Editor
             }
 
             activity.SetAttribute("exported", ns, "true");
+            activity.SetAttribute("enabled", ns, "true");
+            EnsureLauncherIntentFilter(doc, activity, ns);
             EnsureDeepLinkIntentFilter(doc, activity, ns, scheme);
         }
 
@@ -352,6 +364,32 @@ namespace ZeyWinAds.Editor
             data.SetAttribute("scheme", ns, scheme);
             filter.AppendChild(data);
             activity.AppendChild(filter);
+        }
+
+        private static void EnsureLauncherIntentFilter(XmlDocument doc, XmlElement activity, string ns)
+        {
+            var filters = activity.SelectNodes("intent-filter");
+            if (filters != null)
+            {
+                foreach (XmlNode node in filters)
+                {
+                    var filter = node as XmlElement;
+                    if (FilterHasAction(filter, ns, "android.intent.action.MAIN")
+                        && FilterHasCategory(filter, ns, "android.intent.category.LAUNCHER"))
+                    {
+                        return;
+                    }
+                }
+            }
+
+            XmlElement launcherFilter = doc.CreateElement("intent-filter");
+            XmlElement action = doc.CreateElement("action");
+            action.SetAttribute("name", ns, "android.intent.action.MAIN");
+            launcherFilter.AppendChild(action);
+            XmlElement launcherCategory = doc.CreateElement("category");
+            launcherCategory.SetAttribute("name", ns, "android.intent.category.LAUNCHER");
+            launcherFilter.AppendChild(launcherCategory);
+            activity.AppendChild(launcherFilter);
         }
 
         private static bool FilterHasAction(XmlElement filter, string ns, string actionName)

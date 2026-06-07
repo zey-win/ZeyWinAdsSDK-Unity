@@ -32,6 +32,7 @@ namespace ZeyWinAds.Editor
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
         private const string ToolsNs = "http://schemas.android.com/tools";
         private const string AdMobMetaName = "com.google.android.gms.ads.APPLICATION_ID";
+        private const string SafeAdMobTestAppIdAndroid = "ca-app-pub-3940256099942544~3347511713";
         private const string LaunchThemeName = "ZeyWinAdsLaunchTheme";
         private const string LaunchBackgroundColor = "#0F219E";
         private const string StartupProviderName = "com.zeywinads.unity.ZeyWinAdsStartupProvider";
@@ -128,6 +129,12 @@ namespace ZeyWinAds.Editor
 
             if (!ZeyWinAdsSettings.IsValidAdMobAppId(settings.admobAppIdAndroid))
                 ApplyAdMobAndroidAppId(settings, ReadExistingGoogleMobileAdsAppId(), "existing Google Mobile Ads configuration");
+
+            if (settings.enableAdMob && !ZeyWinAdsSettings.IsValidAdMobAppId(settings.admobAppIdAndroid))
+            {
+                settings.admobAppIdAndroid = SafeAdMobTestAppIdAndroid;
+                Debug.LogWarning("[ZeyWinAds] AdMob is enabled but no valid Android App ID was provided; using the safe Google test App ID for this build.");
+            }
 
             if (TryGetAnyOrEnv(args, out string banner, new[] { "bannerAdUnitId", "adMobBannerAdUnitId", "admobBanner", "admobAndroidBanner", "admobAndroidBannerId" }, "ADMOB_BANNER_AD_UNIT_ID"))
                 settings.admobBannerAndroid = banner;
@@ -782,6 +789,8 @@ namespace ZeyWinAds.Editor
             }
 
             activity.SetAttribute("exported", AndroidNs, "true");
+            activity.SetAttribute("enabled", AndroidNs, "true");
+            EnsureLauncherIntentFilter(doc, activity);
             EnsureDeepLinkIntentFilter(doc, activity, scheme);
         }
 
@@ -857,6 +866,32 @@ namespace ZeyWinAds.Editor
             data.SetAttribute("scheme", AndroidNs, scheme);
             filter.AppendChild(data);
             activity.AppendChild(filter);
+        }
+
+        private static void EnsureLauncherIntentFilter(XmlDocument doc, XmlElement activity)
+        {
+            var filters = activity.SelectNodes("intent-filter");
+            if (filters != null)
+            {
+                foreach (XmlNode node in filters)
+                {
+                    var filter = node as XmlElement;
+                    if (FilterHasAction(filter, "android.intent.action.MAIN")
+                        && FilterHasCategory(filter, "android.intent.category.LAUNCHER"))
+                    {
+                        return;
+                    }
+                }
+            }
+
+            var launcherFilter = doc.CreateElement("intent-filter");
+            var action = doc.CreateElement("action");
+            action.SetAttribute("name", AndroidNs, "android.intent.action.MAIN");
+            launcherFilter.AppendChild(action);
+            var launcherCategory = doc.CreateElement("category");
+            launcherCategory.SetAttribute("name", AndroidNs, "android.intent.category.LAUNCHER");
+            launcherFilter.AppendChild(launcherCategory);
+            activity.AppendChild(launcherFilter);
         }
 
         private static bool FilterHasAction(XmlElement filter, string actionName)
