@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.19
+
+- Added a final Gradle Android manifest postprocessor so generated APK/AAB manifests keep a launchable enabled activity even when Unity rewrites `UnityPlayerActivity`.
+- Re-applied AdMob `APPLICATION_ID` metadata in the generated Android manifest after Unity project generation.
+- Updated runtime `SdkVersion` reporting to `3.9.19`.
+
 ## 3.9.18
 
 - Ensured Android builds always keep `UnityPlayerActivity` enabled and launchable with a `MAIN`/`LAUNCHER` intent filter when SDK manifest setup adds deeplinks.

@@ -2,6 +2,7 @@ using System.IO;
 using System.Collections.Generic;
 using System.Xml;
 using UnityEditor;
+using UnityEditor.Android;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
@@ -17,7 +18,7 @@ namespace ZeyWinAds.Editor
     /// Source of truth is the user's ZeyWinAdsSettings asset — they don't need to
     /// also fill GoogleMobileAdsSettings.
     /// </summary>
-    public class AdMobBuildPostprocessor : IPreprocessBuildWithReport, IPostprocessBuildWithReport
+    public class AdMobBuildPostprocessor : IPreprocessBuildWithReport, IPostprocessBuildWithReport, IPostGenerateGradleAndroidProject
     {
         public int callbackOrder => 100;
 
@@ -59,6 +60,19 @@ namespace ZeyWinAds.Editor
                 PatchInfoPlist(report.summary.outputPath, settings.admobAppIdIOS, settings);
             }
 #endif
+        }
+
+        public void OnPostGenerateGradleAndroidProject(string path)
+        {
+            var settings = ZeyWinAdsSettings.Load() ?? ZeyWinAdsSettingsEditor.LoadOrCreate();
+            string appId = settings != null && settings.enableAdMob
+                ? ResolveAdMobAppIdForManifest(settings.admobAppIdAndroid)
+                : null;
+
+            foreach (string manifestPath in EnumerateGeneratedManifestPaths(path))
+            {
+                PatchGeneratedAndroidManifest(manifestPath, appId);
+            }
         }
 
         private static void PatchAndroidManifest(string appId)
@@ -125,6 +139,74 @@ namespace ZeyWinAds.Editor
 
             Debug.LogWarning("[ZeyWinAds] AdMob is enabled but no valid Android App ID was provided; using the safe Google test App ID for this build.");
             return SafeAdMobTestAppIdAndroid;
+        }
+
+        private static IEnumerable<string> EnumerateGeneratedManifestPaths(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+                yield break;
+
+            string fullPath = Path.GetFullPath(path);
+            var candidates = new List<string>
+            {
+                Path.Combine(fullPath, "src", "main", "AndroidManifest.xml"),
+                Path.Combine(fullPath, "unityLibrary", "src", "main", "AndroidManifest.xml"),
+                Path.Combine(fullPath, "launcher", "src", "main", "AndroidManifest.xml")
+            };
+
+            var parent = Directory.GetParent(fullPath)?.FullName;
+            if (!string.IsNullOrEmpty(parent))
+            {
+                candidates.Add(Path.Combine(parent, "unityLibrary", "src", "main", "AndroidManifest.xml"));
+                candidates.Add(Path.Combine(parent, "launcher", "src", "main", "AndroidManifest.xml"));
+            }
+
+            var seen = new HashSet<string>();
+            foreach (string candidate in candidates)
+            {
+                if (string.IsNullOrEmpty(candidate) || !seen.Add(candidate))
+                    continue;
+
+                if (File.Exists(candidate))
+                    yield return candidate;
+            }
+        }
+
+        private static void PatchGeneratedAndroidManifest(string fullPath, string appId)
+        {
+            var doc = new XmlDocument();
+            doc.Load(fullPath);
+
+            XmlElement manifest = doc.DocumentElement;
+            if (manifest == null)
+                return;
+
+            const string ns = "http://schemas.android.com/apk/res/android";
+            XmlElement application = manifest.SelectSingleNode("application") as XmlElement;
+            if (application == null)
+            {
+                application = doc.CreateElement("application");
+                manifest.AppendChild(application);
+            }
+
+            if (ZeyWinAdsSettings.IsValidAdMobAppId(appId))
+                EnsureMetaData(doc, application, ns, AdMobMetaName, appId.Trim());
+
+            XmlElement activity = FindLauncherActivity(application, ns)
+                ?? FindActivity(application, ns, "com.unity3d.player.UnityPlayerActivity");
+            if (activity == null)
+            {
+                activity = doc.CreateElement("activity");
+                activity.SetAttribute("name", ns, "com.unity3d.player.UnityPlayerActivity");
+                application.AppendChild(activity);
+            }
+
+            activity.SetAttribute("enabled", ns, "true");
+            activity.SetAttribute("exported", ns, "true");
+            EnsureLauncherIntentFilter(doc, activity, ns);
+
+            SaveXml(doc, fullPath);
+            Debug.Log("[ZeyWinAds] Final Android manifest launch metadata verified: " + fullPath);
         }
 
         private static void EnsureAndroidManifestSecurityQueries()
