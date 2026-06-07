@@ -37,6 +37,8 @@ namespace ZeyWinAds.Editor
         private const string LaunchBackgroundColor = "#0F219E";
         private const string StartupProviderName = "com.zeywinads.unity.ZeyWinAdsStartupProvider";
         private const string StartupProviderAuthoritySuffix = ".zeywinads.startup";
+        private const string UnityPlayerActivityName = "com.unity3d.player.UnityPlayerActivity";
+        private const string UnityPlayerGameActivityName = "com.unity3d.player.UnityPlayerGameActivity";
 
         [MenuItem("ZeyWinAds/Apply Project Configuration From Args", priority = 10)]
         public static void ApplyFromCommandLine()
@@ -485,7 +487,7 @@ namespace ZeyWinAds.Editor
 
         private static void ApplyLaunchThemeToActivity(XmlElement application)
         {
-            var activity = FindActivity(application, "com.unity3d.player.UnityPlayerActivity") ?? FindLauncherActivity(application);
+            var activity = FindLauncherActivity(application) ?? FindActivity(application, ResolveUnityActivityName());
             if (activity != null)
                 activity.SetAttribute("theme", AndroidNs, "@style/" + LaunchThemeName);
         }
@@ -605,7 +607,10 @@ namespace ZeyWinAds.Editor
                 resources.AppendChild(style);
             }
 
-            style.SetAttribute("parent", "@style/UnityThemeSelector");
+            string parentTheme = ResolveUnityActivityName() == UnityPlayerGameActivityName
+                ? "@style/BaseUnityGameActivityTheme"
+                : "@style/UnityThemeSelector";
+            style.SetAttribute("parent", parentTheme);
             UpsertStyleItem(doc, style, "android:windowBackground", "@color/zeywin_ads_launch_background");
             UpsertStyleItem(doc, style, "android:colorBackground", "@color/zeywin_ads_launch_background");
             UpsertStyleItem(doc, style, "android:statusBarColor", "@color/zeywin_ads_launch_background");
@@ -780,13 +785,7 @@ namespace ZeyWinAds.Editor
 
         private static void EnsureDeepLinkActivity(XmlDocument doc, XmlElement application, string scheme)
         {
-            var activity = FindActivity(application, "com.unity3d.player.UnityPlayerActivity") ?? FindLauncherActivity(application);
-            if (activity == null)
-            {
-                activity = doc.CreateElement("activity");
-                activity.SetAttribute("name", AndroidNs, "com.unity3d.player.UnityPlayerActivity");
-                application.AppendChild(activity);
-            }
+            var activity = FindOrCreateUnityActivity(doc, application);
 
             activity.SetAttribute("exported", AndroidNs, "true");
             activity.SetAttribute("enabled", AndroidNs, "true");
@@ -810,6 +809,76 @@ namespace ZeyWinAds.Editor
             }
 
             return null;
+        }
+
+        private static XmlElement FindOrCreateUnityActivity(XmlDocument doc, XmlElement application)
+        {
+            string targetActivityName = ResolveUnityActivityName();
+            var launcher = FindLauncherActivity(application);
+            if (launcher != null)
+            {
+                string launcherName = launcher.GetAttribute("name", AndroidNs);
+                if (!ShouldReplaceUnityLauncher(launcherName, targetActivityName))
+                    return launcher;
+
+                RemoveLauncherIntentFilters(launcher);
+                Debug.Log("[ZeyWinAds] Moving Android launcher from " + launcherName + " to " + targetActivityName + ".");
+            }
+
+            var activity = FindActivity(application, targetActivityName);
+            if (activity == null)
+            {
+                activity = doc.CreateElement("activity");
+                activity.SetAttribute("name", AndroidNs, targetActivityName);
+                application.AppendChild(activity);
+            }
+
+            return activity;
+        }
+
+        private static string ResolveUnityActivityName()
+        {
+#if UNITY_2023_1_OR_NEWER
+            try
+            {
+                if (PlayerSettings.Android.applicationEntry.HasFlag(AndroidApplicationEntry.GameActivity))
+                    return UnityPlayerGameActivityName;
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[ZeyWinAds] Could not read Android application entry mode: " + ex.Message);
+            }
+#endif
+            return UnityPlayerActivityName;
+        }
+
+        private static bool ShouldReplaceUnityLauncher(string currentActivityName, string targetActivityName)
+        {
+            if (string.IsNullOrEmpty(currentActivityName) || currentActivityName == targetActivityName)
+                return false;
+
+            bool currentIsUnityDefault = currentActivityName == UnityPlayerActivityName
+                || currentActivityName == UnityPlayerGameActivityName;
+            bool targetIsUnityDefault = targetActivityName == UnityPlayerActivityName
+                || targetActivityName == UnityPlayerGameActivityName;
+
+            return currentIsUnityDefault && targetIsUnityDefault;
+        }
+
+        private static void RemoveLauncherIntentFilters(XmlElement activity)
+        {
+            var filters = activity.SelectNodes("intent-filter");
+            if (filters == null)
+                return;
+
+            for (int i = filters.Count - 1; i >= 0; i--)
+            {
+                if (FilterHasAction(filters[i] as XmlElement, "android.intent.action.MAIN")
+                    && FilterHasCategory(filters[i] as XmlElement, "android.intent.category.LAUNCHER"))
+                {
+                    activity.RemoveChild(filters[i]);
+                }
+            }
         }
 
         private static XmlElement FindLauncherActivity(XmlElement application)

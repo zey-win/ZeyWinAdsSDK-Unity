@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.20
+
+- Fixed Android launcher/deeplink manifest patching for Unity 6 GameActivity builds by targeting `UnityPlayerGameActivity` when `PlayerSettings.Android.applicationEntry` uses GameActivity.
+- Moved stale launcher filters away from the wrong Unity default activity instead of leaving Android to launch a missing class.
+- Switched the SDK launch theme parent to Unity's GameActivity base theme when the host project uses GameActivity.
+- Updated runtime `SdkVersion` reporting to `3.9.20`.
+
 ## 3.9.19
 
 - Added a final Gradle Android manifest postprocessor so generated APK/AAB manifests keep a launchable enabled activity even when Unity rewrites `UnityPlayerActivity`.

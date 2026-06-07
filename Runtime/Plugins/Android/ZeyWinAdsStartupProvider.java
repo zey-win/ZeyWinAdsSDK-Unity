@@ -11,7 +11,7 @@ import android.os.Bundle;
 
 /**
  * Installed into the host app manifest by the SDK configurator. ContentProvider
- * startup happens before UnityPlayerActivity, giving the SDK a native blue
+ * startup happens before the Unity activity, giving the SDK a native blue
  * loading surface as soon as the launcher opens the app.
  */
 public final class ZeyWinAdsStartupProvider extends ContentProvider {
