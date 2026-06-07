@@ -25,7 +25,10 @@ namespace ZeyWinAds.Editor
         private const string ObsoleteAndroidRootStylesPath = "Assets/Plugins/Android/res/values/styles.xml";
         private const string ObsoleteAndroidRootStylesV31Path = "Assets/Plugins/Android/res/values-v31/styles.xml";
         private const string GoogleMobileAdsSettingsPath = "Assets/GoogleMobileAds/Resources/GoogleMobileAdsSettings.asset";
-        private const string GoogleMobileAdsAndroidManifestPath = "Assets/Plugins/Android/GoogleMobileAdsPlugin.androidlib/AndroidManifest.xml";
+        private const string GoogleMobileAdsAndroidLibraryPath = "Assets/Plugins/Android/GoogleMobileAdsPlugin.androidlib";
+        private const string GoogleMobileAdsAndroidManifestPath = GoogleMobileAdsAndroidLibraryPath + "/AndroidManifest.xml";
+        private const string GoogleMobileAdsPackagingOptionsPath = GoogleMobileAdsAndroidLibraryPath + "/packaging_options.gradle";
+        private const string GoogleMobileAdsProjectPropertiesPath = GoogleMobileAdsAndroidLibraryPath + "/project.properties";
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
         private const string ToolsNs = "http://schemas.android.com/tools";
         private const string AdMobMetaName = "com.google.android.gms.ads.APPLICATION_ID";
@@ -49,6 +52,7 @@ namespace ZeyWinAds.Editor
             ApplyPlayerSettings(args);
             ApplyZeyWinSettings(settings, args);
             PatchGoogleMobileAdsSettings(settings);
+            EnsureGoogleMobileAdsAndroidLibrary(settings);
             PatchGoogleMobileAdsAndroidManifest(settings);
             PatchAndroidLaunchThemeResources();
             PatchAndroidManifest(settings, args);
@@ -184,6 +188,50 @@ namespace ZeyWinAds.Editor
             meta.SetAttribute("name", AndroidNs, AdMobMetaName);
             meta.SetAttribute("value", AndroidNs, settings.admobAppIdAndroid);
             SaveXml(doc, fullPath);
+        }
+
+        private static void EnsureGoogleMobileAdsAndroidLibrary(ZeyWinAdsSettings settings)
+        {
+            string assetsRoot = Path.GetFullPath("Assets/GoogleMobileAds");
+            string libraryPath = Path.GetFullPath(GoogleMobileAdsAndroidLibraryPath);
+            bool hasLegacyGoogleMobileAds = Directory.Exists(assetsRoot) || Directory.Exists(libraryPath);
+            if (!hasLegacyGoogleMobileAds && string.IsNullOrEmpty(settings.admobAppIdAndroid))
+                return;
+
+            Directory.CreateDirectory(libraryPath);
+
+            string manifestPath = Path.GetFullPath(GoogleMobileAdsAndroidManifestPath);
+            if (!File.Exists(manifestPath))
+            {
+                var doc = new XmlDocument();
+                doc.LoadXml(
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
+                    "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" package=\"com.google.unity.ads\">\n" +
+                    "  <application />\n" +
+                    "</manifest>");
+                SaveXml(doc, manifestPath);
+            }
+
+            string packagingOptionsPath = Path.GetFullPath(GoogleMobileAdsPackagingOptionsPath);
+            if (!File.Exists(packagingOptionsPath))
+            {
+                File.WriteAllText(packagingOptionsPath,
+                    "android {\n" +
+                    "    packagingOptions {\n" +
+                    "        pickFirst \"META-INF/kotlinx_coroutines_core.version\"\n" +
+                    "    }\n" +
+                    "}\n",
+                    Encoding.UTF8);
+            }
+
+            string projectPropertiesPath = Path.GetFullPath(GoogleMobileAdsProjectPropertiesPath);
+            if (!File.Exists(projectPropertiesPath))
+            {
+                File.WriteAllText(projectPropertiesPath,
+                    "target=android-31\n" +
+                    "android.library=true\n",
+                    Encoding.UTF8);
+            }
         }
 
         private static void PatchAndroidManifest(ZeyWinAdsSettings settings, IDictionary<string, string> args)

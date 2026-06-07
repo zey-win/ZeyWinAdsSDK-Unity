@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.14
+
+- Repaired legacy Google Mobile Ads androidlib exports by creating missing `packaging_options.gradle`, manifest, and project properties before build and again after Gradle project generation.
+- Fixed old fleet games whose Google Mobile Ads editor scripts injected `packaging_options.gradle` references that Unity 6 did not export.
+- Updated runtime `SdkVersion` reporting to `3.9.14`.
+
 ## 3.9.13
 
 - Updated the Android batchmode builder to run the full ZeyWin project configurator before `BuildPipeline.BuildPlayer`, so fleet builds apply package name, product name, API key, and AdMob IDs even when the game had stale Android manifests.
