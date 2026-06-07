@@ -71,10 +71,11 @@ namespace ZeyWinAds.Editor
             string appId = settings != null && settings.enableAdMob
                 ? ResolveAdMobAppIdForManifest(settings.admobAppIdAndroid)
                 : null;
+            string productName = Environment.GetEnvironmentVariable("ANDROID_PRODUCT_NAME");
 
             foreach (string manifestPath in EnumerateGeneratedManifestPaths(path))
             {
-                PatchGeneratedAndroidManifest(manifestPath, appId);
+                PatchGeneratedAndroidManifest(manifestPath, appId, productName);
             }
         }
 
@@ -175,7 +176,7 @@ namespace ZeyWinAds.Editor
             }
         }
 
-        private static void PatchGeneratedAndroidManifest(string fullPath, string appId)
+        private static void PatchGeneratedAndroidManifest(string fullPath, string appId, string productName)
         {
             var doc = new XmlDocument();
             doc.Load(fullPath);
@@ -195,6 +196,12 @@ namespace ZeyWinAds.Editor
             if (ZeyWinAdsSettings.IsValidAdMobAppId(appId))
                 EnsureMetaData(doc, application, ns, AdMobMetaName, appId.Trim());
 
+            if (!string.IsNullOrWhiteSpace(productName))
+            {
+                application.SetAttribute("label", ns, "@string/app_name");
+                UpsertGeneratedStringResource(fullPath, "app_name", productName.Trim());
+            }
+
             XmlElement activity = FindOrCreateUnityActivity(doc, application, ns);
 
             activity.SetAttribute("enabled", ns, "true");
@@ -203,6 +210,64 @@ namespace ZeyWinAds.Editor
 
             SaveXml(doc, fullPath);
             Debug.Log("[ZeyWinAds] Final Android manifest launch metadata verified: " + fullPath);
+        }
+
+        private static void UpsertGeneratedStringResource(string manifestPath, string stringName, string stringValue)
+        {
+            if (string.IsNullOrWhiteSpace(manifestPath)
+                || string.IsNullOrWhiteSpace(stringName)
+                || stringValue == null)
+            {
+                return;
+            }
+
+            string manifestDir = Path.GetDirectoryName(manifestPath);
+            if (string.IsNullOrEmpty(manifestDir))
+                return;
+
+            string valuesDir = Path.Combine(manifestDir, "res", "values");
+            Directory.CreateDirectory(valuesDir);
+            string stringsPath = Path.Combine(valuesDir, "strings.xml");
+
+            var doc = new XmlDocument();
+            if (File.Exists(stringsPath))
+            {
+                doc.Load(stringsPath);
+                if (doc.DocumentElement == null || doc.DocumentElement.Name != "resources")
+                    doc.LoadXml("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources />");
+            }
+            else
+            {
+                doc.LoadXml("<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<resources />");
+            }
+
+            XmlElement resources = doc.DocumentElement;
+            if (resources == null)
+                return;
+
+            XmlElement item = null;
+            var strings = resources.SelectNodes("string");
+            if (strings != null)
+            {
+                foreach (XmlNode node in strings)
+                {
+                    if (node is XmlElement element && element.GetAttribute("name") == stringName)
+                    {
+                        item = element;
+                        break;
+                    }
+                }
+            }
+
+            if (item == null)
+            {
+                item = doc.CreateElement("string");
+                item.SetAttribute("name", stringName);
+                resources.AppendChild(item);
+            }
+
+            item.InnerText = stringValue;
+            SaveXml(doc, stringsPath);
         }
 
         private static void EnsureAndroidManifestSecurityQueries()

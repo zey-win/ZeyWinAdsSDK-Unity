@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.21
+
+- Stopped locked WebView Android back handling from throwing every frame in games that use Input System only.
+- Forced Android `app_name` resources and manifest labels from the configured app name during both source manifest setup and final Gradle manifest generation.
+- Updated runtime `SdkVersion` reporting to `3.9.21`.
+
 ## 3.9.20
 
 - Fixed Android launcher/deeplink manifest patching for Unity 6 GameActivity builds by targeting `UnityPlayerGameActivity` when `PlayerSettings.Android.applicationEntry` uses GameActivity.

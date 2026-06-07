@@ -34,6 +34,7 @@ namespace ZeyWinAds.UI
         private bool _zeyWinSurfaceActive;
         private string _lockedUrl;
         private float _lockStartedAt;
+        private bool _legacyBackInputUnavailable;
 
 #if UNITY_ANDROID
         private AndroidJavaObject _webView;
@@ -783,7 +784,7 @@ namespace ZeyWinAds.UI
             PromoteAndroidOfferSurface();
 
             // Handle Android system back button for webview navigation
-            if (Input.GetKeyDown(KeyCode.Escape) && _webView != null)
+            if (IsAndroidBackPressed() && _webView != null)
             {
                 AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
                 AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
@@ -804,6 +805,25 @@ namespace ZeyWinAds.UI
             }
 #endif
         }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private bool IsAndroidBackPressed()
+        {
+            if (_legacyBackInputUnavailable)
+                return false;
+
+            try
+            {
+                return Input.GetKeyDown(KeyCode.Escape);
+            }
+            catch (InvalidOperationException e)
+            {
+                _legacyBackInputUnavailable = true;
+                Logger.Warn("Legacy Android back input disabled because the project uses Input System only: {0}", e.Message);
+                return false;
+            }
+        }
+#endif
 
         private void OnApplicationPause(bool paused)
         {

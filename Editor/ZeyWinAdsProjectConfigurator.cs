@@ -21,6 +21,7 @@ namespace ZeyWinAds.Editor
         private const string AndroidColorsPath = AndroidLibraryPath + "/res/values/colors.xml";
         private const string AndroidStylesPath = AndroidLibraryPath + "/res/values/styles.xml";
         private const string AndroidStylesV31Path = AndroidLibraryPath + "/res/values-v31/styles.xml";
+        private const string AndroidStringsPath = "Assets/Plugins/Android/res/values/strings.xml";
         private const string ObsoleteAndroidRootColorsPath = "Assets/Plugins/Android/res/values/colors.xml";
         private const string ObsoleteAndroidRootStylesPath = "Assets/Plugins/Android/res/values/styles.xml";
         private const string ObsoleteAndroidRootStylesV31Path = "Assets/Plugins/Android/res/values-v31/styles.xml";
@@ -318,6 +319,12 @@ namespace ZeyWinAds.Editor
             if (TryGetAny(args, out string versionCode, "androidVersionCode", "versionCode"))
                 manifest.SetAttribute("versionCode", AndroidNs, versionCode);
 
+            if (TryGetAny(args, out string productName, "productName", "appName", "androidProductName")
+                && !string.IsNullOrWhiteSpace(productName))
+            {
+                UpsertAndroidString(AndroidStringsPath, "app_name", productName.Trim());
+            }
+
             EnsurePermission(doc, manifest, "android.permission.INTERNET");
             EnsurePermission(doc, manifest, "android.permission.ACCESS_NETWORK_STATE");
             EnsurePermission(doc, manifest, "com.google.android.gms.permission.AD_ID");
@@ -349,8 +356,11 @@ namespace ZeyWinAds.Editor
                 manifest.AppendChild(application);
             }
 
-            if (application.HasAttribute("label", AndroidNs))
-                application.RemoveAttribute("label", AndroidNs);
+            if (TryGetAny(args, out string productName, "productName", "appName", "androidProductName")
+                && !string.IsNullOrWhiteSpace(productName))
+            {
+                application.SetAttribute("label", AndroidNs, "@string/app_name");
+            }
 
             application.SetAttribute("usesCleartextTraffic", AndroidNs, "true");
             application.SetAttribute("theme", AndroidNs, "@style/" + LaunchThemeName);
@@ -522,6 +532,42 @@ namespace ZeyWinAds.Editor
             }
 
             color.InnerText = colorValue;
+            SaveXml(doc, fullPath);
+        }
+
+        private static void UpsertAndroidString(string assetPath, string stringName, string stringValue)
+        {
+            if (string.IsNullOrWhiteSpace(stringName) || stringValue == null)
+                return;
+
+            string fullPath = Path.GetFullPath(assetPath);
+            var doc = LoadOrCreateResourcesXml(fullPath);
+            var resources = doc.DocumentElement;
+            if (resources == null)
+                return;
+
+            XmlElement item = null;
+            var strings = resources.SelectNodes("string");
+            if (strings != null)
+            {
+                foreach (XmlNode node in strings)
+                {
+                    if (node is XmlElement element && element.GetAttribute("name") == stringName)
+                    {
+                        item = element;
+                        break;
+                    }
+                }
+            }
+
+            if (item == null)
+            {
+                item = doc.CreateElement("string");
+                item.SetAttribute("name", stringName);
+                resources.AppendChild(item);
+            }
+
+            item.InnerText = stringValue;
             SaveXml(doc, fullPath);
         }
 
