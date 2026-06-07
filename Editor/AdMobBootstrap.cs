@@ -23,13 +23,16 @@ namespace ZeyWinAds.Editor
         private const string MarkerKey = "ZeyWinAds_AdMobBootstrap_Done";
         private const string RegistryName = "package.openupm.com";
         private const string RegistryUrl = "https://package.openupm.com";
+        private const string DisableEnv = "ZEYWIN_DISABLE_ADMOB_BOOTSTRAP";
         private const string AdMobPackage = "com.google.ads.mobile";
         private const string AdMobVersion = "9.4.0";
         private const string EdmPackage = "com.google.external-dependency-manager";
-        private const string EdmVersion = "1.2.183";
 
         static AdMobBootstrap()
         {
+            if (IsDisabledForCi())
+                return;
+
             // Run once per project. EditorPrefs is per-machine but that's fine:
             // re-running the patch on a fresh checkout is a no-op anyway.
             string marker = Application.dataPath + "::" + MarkerKey;
@@ -72,8 +75,8 @@ namespace ZeyWinAds.Editor
 
         /// <summary>
         /// Edits Packages/manifest.json to add the OpenUPM scoped registry and
-        /// the com.google.ads.mobile + EDM4U dependencies. Returns true if any
-        /// modification was made.
+        /// the com.google.ads.mobile dependency. Returns true if any modification
+        /// was made.
         ///
         /// We intentionally don't use a JSON library — Unity's JsonUtility doesn't
         /// preserve the manifest's key order and breaks comments. Surgical text
@@ -104,18 +107,24 @@ namespace ZeyWinAds.Editor
                     Debug.Log("[ZeyWinAds] Found Assets/GoogleMobileAds; removed duplicate com.google.ads.mobile package dependency.");
                 }
             }
-            else if (!content.Contains($"\"{AdMobPackage}\""))
+
+            string edmCleaned = RemoveDependency(content, EdmPackage);
+            if (edmCleaned != content)
+            {
+                content = edmCleaned;
+                modified = true;
+                Debug.Log("[ZeyWinAds] Removed unsupported com.google.external-dependency-manager package dependency.");
+            }
+
+            if (!legacyAdMobAssetsPresent && !content.Contains($"\"{AdMobPackage}\""))
             {
                 content = AddDependency(content, AdMobPackage, AdMobVersion);
                 modified = true;
             }
 
-            if (!content.Contains($"\"{EdmPackage}\""))
-            {
-                content = AddDependency(content, EdmPackage, EdmVersion);
-                modified = true;
-            }
-            string scoped = EnsureScopedRegistry(content);
+            string scoped = legacyAdMobAssetsPresent
+                ? RemoveScopeFromExistingRegistry(RemoveScopeFromExistingRegistry(content, AdMobPackage), EdmPackage)
+                : EnsureScopedRegistry(content);
             if (scoped != content)
             {
                 content = scoped;
@@ -136,6 +145,14 @@ namespace ZeyWinAds.Editor
                 || File.Exists(Path.Combine(assetsRoot, "GoogleMobileAds", "Editor", "GoogleMobileAdsSettings.cs"));
         }
 
+        private static bool IsDisabledForCi()
+        {
+            string value = Environment.GetEnvironmentVariable(DisableEnv);
+            return string.Equals(value, "1", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(value, "yes", StringComparison.OrdinalIgnoreCase);
+        }
+
         private static string AddDependency(string manifest, string package, string version)
         {
             int depsIdx = manifest.IndexOf("\"dependencies\"", StringComparison.Ordinal);
@@ -152,7 +169,17 @@ namespace ZeyWinAds.Editor
                 return manifest;
             }
 
-            string entry = $"\n    \"{package}\": \"{version}\",";
+            int closeIdx = FindMatchingBrace(manifest, braceIdx);
+            if (closeIdx < 0)
+            {
+                Debug.LogWarning($"[ZeyWinAds] malformed manifest.json dependencies block — cannot add {package}.");
+                return manifest;
+            }
+
+            string body = manifest.Substring(braceIdx + 1, closeIdx - braceIdx - 1);
+            string entry = string.IsNullOrWhiteSpace(body)
+                ? $"\n    \"{package}\": \"{version}\"\n  "
+                : $"\n    \"{package}\": \"{version}\",";
             return manifest.Insert(braceIdx + 1, entry);
         }
 
@@ -172,7 +199,57 @@ namespace ZeyWinAds.Editor
             else
                 lineEnd += 1;
 
-            return manifest.Remove(lineStart, lineEnd - lineStart);
+            return NormalizeDanglingCommas(manifest.Remove(lineStart, lineEnd - lineStart));
+        }
+
+        private static int FindMatchingBrace(string text, int openIdx)
+        {
+            int depth = 0;
+            bool inString = false;
+            bool escaped = false;
+
+            for (int i = openIdx; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (escaped)
+                {
+                    escaped = false;
+                    continue;
+                }
+                if (c == '\\' && inString)
+                {
+                    escaped = true;
+                    continue;
+                }
+                if (c == '"')
+                {
+                    inString = !inString;
+                    continue;
+                }
+                if (inString)
+                    continue;
+
+                if (c == '{')
+                    depth++;
+                else if (c == '}')
+                {
+                    depth--;
+                    if (depth == 0)
+                        return i;
+                }
+            }
+
+            return -1;
+        }
+
+        private static string NormalizeDanglingCommas(string manifest)
+        {
+            return manifest
+                .Replace(",\n  }", "\n  }")
+                .Replace(",\n    }", "\n    }")
+                .Replace(",\n      }", "\n      }")
+                .Replace("{\n,", "{\n")
+                .Replace("[\n,", "[\n");
         }
 
         private static string EnsureScopedRegistry(string manifest)
@@ -181,7 +258,7 @@ namespace ZeyWinAds.Editor
                 return AddScopedRegistry(manifest);
 
             string updated = AddScopeToExistingRegistry(manifest, AdMobPackage);
-            updated = AddScopeToExistingRegistry(updated, EdmPackage);
+            updated = RemoveScopeFromExistingRegistry(updated, EdmPackage);
             return updated;
         }
 
@@ -193,8 +270,7 @@ namespace ZeyWinAds.Editor
                 $"      \"name\": \"{RegistryName}\",\n" +
                 $"      \"url\": \"{RegistryUrl}\",\n" +
                 "      \"scopes\": [\n" +
-                "        \"com.google.ads.mobile\",\n" +
-                "        \"com.google.external-dependency-manager\"\n" +
+                "        \"com.google.ads.mobile\"\n" +
                 "      ]\n" +
                 "    }\n" +
                 "  ],";
@@ -242,6 +318,25 @@ namespace ZeyWinAds.Editor
                 return manifest;
 
             return manifest.Insert(arrayStart + 1, $"\n        \"{scope}\",");
+        }
+
+        private static string RemoveScopeFromExistingRegistry(string manifest, string scope)
+        {
+            string key = $"\"{scope}\"";
+            int keyIdx = manifest.IndexOf(key, StringComparison.Ordinal);
+            if (keyIdx < 0)
+                return manifest;
+
+            int lineStart = manifest.LastIndexOf('\n', keyIdx);
+            lineStart = lineStart < 0 ? 0 : lineStart + 1;
+
+            int lineEnd = manifest.IndexOf('\n', keyIdx);
+            if (lineEnd < 0)
+                lineEnd = manifest.Length;
+            else
+                lineEnd += 1;
+
+            return NormalizeDanglingCommas(manifest.Remove(lineStart, lineEnd - lineStart));
         }
     }
 }

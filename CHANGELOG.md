@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.8
+
+- Stopped auto-adding the unsupported `com.google.external-dependency-manager` UPM dependency from the SDK AdMob bootstrap.
+- Added `ZEYWIN_DISABLE_ADMOB_BOOTSTRAP=1` support so GitHub Actions can own manifest normalization during fleet builds.
+- Hardened manifest text edits so dependency removal does not leave dangling JSON commas.
+- Updated runtime `SdkVersion` reporting to `3.9.8`.
+
 ## 3.9.7
 
 - Added Firebase Remote Config switches for SDK-owned native/banner and popup animations, with all animation defaults disabled until explicitly enabled remotely.
