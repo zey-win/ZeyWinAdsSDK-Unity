@@ -173,7 +173,10 @@ namespace ZeyWinAds
 
             if (blockReason == "none")
             {
-                WarmStartupInterstitial(preloadSettings);
+                if (Core.AndroidDeviceProfile.IsStartupAdPreloadConstrained)
+                    Core.Logger.Warn("Startup interstitial warmup skipped for compatibility: {0}", Core.AndroidDeviceProfile.StartupAdPreloadConstraintReason);
+                else
+                    WarmStartupInterstitial(preloadSettings);
             }
 
             // CrashGuard is an optional sibling package auto-installed via CrashGuardBootstrap.

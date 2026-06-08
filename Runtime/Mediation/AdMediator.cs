@@ -86,7 +86,11 @@ namespace ZeyWinAds.Mediation
             // only then do we explicitly re-trigger preloads.
             FrameRateController.Apply("mediator_initialize");
             bool wasAdMobInitialized = AdMobNetwork.IsInitialized;
-            AdMobNetwork.Initialize(settings);
+            bool deferStartupPreloads = AndroidDeviceProfile.IsStartupAdPreloadConstrained;
+            if (deferStartupPreloads)
+                Logger.Warn("[Mediator] AdMob startup preloads deferred for compatibility: {0}", AndroidDeviceProfile.StartupAdPreloadConstraintReason);
+
+            AdMobNetwork.Initialize(settings, deferStartupPreloads);
             if (wasAdMobInitialized)
                 AdMobNetwork.RepreloadAll();
         }

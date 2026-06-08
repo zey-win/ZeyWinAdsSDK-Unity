@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.27
+
+- Added an Android low-memory startup guard that skips SDK-owned startup interstitial warmup and eager preload-all on constrained devices, preventing older games from being killed before their first scene is playable.
+- Deferred AdMob startup preloads on constrained Android devices while keeping explicit later ad loads available.
+- Added Remote Config controls for the guard thresholds: `zeywin_low_memory_startup_guard_enabled`, `zeywin_low_memory_system_mb_threshold`, `zeywin_low_memory_graphics_mb_threshold`, and `zeywin_low_memory_class_mb_threshold`.
+- Updated runtime `SdkVersion` reporting to `3.9.27`.
+
 ## 3.9.26
 
 - Kept Android app labels out of the generated `unityLibrary` manifest so Unity 6 launcher/library manifest merge does not fail; launcher remains the app label owner.

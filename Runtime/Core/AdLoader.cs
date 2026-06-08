@@ -168,6 +168,12 @@ namespace ZeyWinAds.Core
         /// </summary>
         public void OnSDKInitialize()
         {
+            if (AndroidDeviceProfile.IsStartupAdPreloadConstrained)
+            {
+                Logger.Warn("Preload on initialize skipped for compatibility: {0}", AndroidDeviceProfile.StartupAdPreloadConstraintReason);
+                return;
+            }
+
             if (!Settings.preloadOnInitialize)
             {
                 Logger.Debug("Preload on initialize is disabled");
