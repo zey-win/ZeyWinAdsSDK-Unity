@@ -360,7 +360,7 @@ namespace ZeyWinAds.Editor
             if (TryGetAny(args, out string productName, "productName", "appName", "androidProductName")
                 && !string.IsNullOrWhiteSpace(productName))
             {
-                application.SetAttribute("label", AndroidNs, "@string/app_name");
+                application.RemoveAttribute("label", AndroidNs);
             }
 
             application.SetAttribute("usesCleartextTraffic", AndroidNs, "true");
@@ -1121,7 +1121,7 @@ namespace ZeyWinAds.Editor
             doc.LoadXml(
                 "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n" +
                 "<manifest xmlns:android=\"http://schemas.android.com/apk/res/android\" xmlns:tools=\"http://schemas.android.com/tools\">\n" +
-                "  <application android:label=\"@string/app_name\" android:usesCleartextTraffic=\"true\" />\n" +
+                "  <application android:usesCleartextTraffic=\"true\" />\n" +
                 "</manifest>");
 
             SaveXml(doc, fullPath);

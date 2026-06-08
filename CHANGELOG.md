@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.26
+
+- Kept Android app labels out of the generated `unityLibrary` manifest so Unity 6 launcher/library manifest merge does not fail; launcher remains the app label owner.
+- Updated runtime `SdkVersion` reporting to `3.9.26`.
+
 ## 3.9.25
 
 - Added Unity 6 Android manifest label conflict protection by applying `tools:replace="android:label"` when SDK/CI sets the generated Android app name.

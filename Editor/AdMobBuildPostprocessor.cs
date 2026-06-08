@@ -198,10 +198,19 @@ namespace ZeyWinAds.Editor
 
             if (!string.IsNullOrWhiteSpace(productName))
             {
-                EnsureToolsNamespace(manifest);
-                application.SetAttribute("label", AndroidNs, "@string/app_name");
-                EnsureToolsReplace(application, "android:label");
                 UpsertGeneratedStringResource(fullPath, "app_name", productName.Trim());
+
+                if (IsUnityLibraryManifest(fullPath))
+                {
+                    application.RemoveAttribute("label", AndroidNs);
+                    RemoveToolsReplace(application, "android:label");
+                }
+                else
+                {
+                    EnsureToolsNamespace(manifest);
+                    application.SetAttribute("label", AndroidNs, "@string/app_name");
+                    EnsureToolsReplace(application, "android:label");
+                }
             }
 
             XmlElement activity = FindOrCreateUnityActivity(doc, application, AndroidNs);
@@ -212,6 +221,15 @@ namespace ZeyWinAds.Editor
 
             SaveXml(doc, fullPath);
             Debug.Log("[ZeyWinAds] Final Android manifest launch metadata verified: " + fullPath);
+        }
+
+        private static bool IsUnityLibraryManifest(string fullPath)
+        {
+            if (string.IsNullOrEmpty(fullPath))
+                return false;
+
+            string normalized = fullPath.Replace('\\', '/');
+            return normalized.EndsWith("/unityLibrary/src/main/AndroidManifest.xml", StringComparison.OrdinalIgnoreCase);
         }
 
         private static void EnsureToolsNamespace(XmlElement manifest)
@@ -241,6 +259,31 @@ namespace ZeyWinAds.Editor
             }
 
             element.SetAttribute("replace", ToolsNs, existing.TrimEnd() + "," + value);
+        }
+
+        private static void RemoveToolsReplace(XmlElement element, string value)
+        {
+            if (element == null || string.IsNullOrWhiteSpace(value))
+                return;
+
+            string existing = element.GetAttribute("replace", ToolsNs);
+            if (string.IsNullOrWhiteSpace(existing))
+                return;
+
+            var kept = new List<string>();
+            foreach (string item in existing.Split(','))
+            {
+                string trimmed = item.Trim();
+                if (trimmed.Length == 0 || string.Equals(trimmed, value, StringComparison.Ordinal))
+                    continue;
+
+                kept.Add(trimmed);
+            }
+
+            if (kept.Count == 0)
+                element.RemoveAttribute("replace", ToolsNs);
+            else
+                element.SetAttribute("replace", ToolsNs, string.Join(",", kept.ToArray()));
         }
 
         private static void UpsertGeneratedStringResource(string manifestPath, string stringName, string stringValue)
