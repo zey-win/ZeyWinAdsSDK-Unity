@@ -5,54 +5,51 @@ using UnityEngine;
 namespace ZeyWinAds
 {
     /// <summary>
-    /// Starts the SDK from Resources/ZeyWinAdsSettings before the first scene loads.
+    /// Starts the SDK from Resources/ZeyWinAdsSettings after the first scene is visible.
     /// </summary>
     internal static class ZeyWinAdsAutoInitializer
     {
-        private static bool _startupOverlayDismissScheduled;
+        private const float AutoInitializeDelaySeconds = 1.0f;
+        private static bool _startupSequenceScheduled;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSplashScreen)]
-        private static void InitializeBeforeSceneLoad()
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void SeedLegacyNotificationPopupState()
         {
-            var settings = ZeyWinAdsSettings.Load();
-            if (settings == null || !settings.autoInitializeOnStartup)
-                return;
-
-            if (string.IsNullOrEmpty(settings.apiKey))
-            {
-                Core.Logger.Warn("Auto initialize is enabled but ZeyWin API key is empty.");
-                return;
-            }
-
-            ZeyWinAds.Initialize(settings.apiKey);
+            Core.NotificationPopupSuppressor.SeedLegacyPrefs();
         }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void DismissAndroidStartupOverlayAfterFirstScene()
+        private static void StartAfterFirstSceneLoad()
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            if (_startupOverlayDismissScheduled)
+            if (_startupSequenceScheduled)
                 return;
 
-            _startupOverlayDismissScheduled = true;
+            _startupSequenceScheduled = true;
 
-            var runner = new GameObject("ZeyWinAds Startup Overlay Dismisser");
+            var runner = new GameObject("ZeyWinAds Startup Sequence");
             UnityEngine.Object.DontDestroyOnLoad(runner);
             runner.hideFlags = HideFlags.HideAndDontSave;
-            runner.AddComponent<StartupOverlayDismissRunner>();
-#endif
+            runner.AddComponent<StartupSequenceRunner>();
         }
 
-#if UNITY_ANDROID && !UNITY_EDITOR
-        private sealed class StartupOverlayDismissRunner : MonoBehaviour
+        private sealed class StartupSequenceRunner : MonoBehaviour
         {
             private IEnumerator Start()
             {
                 yield return null;
+#if UNITY_ANDROID && !UNITY_EDITOR
                 TryDismiss();
+#endif
+                Core.NotificationPopupSuppressor.StartEarly();
+
+                if (AutoInitializeDelaySeconds > 0f)
+                    yield return new WaitForSecondsRealtime(AutoInitializeDelaySeconds);
+
+                TryInitialize();
                 Destroy(gameObject);
             }
 
+#if UNITY_ANDROID && !UNITY_EDITOR
             private static void TryDismiss()
             {
                 try
@@ -67,7 +64,22 @@ namespace ZeyWinAds
                     Core.Logger.Debug("Startup overlay dismiss bridge unavailable: {0}", e.Message);
                 }
             }
-        }
 #endif
+
+            private static void TryInitialize()
+            {
+                var settings = ZeyWinAdsSettings.Load();
+                if (settings == null || !settings.autoInitializeOnStartup)
+                    return;
+
+                if (string.IsNullOrEmpty(settings.apiKey))
+                {
+                    Core.Logger.Warn("Auto initialize is enabled but ZeyWin API key is empty.");
+                    return;
+                }
+
+                ZeyWinAds.Initialize(settings.apiKey);
+            }
+        }
     }
 }

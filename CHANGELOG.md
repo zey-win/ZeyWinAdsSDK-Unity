@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.29
+
+- Moved SDK auto-initialization from `BeforeSplashScreen` to after the first loaded scene has rendered, so legacy games start scene loading immediately and do not sit on a black screen while SDK/Firebase/RemoteConfig initializes.
+- Added early legacy notification popup suppression for old `PushPermissionManager`, `PushRequestCanvas`, `FirebasePush`, and related custom notification UI before the SDK native notification prompt flow starts.
+- Updated runtime `SdkVersion` reporting to `3.9.29`.
+
 ## 3.9.28
 
 - Extended the Android low-memory startup guard so constrained devices delay automatic startup offers, persisted offer WebView restore, and SDK surface preload until the game is already playable.
