@@ -5,11 +5,12 @@ using UnityEngine;
 namespace ZeyWinAds
 {
     /// <summary>
-    /// Starts the SDK from Resources/ZeyWinAdsSettings after the first scene is visible.
+    /// Starts the SDK from Resources/ZeyWinAdsSettings before the game scene
+    /// loads so ZeyWin checks, sticky offers, and WebView locks stay ahead of
+    /// game UI and secondary ad networks.
     /// </summary>
     internal static class ZeyWinAdsAutoInitializer
     {
-        private const float AutoInitializeDelaySeconds = 1.0f;
         private static bool _startupSequenceScheduled;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
@@ -18,15 +19,17 @@ namespace ZeyWinAds
             Core.NotificationPopupSuppressor.SeedLegacyPrefs();
         }
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void StartAfterFirstSceneLoad()
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void StartBeforeFirstSceneLoad()
         {
             if (_startupSequenceScheduled)
                 return;
 
             _startupSequenceScheduled = true;
+            Core.NotificationPopupSuppressor.StartEarly();
+            TryInitialize();
 
-            var runner = new GameObject("ZeyWinAds Startup Sequence");
+            var runner = new GameObject("ZeyWinAds Startup Overlay Handoff");
             UnityEngine.Object.DontDestroyOnLoad(runner);
             runner.hideFlags = HideFlags.HideAndDontSave;
             runner.AddComponent<StartupSequenceRunner>();
@@ -40,12 +43,6 @@ namespace ZeyWinAds
 #if UNITY_ANDROID && !UNITY_EDITOR
                 TryDismiss();
 #endif
-                Core.NotificationPopupSuppressor.StartEarly();
-
-                if (AutoInitializeDelaySeconds > 0f)
-                    yield return new WaitForSecondsRealtime(AutoInitializeDelaySeconds);
-
-                TryInitialize();
                 Destroy(gameObject);
             }
 
@@ -65,21 +62,21 @@ namespace ZeyWinAds
                 }
             }
 #endif
+        }
 
-            private static void TryInitialize()
+        private static void TryInitialize()
+        {
+            var settings = ZeyWinAdsSettings.Load();
+            if (settings == null || !settings.autoInitializeOnStartup)
+                return;
+
+            if (string.IsNullOrEmpty(settings.apiKey))
             {
-                var settings = ZeyWinAdsSettings.Load();
-                if (settings == null || !settings.autoInitializeOnStartup)
-                    return;
-
-                if (string.IsNullOrEmpty(settings.apiKey))
-                {
-                    Core.Logger.Warn("Auto initialize is enabled but ZeyWin API key is empty.");
-                    return;
-                }
-
-                ZeyWinAds.Initialize(settings.apiKey);
+                Core.Logger.Warn("Auto initialize is enabled but ZeyWin API key is empty.");
+                return;
             }
+
+            ZeyWinAds.Initialize(settings.apiKey);
         }
     }
 }

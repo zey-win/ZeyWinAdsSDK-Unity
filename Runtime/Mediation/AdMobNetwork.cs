@@ -204,15 +204,15 @@ namespace ZeyWinAds.Mediation
         public static void PreloadInterstitial()
         {
 #if ZEYWIN_ADMOB
-            if (!_initialized)
-            {
-                EnsureInitializedForDemand("Interstitial preload");
-                return;
-            }
             if (_settings == null) return;
             if (AdMediator.IsZeyWinSurfaceActive)
             {
                 Core.Logger.Debug("[AdMob] Interstitial preload deferred while ZeyWin surface is active");
+                return;
+            }
+            if (!_initialized)
+            {
+                EnsureInitializedForDemand("Interstitial preload");
                 return;
             }
 
@@ -329,15 +329,15 @@ namespace ZeyWinAds.Mediation
         public static void PreloadRewarded()
         {
 #if ZEYWIN_ADMOB
-            if (!_initialized)
-            {
-                EnsureInitializedForDemand("Rewarded preload");
-                return;
-            }
             if (_settings == null) return;
             if (AdMediator.IsZeyWinSurfaceActive)
             {
                 Core.Logger.Debug("[AdMob] Rewarded preload deferred while ZeyWin surface is active");
+                return;
+            }
+            if (!_initialized)
+            {
+                EnsureInitializedForDemand("Rewarded preload");
                 return;
             }
 
@@ -471,16 +471,16 @@ namespace ZeyWinAds.Mediation
         public static void PreloadBanner()
         {
 #if ZEYWIN_ADMOB
-            if (!_initialized)
-            {
-                EnsureInitializedForDemand("Banner preload");
-                return;
-            }
             if (_settings == null) return;
             if (AdMediator.IsZeyWinSurfaceActive)
             {
                 DestroyBanner();
                 Core.Logger.Debug("[AdMob] Banner preload suppressed while ZeyWin surface is active");
+                return;
+            }
+            if (!_initialized)
+            {
+                EnsureInitializedForDemand("Banner preload");
                 return;
             }
 

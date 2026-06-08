@@ -68,7 +68,7 @@ namespace ZeyWinAds.Editor
 
             text = ReplaceOnce(text,
                 "        Load(AdNetwork.AdMob, AdFormat.Banner);\n        Load(AdNetwork.ZeyWin, AdFormat.Banner);",
-                "        _currentBannerNet = AdNetwork.ZeyWin;\n        Load(AdNetwork.ZeyWin, AdFormat.Banner);",
+                "        _currentBannerNet = AdNetwork.ZeyWin;\n        TryPreloadZeyWinNativeBanner(\"initial_show\");",
                 ref changes);
 
             text = ReplaceMethod(text,
@@ -106,7 +106,12 @@ namespace ZeyWinAds.Editor
 
             text = ReplaceOnce(text,
                 "                Debug.Log($\"[BannerRotation] other not ready, preload {other}\");\n                Load(other, AdFormat.Banner);",
+                "                TryPreloadZeyWinNativeBanner(\"rotation_not_ready\");",
+                ref changes);
+
+            text = ReplaceOnce(text,
                 "                Debug.Log(\"[BannerRotation] ZeyWin native banner not ready, preload\");\n                Load(AdNetwork.ZeyWin, AdFormat.Banner);",
+                "                TryPreloadZeyWinNativeBanner(\"rotation_not_ready\");",
                 ref changes);
 
             text = ReplaceOnce(text,
@@ -116,8 +121,15 @@ namespace ZeyWinAds.Editor
 
             text = ReplaceOnce(text,
                 "        Debug.Log(\"[BannerRotation] restore failed, preload both\");\n        Load(AdNetwork.ZeyWin, AdFormat.Banner);\n        Load(AdNetwork.AdMob, AdFormat.Banner);",
-                "        Debug.Log(\"[BannerRotation] restore failed, preload ZeyWin native banner\");\n        Load(AdNetwork.ZeyWin, AdFormat.Banner);",
+                "        TryPreloadZeyWinNativeBanner(\"restore_failed\");",
                 ref changes);
+
+            text = ReplaceOnce(text,
+                "        Debug.Log(\"[BannerRotation] restore failed, preload ZeyWin native banner\");\n        Load(AdNetwork.ZeyWin, AdFormat.Banner);",
+                "        TryPreloadZeyWinNativeBanner(\"restore_failed\");",
+                ref changes);
+
+            text = EnsureNativeBannerThrottleHelper(text, ref changes);
 
             text = ReplaceMethod(text,
                 "    private void ShowBannerForced(AdNetwork net)",
@@ -206,6 +218,36 @@ namespace ZeyWinAds.Editor
 
             changes++;
             return text.Remove(index, oldValue.Length).Insert(index, newValue);
+        }
+
+        private static string EnsureNativeBannerThrottleHelper(string text, ref int changes)
+        {
+            if (text.Contains("private void TryPreloadZeyWinNativeBanner("))
+                return text;
+
+            const string anchor = "    private void ShowBannerForced(AdNetwork net)";
+            int index = text.IndexOf(anchor, StringComparison.Ordinal);
+            if (index < 0)
+                return text;
+
+            const string helper =
+                "    private float _zeyWinNativeBannerNextPreloadAt = -9999f;\n" +
+                "    private const float ZeyWinNativeBannerPreloadIntervalSeconds = 60f;\n\n" +
+                "    private void TryPreloadZeyWinNativeBanner(string reason)\n" +
+                "    {\n" +
+                "        float now = UnityEngine.Time.realtimeSinceStartup;\n" +
+                "        if (now < _zeyWinNativeBannerNextPreloadAt)\n" +
+                "        {\n" +
+                "            Debug.Log($\"[BannerRotation] ZeyWin native banner preload throttled ({UnityEngine.Mathf.CeilToInt(_zeyWinNativeBannerNextPreloadAt - now)}s, {reason})\");\n" +
+                "            return;\n" +
+                "        }\n\n" +
+                "        _zeyWinNativeBannerNextPreloadAt = now + ZeyWinNativeBannerPreloadIntervalSeconds;\n" +
+                "        Debug.Log($\"[BannerRotation] ZeyWin native banner preload ({reason})\");\n" +
+                "        Load(AdNetwork.ZeyWin, AdFormat.Banner);\n" +
+                "    }\n\n";
+
+            changes++;
+            return text.Insert(index, helper);
         }
 
         private static string ToAssetPath(string fullPath)

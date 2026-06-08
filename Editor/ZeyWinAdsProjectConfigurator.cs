@@ -40,6 +40,8 @@ namespace ZeyWinAds.Editor
         private const string StartupProviderAuthoritySuffix = ".zeywinads.startup";
         private const string UnityPlayerActivityName = "com.unity3d.player.UnityPlayerActivity";
         private const string UnityPlayerGameActivityName = "com.unity3d.player.UnityPlayerGameActivity";
+        private const string UnityActivityConfigChanges =
+            "mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|fontScale|layoutDirection|colorMode";
 
         [MenuItem("ZeyWinAds/Apply Project Configuration From Args", priority = 10)]
         public static void ApplyFromCommandLine()
@@ -367,6 +369,7 @@ namespace ZeyWinAds.Editor
             application.SetAttribute("theme", AndroidNs, "@style/" + LaunchThemeName);
             EnsureStartupProvider(doc, application, args);
             ApplyLaunchThemeToActivity(application);
+            EnsureUnityActivityHandlesConfigurationChanges(application);
 
             if (ZeyWinAdsSettings.IsValidAdMobAppId(settings.admobAppIdAndroid))
             {
@@ -387,6 +390,7 @@ namespace ZeyWinAds.Editor
                 EnsureMetaData(application, "zeywin.deeplink.scheme", deepLinkScheme);
                 EnsureDeepLinkActivity(doc, application, deepLinkScheme);
                 ApplyLaunchThemeToActivity(application);
+                EnsureUnityActivityHandlesConfigurationChanges(application);
             }
         }
 
@@ -501,6 +505,22 @@ namespace ZeyWinAds.Editor
             var activity = FindLauncherActivity(application) ?? FindActivity(application, ResolveUnityActivityName());
             if (activity != null)
                 activity.SetAttribute("theme", AndroidNs, "@style/" + LaunchThemeName);
+        }
+
+        private static void EnsureUnityActivityHandlesConfigurationChanges(XmlElement application)
+        {
+            ApplyUnityActivityConfigurationChanges(FindLauncherActivity(application));
+            ApplyUnityActivityConfigurationChanges(FindActivity(application, ResolveUnityActivityName()));
+            ApplyUnityActivityConfigurationChanges(FindActivity(application, UnityPlayerActivityName));
+            ApplyUnityActivityConfigurationChanges(FindActivity(application, UnityPlayerGameActivityName));
+        }
+
+        private static void ApplyUnityActivityConfigurationChanges(XmlElement activity)
+        {
+            if (activity == null)
+                return;
+
+            activity.SetAttribute("configChanges", AndroidNs, UnityActivityConfigChanges);
         }
 
         private static void UpsertAndroidColor(string assetPath, string colorName, string colorValue)

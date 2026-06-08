@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.30
+
+- Added Android `configChanges` protection to Unity launcher activities, including `UnityPlayerGameActivity`, so rotating the device does not recreate the Unity activity and restart the game scene.
+- Re-applied the same `configChanges` protection during the final Gradle manifest postprocess step, covering Unity 6 generated launcher manifests.
+- Moved automatic SDK startup back before the first scene so ZeyWin checks, sticky offers, and WebView locks run ahead of game UI while still deferring only secondary preloads on constrained Android devices.
+- Suppressed AdMob preload wakeups while a ZeyWin surface is active, keeping offers and ZeyWin banners above AdMob fallback.
+- Throttled legacy native banner preload retries to avoid repeated ad-request churn in old games.
+- Updated runtime `SdkVersion` reporting to `3.9.30`.
+
 ## 3.9.29
 
 - Moved SDK auto-initialization from `BeforeSplashScreen` to after the first loaded scene has rendered, so legacy games start scene loading immediately and do not sit on a black screen while SDK/Firebase/RemoteConfig initializes.

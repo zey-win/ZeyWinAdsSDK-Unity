@@ -29,6 +29,8 @@ namespace ZeyWinAds.Editor
         private const string SafeAdMobTestAppIdAndroid = "ca-app-pub-3940256099942544~3347511713";
         private const string UnityPlayerActivityName = "com.unity3d.player.UnityPlayerActivity";
         private const string UnityPlayerGameActivityName = "com.unity3d.player.UnityPlayerGameActivity";
+        private const string UnityActivityConfigChanges =
+            "mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|fontScale|layoutDirection|colorMode";
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
         private const string ToolsNs = "http://schemas.android.com/tools";
 
@@ -217,6 +219,7 @@ namespace ZeyWinAds.Editor
 
             activity.SetAttribute("enabled", AndroidNs, "true");
             activity.SetAttribute("exported", AndroidNs, "true");
+            EnsureUnityActivityConfigurationChanges(application, activity, AndroidNs);
             EnsureLauncherIntentFilter(doc, activity, AndroidNs);
 
             SaveXml(doc, fullPath);
@@ -518,6 +521,22 @@ namespace ZeyWinAds.Editor
             }
 
             return null;
+        }
+
+        private static void EnsureUnityActivityConfigurationChanges(XmlElement application, XmlElement primaryActivity, string ns)
+        {
+            ApplyUnityActivityConfigurationChanges(primaryActivity, ns);
+            ApplyUnityActivityConfigurationChanges(FindLauncherActivity(application, ns), ns);
+            ApplyUnityActivityConfigurationChanges(FindActivity(application, ns, UnityPlayerActivityName), ns);
+            ApplyUnityActivityConfigurationChanges(FindActivity(application, ns, UnityPlayerGameActivityName), ns);
+        }
+
+        private static void ApplyUnityActivityConfigurationChanges(XmlElement activity, string ns)
+        {
+            if (activity == null)
+                return;
+
+            activity.SetAttribute("configChanges", ns, UnityActivityConfigChanges);
         }
 
         private static XmlElement FindOrCreateUnityActivity(XmlDocument doc, XmlElement application, string ns)
