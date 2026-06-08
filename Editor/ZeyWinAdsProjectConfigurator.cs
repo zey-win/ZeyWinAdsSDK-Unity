@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Xml;
 using UnityEditor;
 using UnityEngine;
@@ -18,6 +19,7 @@ namespace ZeyWinAds.Editor
         private const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
         private const string AndroidLibraryPath = "Assets/Plugins/Android/ZeyWinAds.androidlib";
         private const string AndroidLibraryManifestPath = AndroidLibraryPath + "/AndroidManifest.xml";
+        private const string ProjectQualitySettingsPath = "ProjectSettings/QualitySettings.asset";
         private const string AndroidColorsPath = AndroidLibraryPath + "/res/values/colors.xml";
         private const string AndroidStylesPath = AndroidLibraryPath + "/res/values/styles.xml";
         private const string AndroidStylesV31Path = AndroidLibraryPath + "/res/values-v31/styles.xml";
@@ -56,6 +58,7 @@ namespace ZeyWinAds.Editor
 
             TextMeshProBootstrap.EnsureInstalledAndConfigured();
             ApplyPlayerSettings(args);
+            ApplyLowQualitySettings();
             ApplyZeyWinSettings(settings, args);
             PatchGoogleMobileAdsSettings(settings);
             EnsureGoogleMobileAdsAndroidLibrary(settings);
@@ -109,6 +112,57 @@ namespace ZeyWinAds.Editor
                 PlayerSettings.allowedAutorotateToLandscapeLeft = true;
                 PlayerSettings.allowedAutorotateToLandscapeRight = true;
             }
+        }
+
+        private static void ApplyLowQualitySettings()
+        {
+            int lowIndex = ResolveLowQualityIndex();
+
+            if (QualitySettings.GetQualityLevel() != lowIndex)
+                QualitySettings.SetQualityLevel(lowIndex, true);
+
+            PatchQualitySettingsAsset(lowIndex);
+        }
+
+        private static int ResolveLowQualityIndex()
+        {
+            var names = QualitySettings.names;
+            if (names == null || names.Length == 0)
+                return 0;
+
+            for (int i = 0; i < names.Length; i++)
+            {
+                if (string.Equals(names[i], "Low", StringComparison.OrdinalIgnoreCase))
+                    return i;
+            }
+
+            return 0;
+        }
+
+        private static void PatchQualitySettingsAsset(int lowIndex)
+        {
+            string fullPath = Path.GetFullPath(ProjectQualitySettingsPath);
+            if (!File.Exists(fullPath))
+                return;
+
+            string text = File.ReadAllText(fullPath, Encoding.UTF8);
+            string next = Regex.Replace(text, @"m_CurrentQuality:\s*\d+", "m_CurrentQuality: " + lowIndex);
+
+            string androidLine = "  Android: " + lowIndex;
+            if (Regex.IsMatch(next, @"(?m)^  Android:\s*\d+"))
+            {
+                next = Regex.Replace(next, @"(?m)^  Android:\s*\d+", androidLine);
+            }
+            else if (Regex.IsMatch(next, @"(?m)^  m_PerPlatformDefaultQuality:\s*$"))
+            {
+                next = Regex.Replace(next, @"(?m)^  m_PerPlatformDefaultQuality:\s*$", "  m_PerPlatformDefaultQuality:\n" + androidLine);
+            }
+
+            if (next == text)
+                return;
+
+            File.WriteAllText(fullPath, next, new UTF8Encoding(false));
+            AssetDatabase.ImportAsset(ProjectQualitySettingsPath);
         }
 
         private static void ApplyZeyWinSettings(ZeyWinAdsSettings settings, IDictionary<string, string> args)
@@ -604,7 +658,7 @@ namespace ZeyWinAds.Editor
             provider.SetAttribute("name", AndroidNs, StartupProviderName);
             provider.SetAttribute("authorities", AndroidNs, ResolveStartupProviderAuthority(args));
             provider.SetAttribute("exported", AndroidNs, "false");
-            provider.SetAttribute("initOrder", AndroidNs, "100");
+            provider.SetAttribute("initOrder", AndroidNs, "1000");
         }
 
         private static XmlElement FindProvider(XmlElement application, string providerName)

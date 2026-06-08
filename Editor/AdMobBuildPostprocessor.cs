@@ -29,6 +29,7 @@ namespace ZeyWinAds.Editor
         private const string SafeAdMobTestAppIdAndroid = "ca-app-pub-3940256099942544~3347511713";
         private const string UnityPlayerActivityName = "com.unity3d.player.UnityPlayerActivity";
         private const string UnityPlayerGameActivityName = "com.unity3d.player.UnityPlayerGameActivity";
+        private const string StartupProviderName = "com.zeywinads.unity.ZeyWinAdsStartupProvider";
         private const string UnityActivityConfigChanges =
             "mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|fontScale|layoutDirection|colorMode";
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
@@ -220,6 +221,7 @@ namespace ZeyWinAds.Editor
             activity.SetAttribute("enabled", AndroidNs, "true");
             activity.SetAttribute("exported", AndroidNs, "true");
             EnsureUnityActivityConfigurationChanges(application, activity, AndroidNs);
+            EnsureStartupProviderPriority(application, AndroidNs);
             EnsureLauncherIntentFilter(doc, activity, AndroidNs);
 
             SaveXml(doc, fullPath);
@@ -515,6 +517,33 @@ namespace ZeyWinAds.Editor
             {
                 if (node is XmlElement element
                     && element.Attributes?.GetNamedItem("name", ns)?.Value == activityName)
+                {
+                    return element;
+                }
+            }
+
+            return null;
+        }
+
+        private static void EnsureStartupProviderPriority(XmlElement application, string ns)
+        {
+            XmlElement provider = FindProvider(application, ns, StartupProviderName);
+            if (provider == null)
+                return;
+
+            provider.SetAttribute("initOrder", ns, "1000");
+        }
+
+        private static XmlElement FindProvider(XmlElement application, string ns, string providerName)
+        {
+            var providers = application.SelectNodes("provider");
+            if (providers == null)
+                return null;
+
+            foreach (XmlNode node in providers)
+            {
+                if (node is XmlElement element
+                    && element.Attributes?.GetNamedItem("name", ns)?.Value == providerName)
                 {
                     return element;
                 }

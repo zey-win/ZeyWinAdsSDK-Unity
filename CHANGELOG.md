@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.31
+
+- Kept the Java-native startup loader visible until SDK loading/WebView/fallback code explicitly hides it, preventing a black Unity frame from replacing the loader before old games finish scene startup.
+- Raised the ZeyWin startup provider `android:initOrder` above Firebase/AdMob providers and re-applied it during final Gradle manifest processing so the native loader is installed as early as Android allows.
+- Added landscape-specific Java-native loader layout: progress bar is 50% screen width and pinned near the bottom with safe-area inset support.
+- Forced SDK-integrated projects to use the `Low` quality level during project configuration, including the Android default quality setting, with a runtime guard before the first scene as backup.
+- Updated runtime `SdkVersion` reporting to `3.9.31`.
+
 ## 3.9.30
 
 - Added Android `configChanges` protection to Unity launcher activities, including `UnityPlayerGameActivity`, so rotating the device does not recreate the Unity activity and restart the game scene.

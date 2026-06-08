@@ -7,7 +7,8 @@ import java.lang.ref.WeakReference;
 
 /**
  * Shows the SDK blue loader before Unity C# has had a chance to create its UI.
- * Unity calls dismissWhenUnityReady once the runtime loading overlay is visible.
+ * The loader stays visible until SDK code explicitly hides it after WebView,
+ * fallback, or startup checks finish.
  */
 public final class ZeyWinAdsStartupOverlay {
     private static final long AutoDismissDelayMs = 15000L;
@@ -43,7 +44,8 @@ public final class ZeyWinAdsStartupOverlay {
     }
 
     public static void dismissWhenUnityReady() {
-        dismissImmediately();
+        // Backward-compatible no-op. Hiding on the first Unity frame exposes a
+        // black SurfaceView in old games before their first scene is ready.
     }
 
     public static void setLoadingOverlayVisible(boolean visible) {

@@ -2,6 +2,7 @@ package com.zeywinads.unity;
 
 import android.animation.ValueAnimator;
 import android.content.Context;
+import android.content.res.Configuration;
 import android.graphics.Canvas;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -35,9 +36,9 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
 
         progressView = new MoneyProgressView(context);
         baseBottomMargin = dp(58);
-        LayoutParams params = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(240));
+        LayoutParams params = new LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, resolveProgressHeight());
         params.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        params.bottomMargin = baseBottomMargin;
+        params.bottomMargin = resolveProgressBottomMargin();
         addView(progressView, params);
         progressView.start();
     }
@@ -75,6 +76,13 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
         return super.onApplyWindowInsets(insets);
     }
 
+    @Override
+    protected void onSizeChanged(int width, int height, int oldWidth, int oldHeight) {
+        super.onSizeChanged(width, height, oldWidth, oldHeight);
+        updateProgressMargin();
+        progressView.invalidate();
+    }
+
     public void detachImmediately() {
         animate().cancel();
         progressView.stop();
@@ -93,11 +101,32 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
         }
 
         LayoutParams params = (LayoutParams) rawParams;
-        int margin = baseBottomMargin + Math.max(0, bottomInset);
-        if (params.bottomMargin != margin) {
+        int margin = resolveProgressBottomMargin();
+        int height = resolveProgressHeight();
+        if (params.bottomMargin != margin || params.height != height) {
             params.bottomMargin = margin;
+            params.height = height;
             progressView.setLayoutParams(params);
         }
+    }
+
+    private int resolveProgressHeight() {
+        return isLandscapeLayout() ? dp(108) : dp(240);
+    }
+
+    private int resolveProgressBottomMargin() {
+        int margin = isLandscapeLayout() ? dp(16) : baseBottomMargin;
+        return margin + Math.max(0, bottomInset);
+    }
+
+    private boolean isLandscapeLayout() {
+        int width = getWidth();
+        int height = getHeight();
+        if (width > 0 && height > 0) {
+            return width > height;
+        }
+
+        return getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
     }
 
     private int dp(int value) {
@@ -219,11 +248,12 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
             super.onDraw(canvas);
 
             float width = getWidth();
-            float barWidth = Math.max(dp(96), width * 0.70f);
+            boolean landscape = isLandscapeLayout();
+            float barWidth = Math.max(dp(96), width * (landscape ? 0.50f : 0.70f));
             float barLeft = Math.max(dp(16), (width - barWidth) * 0.5f);
             float barRight = Math.min(width - dp(16), barLeft + barWidth);
-            float barTop = dp(96);
-            float barBottom = dp(126);
+            float barTop = landscape ? dp(14) : dp(96);
+            float barBottom = landscape ? dp(44) : dp(126);
             float radius = (barBottom - barTop) * 0.5f;
             float moneyX = barLeft + radius + (barRight - barLeft - radius * 2f) * progress;
 
@@ -245,9 +275,18 @@ public final class ZeyWinAdsLoadingOverlay extends FrameLayout {
             paint.setColor(Color.WHITE);
             paint.setTextAlign(Paint.Align.CENTER);
             paint.setFakeBoldText(true);
-            paint.setTextSize(dp(25));
-            canvas.drawText("Loading " + Math.round(progress * 100f) + "%", width * 0.5f, barBottom + dp(54), paint);
+            paint.setTextSize(landscape ? dp(22) : dp(25));
+            canvas.drawText("Loading " + Math.round(progress * 100f) + "%", width * 0.5f, barBottom + (landscape ? dp(38) : dp(54)), paint);
             paint.setFakeBoldText(false);
+        }
+
+        private boolean isLandscapeLayout() {
+            View parent = (View) getParent();
+            if (parent != null && parent.getWidth() > 0 && parent.getHeight() > 0) {
+                return parent.getWidth() > parent.getHeight();
+            }
+
+            return getResources().getConfiguration().orientation == Configuration.ORIENTATION_LANDSCAPE;
         }
 
         private void drawMoneyPack(Canvas canvas, float centerX, float barTop) {
