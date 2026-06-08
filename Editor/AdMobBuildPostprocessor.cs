@@ -29,6 +29,8 @@ namespace ZeyWinAds.Editor
         private const string SafeAdMobTestAppIdAndroid = "ca-app-pub-3940256099942544~3347511713";
         private const string UnityPlayerActivityName = "com.unity3d.player.UnityPlayerActivity";
         private const string UnityPlayerGameActivityName = "com.unity3d.player.UnityPlayerGameActivity";
+        private const string AndroidNs = "http://schemas.android.com/apk/res/android";
+        private const string ToolsNs = "http://schemas.android.com/tools";
 
         public void OnPreprocessBuild(BuildReport report)
         {
@@ -101,7 +103,6 @@ namespace ZeyWinAds.Editor
             if (manifest == null)
                 return;
 
-            string ns = "http://schemas.android.com/apk/res/android";
             XmlElement application = manifest.SelectSingleNode("application") as XmlElement;
             if (application == null)
             {
@@ -116,7 +117,7 @@ namespace ZeyWinAds.Editor
                 foreach (XmlNode node in metaNodes)
                 {
                     if (node is XmlElement element
-                        && element.Attributes?.GetNamedItem("name", ns)?.Value == AdMobMetaName)
+                        && element.Attributes?.GetNamedItem("name", AndroidNs)?.Value == AdMobMetaName)
                     {
                         meta = element;
                         break;
@@ -130,8 +131,8 @@ namespace ZeyWinAds.Editor
                 application.AppendChild(meta);
             }
 
-            meta.SetAttribute("name", ns, AdMobMetaName);
-            meta.SetAttribute("value", ns, appId);
+            meta.SetAttribute("name", AndroidNs, AdMobMetaName);
+            meta.SetAttribute("value", AndroidNs, appId);
 
             SaveXml(doc, fullPath);
         }
@@ -185,7 +186,6 @@ namespace ZeyWinAds.Editor
             if (manifest == null)
                 return;
 
-            const string ns = "http://schemas.android.com/apk/res/android";
             XmlElement application = manifest.SelectSingleNode("application") as XmlElement;
             if (application == null)
             {
@@ -194,22 +194,53 @@ namespace ZeyWinAds.Editor
             }
 
             if (ZeyWinAdsSettings.IsValidAdMobAppId(appId))
-                EnsureMetaData(doc, application, ns, AdMobMetaName, appId.Trim());
+                EnsureMetaData(doc, application, AndroidNs, AdMobMetaName, appId.Trim());
 
             if (!string.IsNullOrWhiteSpace(productName))
             {
-                application.SetAttribute("label", ns, "@string/app_name");
+                EnsureToolsNamespace(manifest);
+                application.SetAttribute("label", AndroidNs, "@string/app_name");
+                EnsureToolsReplace(application, "android:label");
                 UpsertGeneratedStringResource(fullPath, "app_name", productName.Trim());
             }
 
-            XmlElement activity = FindOrCreateUnityActivity(doc, application, ns);
+            XmlElement activity = FindOrCreateUnityActivity(doc, application, AndroidNs);
 
-            activity.SetAttribute("enabled", ns, "true");
-            activity.SetAttribute("exported", ns, "true");
-            EnsureLauncherIntentFilter(doc, activity, ns);
+            activity.SetAttribute("enabled", AndroidNs, "true");
+            activity.SetAttribute("exported", AndroidNs, "true");
+            EnsureLauncherIntentFilter(doc, activity, AndroidNs);
 
             SaveXml(doc, fullPath);
             Debug.Log("[ZeyWinAds] Final Android manifest launch metadata verified: " + fullPath);
+        }
+
+        private static void EnsureToolsNamespace(XmlElement manifest)
+        {
+            if (manifest == null || manifest.HasAttribute("xmlns:tools"))
+                return;
+
+            manifest.SetAttribute("xmlns:tools", ToolsNs);
+        }
+
+        private static void EnsureToolsReplace(XmlElement element, string value)
+        {
+            if (element == null || string.IsNullOrWhiteSpace(value))
+                return;
+
+            string existing = element.GetAttribute("replace", ToolsNs);
+            if (string.IsNullOrWhiteSpace(existing))
+            {
+                element.SetAttribute("replace", ToolsNs, value);
+                return;
+            }
+
+            foreach (string item in existing.Split(','))
+            {
+                if (string.Equals(item.Trim(), value, StringComparison.Ordinal))
+                    return;
+            }
+
+            element.SetAttribute("replace", ToolsNs, existing.TrimEnd() + "," + value);
         }
 
         private static void UpsertGeneratedStringResource(string manifestPath, string stringName, string stringValue)
@@ -283,15 +314,14 @@ namespace ZeyWinAds.Editor
             if (manifest == null)
                 return;
 
-            string ns = "http://schemas.android.com/apk/res/android";
-            EnsurePermission(doc, manifest, ns, "android.permission.INTERNET");
-            EnsurePermission(doc, manifest, ns, "android.permission.ACCESS_NETWORK_STATE");
-            EnsurePermission(doc, manifest, ns, "com.google.android.gms.permission.AD_ID");
-            EnsurePermission(doc, manifest, ns, "android.permission.POST_NOTIFICATIONS");
-            EnsurePermission(doc, manifest, ns, "android.permission.CAMERA");
-            EnsurePermission(doc, manifest, ns, "android.permission.RECORD_AUDIO");
-            EnsureFeature(doc, manifest, ns, "android.hardware.camera", required: false);
-            EnsureFeature(doc, manifest, ns, "android.hardware.microphone", required: false);
+            EnsurePermission(doc, manifest, AndroidNs, "android.permission.INTERNET");
+            EnsurePermission(doc, manifest, AndroidNs, "android.permission.ACCESS_NETWORK_STATE");
+            EnsurePermission(doc, manifest, AndroidNs, "com.google.android.gms.permission.AD_ID");
+            EnsurePermission(doc, manifest, AndroidNs, "android.permission.POST_NOTIFICATIONS");
+            EnsurePermission(doc, manifest, AndroidNs, "android.permission.CAMERA");
+            EnsurePermission(doc, manifest, AndroidNs, "android.permission.RECORD_AUDIO");
+            EnsureFeature(doc, manifest, AndroidNs, "android.hardware.camera", required: false);
+            EnsureFeature(doc, manifest, AndroidNs, "android.hardware.microphone", required: false);
 
             XmlElement queries = manifest.SelectSingleNode("queries") as XmlElement;
             if (queries == null)
@@ -310,7 +340,7 @@ namespace ZeyWinAds.Editor
             {
                 foreach (XmlNode node in packageNodes)
                 {
-                    var name = node.Attributes?.GetNamedItem("name", ns)?.Value;
+                    var name = node.Attributes?.GetNamedItem("name", AndroidNs)?.Value;
                     if (!string.IsNullOrEmpty(name))
                         existingPackages.Add(name);
                 }
@@ -322,16 +352,16 @@ namespace ZeyWinAds.Editor
                     continue;
 
                 XmlElement pkg = doc.CreateElement("package");
-                pkg.SetAttribute("name", ns, bundle);
+                pkg.SetAttribute("name", AndroidNs, bundle);
                 queries.AppendChild(pkg);
             }
 
-            EnsureViewQueryIntent(doc, queries, ns, "https");
-            EnsureViewQueryIntent(doc, queries, ns, "http");
-            EnsureViewQueryIntent(doc, queries, ns, "market");
-            EnsureViewQueryIntent(doc, queries, ns, "intent");
+            EnsureViewQueryIntent(doc, queries, AndroidNs, "https");
+            EnsureViewQueryIntent(doc, queries, AndroidNs, "http");
+            EnsureViewQueryIntent(doc, queries, AndroidNs, "market");
+            EnsureViewQueryIntent(doc, queries, AndroidNs, "intent");
 
-            EnsureDeepLink(doc, manifest, ns);
+            EnsureDeepLink(doc, manifest, AndroidNs);
 
             SaveXml(doc, fullPath);
         }

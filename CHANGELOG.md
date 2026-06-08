@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.25
+
+- Added Unity 6 Android manifest label conflict protection by applying `tools:replace="android:label"` when SDK/CI sets the generated Android app name.
+- Updated runtime `SdkVersion` reporting to `3.9.25`.
+
 ## 3.9.24
 
 - Stopped the project configurator from creating a local `GoogleMobileAdsPlugin.androidlib` in projects that use the OpenUPM Google Mobile Ads package, preventing duplicate Gradle namespace failures.
