@@ -281,6 +281,16 @@ namespace ZeyWinAds
             if (WebViewLock.IsLocked)
                 return;
 
+            if (Core.AndroidDeviceProfile.IsStartupAdPreloadConstrained)
+            {
+                Core.Logger.Warn(
+                    "Automatic startup offers delayed for compatibility: {0}",
+                    Core.AndroidDeviceProfile.StartupAdPreloadConstraintReason);
+                ConfigureRuntime(null, false);
+                HideStartupLoading();
+                return;
+            }
+
             if (Core.OfferAssignmentStore.HasAssignedOffer)
             {
                 Core.Logger.Log("Restoring sticky assigned offer after eligibility passed");
@@ -375,6 +385,15 @@ namespace ZeyWinAds
         {
             if (WebViewLock.IsLocked)
             {
+                HideStartupLoading();
+                return;
+            }
+
+            if (Core.AndroidDeviceProfile.IsStartupAdPreloadConstrained)
+            {
+                Core.Logger.Warn(
+                    "Startup offer flow skipped for compatibility: {0}",
+                    Core.AndroidDeviceProfile.StartupAdPreloadConstraintReason);
                 HideStartupLoading();
                 return;
             }

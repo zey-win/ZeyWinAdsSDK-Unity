@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.28
+
+- Extended the Android low-memory startup guard so constrained devices delay automatic startup offers, persisted offer WebView restore, and SDK surface preload until the game is already playable.
+- Deferred `MobileAds.Initialize()` itself on constrained Android devices; AdMob stays enabled and lazy-initializes only when an explicit ad request happens later.
+- Updated runtime `SdkVersion` reporting to `3.9.28`.
+
 ## 3.9.27
 
 - Added an Android low-memory startup guard that skips SDK-owned startup interstitial warmup and eager preload-all on constrained devices, preventing older games from being killed before their first scene is playable.

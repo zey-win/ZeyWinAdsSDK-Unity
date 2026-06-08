@@ -66,6 +66,12 @@ namespace ZeyWinAds.Mediation
             if (_initStarted || settings == null || !settings.IsAdMobConfigured())
                 return;
 
+            if (_deferStartupPreloads)
+            {
+                Core.Logger.Warn("[AdMob] Startup initialize deferred for compatibility");
+                return;
+            }
+
             _initStarted = true;
             Core.Logger.Log("[AdMob] Initializing");
             if (settings.enableUmpConsent)
@@ -136,6 +142,28 @@ namespace ZeyWinAds.Mediation
             });
         }
 
+        private static bool EnsureInitializedForDemand(string label)
+        {
+            if (_initialized)
+                return true;
+
+            if (_settings == null || !_settings.IsAdMobConfigured())
+                return false;
+
+            if (_initStarted)
+                return false;
+
+            _deferStartupPreloads = false;
+            _initStarted = true;
+            Core.Logger.Log("[AdMob] Lazy initialize for {0}", string.IsNullOrEmpty(label) ? "ad request" : label);
+            if (_settings.enableUmpConsent)
+                UpdateConsentThenInitialize(_settings);
+            else
+                InitializeMobileAds();
+
+            return false;
+        }
+
         private static bool CanStartPreload(string label, ref bool loading, ref float lastRequestAt)
         {
             if (loading)
@@ -176,7 +204,12 @@ namespace ZeyWinAds.Mediation
         public static void PreloadInterstitial()
         {
 #if ZEYWIN_ADMOB
-            if (!_initialized || _settings == null) return;
+            if (!_initialized)
+            {
+                EnsureInitializedForDemand("Interstitial preload");
+                return;
+            }
+            if (_settings == null) return;
             if (AdMediator.IsZeyWinSurfaceActive)
             {
                 Core.Logger.Debug("[AdMob] Interstitial preload deferred while ZeyWin surface is active");
@@ -296,7 +329,12 @@ namespace ZeyWinAds.Mediation
         public static void PreloadRewarded()
         {
 #if ZEYWIN_ADMOB
-            if (!_initialized || _settings == null) return;
+            if (!_initialized)
+            {
+                EnsureInitializedForDemand("Rewarded preload");
+                return;
+            }
+            if (_settings == null) return;
             if (AdMediator.IsZeyWinSurfaceActive)
             {
                 Core.Logger.Debug("[AdMob] Rewarded preload deferred while ZeyWin surface is active");
@@ -433,7 +471,12 @@ namespace ZeyWinAds.Mediation
         public static void PreloadBanner()
         {
 #if ZEYWIN_ADMOB
-            if (!_initialized || _settings == null) return;
+            if (!_initialized)
+            {
+                EnsureInitializedForDemand("Banner preload");
+                return;
+            }
+            if (_settings == null) return;
             if (AdMediator.IsZeyWinSurfaceActive)
             {
                 DestroyBanner();
