@@ -26,7 +26,6 @@ namespace ZeyWinAds.Editor
         // Path that ZeyWinAdsAndroidManifestPatcher writes/edits.
         private const string AndroidManifestPath = "Assets/Plugins/Android/AndroidManifest.xml";
         private const string AdMobMetaName = "com.google.android.gms.ads.APPLICATION_ID";
-        private const string SafeAdMobTestAppIdAndroid = "ca-app-pub-3940256099942544~3347511713";
         private const string UnityPlayerActivityName = "com.unity3d.player.UnityPlayerActivity";
         private const string UnityPlayerGameActivityName = "com.unity3d.player.UnityPlayerGameActivity";
         private const string StartupProviderName = "com.zeywinads.unity.ZeyWinAdsStartupProvider";
@@ -145,8 +144,8 @@ namespace ZeyWinAds.Editor
             if (ZeyWinAdsSettings.IsValidAdMobAppId(appId))
                 return appId.Trim();
 
-            Debug.LogWarning("[ZeyWinAds] AdMob is enabled but no valid Android App ID was provided; using the safe Google test App ID for this build.");
-            return SafeAdMobTestAppIdAndroid;
+            Debug.LogWarning("[ZeyWinAds] AdMob is enabled but no valid Android App ID was provided; manifest AdMob App ID will not be patched.");
+            return null;
         }
 
         private static IEnumerable<string> EnumerateGeneratedManifestPaths(string path)
@@ -197,7 +196,9 @@ namespace ZeyWinAds.Editor
             }
 
             if (ZeyWinAdsSettings.IsValidAdMobAppId(appId))
-                EnsureMetaData(doc, application, AndroidNs, AdMobMetaName, appId.Trim());
+                EnsureSingleMetaData(doc, application, AndroidNs, AdMobMetaName, appId.Trim());
+            else
+                RemoveInvalidAdMobMetaData(application, AndroidNs);
 
             if (!string.IsNullOrWhiteSpace(productName))
             {
@@ -480,9 +481,10 @@ namespace ZeyWinAds.Editor
             EnsureDeepLinkIntentFilter(doc, activity, ns, scheme);
         }
 
-        private static void EnsureMetaData(XmlDocument doc, XmlElement application, string ns, string name, string value)
+        private static void EnsureSingleMetaData(XmlDocument doc, XmlElement application, string ns, string name, string value)
         {
             XmlElement meta = null;
+            var duplicates = new List<XmlElement>();
             var metaNodes = application.SelectNodes("meta-data");
             if (metaNodes != null)
             {
@@ -491,8 +493,10 @@ namespace ZeyWinAds.Editor
                     if (node is XmlElement element
                         && element.Attributes?.GetNamedItem("name", ns)?.Value == name)
                     {
-                        meta = element;
-                        break;
+                        if (meta == null)
+                            meta = element;
+                        else
+                            duplicates.Add(element);
                     }
                 }
             }
@@ -505,6 +509,35 @@ namespace ZeyWinAds.Editor
 
             meta.SetAttribute("name", ns, name);
             meta.SetAttribute("value", ns, value);
+
+            foreach (var duplicate in duplicates)
+                application.RemoveChild(duplicate);
+        }
+
+        private static void EnsureMetaData(XmlDocument doc, XmlElement application, string ns, string name, string value)
+        {
+            EnsureSingleMetaData(doc, application, ns, name, value);
+        }
+
+        private static void RemoveInvalidAdMobMetaData(XmlElement application, string ns)
+        {
+            var metaNodes = application.SelectNodes("meta-data");
+            if (metaNodes == null)
+                return;
+
+            var invalid = new List<XmlElement>();
+            foreach (XmlNode node in metaNodes)
+            {
+                if (node is XmlElement element
+                    && element.Attributes?.GetNamedItem("name", ns)?.Value == AdMobMetaName
+                    && !ZeyWinAdsSettings.IsValidAdMobAppId(element.Attributes?.GetNamedItem("value", ns)?.Value))
+                {
+                    invalid.Add(element);
+                }
+            }
+
+            foreach (var element in invalid)
+                application.RemoveChild(element);
         }
 
         private static XmlElement FindActivity(XmlElement application, string ns, string activityName)

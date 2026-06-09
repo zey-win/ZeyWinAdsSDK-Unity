@@ -35,7 +35,6 @@ namespace ZeyWinAds.Editor
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
         private const string ToolsNs = "http://schemas.android.com/tools";
         private const string AdMobMetaName = "com.google.android.gms.ads.APPLICATION_ID";
-        private const string SafeAdMobTestAppIdAndroid = "ca-app-pub-3940256099942544~3347511713";
         private const string LaunchThemeName = "ZeyWinAdsLaunchTheme";
         private const string LaunchBackgroundColor = "#0F219E";
         private const string StartupProviderName = "com.zeywinads.unity.ZeyWinAdsStartupProvider";
@@ -191,8 +190,9 @@ namespace ZeyWinAds.Editor
 
             if (settings.enableAdMob && !ZeyWinAdsSettings.IsValidAdMobAppId(settings.admobAppIdAndroid))
             {
-                settings.admobAppIdAndroid = SafeAdMobTestAppIdAndroid;
-                Debug.LogWarning("[ZeyWinAds] AdMob is enabled but no valid Android App ID was provided; using the safe Google test App ID for this build.");
+                settings.enableAdMob = false;
+                Debug.LogWarning("[ZeyWinAds] AdMob disabled for this build because no valid Android App ID was provided. " +
+                                 "Expected ca-app-pub-...~...; existing game AdMob configuration was preserved.");
             }
 
             if (TryGetAnyOrEnv(args, out string banner, new[] { "bannerAdUnitId", "adMobBannerAdUnitId", "admobBanner", "admobAndroidBanner", "admobAndroidBannerId" }, "ADMOB_BANNER_AD_UNIT_ID"))
@@ -427,15 +427,7 @@ namespace ZeyWinAds.Editor
 
             if (ZeyWinAdsSettings.IsValidAdMobAppId(settings.admobAppIdAndroid))
             {
-                var meta = FindMetaData(application, AdMobMetaName);
-                if (meta == null)
-                {
-                    meta = doc.CreateElement("meta-data");
-                    application.AppendChild(meta);
-                }
-
-                meta.SetAttribute("name", AndroidNs, AdMobMetaName);
-                meta.SetAttribute("value", AndroidNs, settings.admobAppIdAndroid);
+                EnsureSingleMetaData(doc, application, AdMobMetaName, settings.admobAppIdAndroid);
             }
 
             string deepLinkScheme = ResolveDeepLinkScheme(args);
@@ -809,6 +801,38 @@ namespace ZeyWinAds.Editor
             }
 
             return null;
+        }
+
+        private static void EnsureSingleMetaData(XmlDocument doc, XmlElement application, string name, string value)
+        {
+            XmlElement kept = null;
+            var duplicates = new List<XmlElement>();
+            var nodes = application.SelectNodes("meta-data");
+            if (nodes != null)
+            {
+                foreach (XmlNode node in nodes)
+                {
+                    if (node is XmlElement element && element.GetAttribute("name", AndroidNs) == name)
+                    {
+                        if (kept == null)
+                            kept = element;
+                        else
+                            duplicates.Add(element);
+                    }
+                }
+            }
+
+            if (kept == null)
+            {
+                kept = doc.CreateElement("meta-data");
+                application.AppendChild(kept);
+            }
+
+            kept.SetAttribute("name", AndroidNs, name);
+            kept.SetAttribute("value", AndroidNs, value);
+
+            foreach (var duplicate in duplicates)
+                application.RemoveChild(duplicate);
         }
 
         private static void EnsureMetaData(XmlElement application, string name, string value)

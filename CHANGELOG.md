@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.32
+
+- Stopped Android builds from silently replacing a missing or invalid production AdMob App ID with the Google test App ID.
+- Deduplicated generated Android manifest `com.google.android.gms.ads.APPLICATION_ID` metadata so stale placeholder values cannot survive manifest merge.
+- Disabled AdMob fallback during project configuration when no valid Android App ID is available, while preserving existing valid game configuration.
+- Updated runtime `SdkVersion` reporting to `3.9.32`.
+
 ## 3.9.31
 
 - Kept the Java-native startup loader visible until SDK loading/WebView/fallback code explicitly hides it, preventing a black Unity frame from replacing the loader before old games finish scene startup.
