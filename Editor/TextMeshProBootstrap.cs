@@ -30,6 +30,13 @@ namespace ZeyWinAds.Editor
         private const string TmpExamplesAsmdefPath = "Assets/TextMesh Pro/Examples & Extras/Scripts/ZeyWinTmpExamplesDisabled.asmdef";
         private const string TmpExamplesCompileDefine = "ZEYWIN_TMP_EXAMPLES_ENABLED";
         private const int MinimumExamplesFileCount = 50;
+        private static readonly string[] PreferredTmpFontAssetPaths =
+        {
+            "Assets/Fonts/Roboto-VariableFont_wdth,wght SDF.asset",
+            "Assets/Fonts/Roboto-Regular SDF.asset",
+            "Assets/Fonts/NotoSans-Regular SDF.asset",
+            "Assets/TextMesh Pro/Examples & Extras/Resources/Fonts & Materials/Roboto-Bold SDF.asset"
+        };
         private static readonly string[] RequiredEssentialAssetPaths =
         {
             TmpSettingsPath,
@@ -299,21 +306,32 @@ namespace ZeyWinAds.Editor
             changed |= SetStringIfDifferent(serialized, "m_defaultFontAssetPath", "Fonts & Materials/");
             changed |= SetStringIfDifferent(serialized, "m_defaultSpriteAssetPath", "Sprite Assets/");
             changed |= SetStringIfDifferent(serialized, "m_defaultStyleSheetPath", "Style Sheets/");
-            changed |= SetObjectReference(serialized, "m_defaultFontAsset", TmpDefaultFontPath, overwriteExisting: true);
+            changed |= SetObjectReference(serialized, "m_defaultFontAsset", GetPreferredTmpFontAssetPath(), overwriteExisting: true);
             changed |= SetObjectReference(serialized, "m_defaultSpriteAsset", TmpDefaultSpritePath, overwriteExisting: true);
             changed |= SetObjectReference(serialized, "m_defaultStyleSheet", TmpDefaultStyleSheetPath, overwriteExisting: false);
 
             var fallbacks = serialized.FindProperty("m_fallbackFontAssets");
-            changed |= AddFallbackFont(fallbacks, TmpDefaultFallbackFontPath);
-            changed |= AddFallbackFont(fallbacks, TmpDefaultFontPath);
+            changed |= AddFallbackFont(fallbacks, "Assets/Fonts/Roboto-VariableFont_wdth,wght SDF.asset");
+            changed |= AddFallbackFont(fallbacks, "Assets/Fonts/Roboto-Regular SDF.asset");
             changed |= AddFallbackFont(fallbacks, "Assets/Fonts/NotoSans-Regular SDF.asset");
-            changed |= AddFallbackFont(fallbacks, "Assets/Fonts/Outfit-Regular SDF.asset");
+            changed |= AddFallbackFont(fallbacks, "Assets/TextMesh Pro/Examples & Extras/Resources/Fonts & Materials/Roboto-Bold SDF.asset");
 
             if (changed)
             {
                 serialized.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(settings);
             }
+        }
+
+        private static string GetPreferredTmpFontAssetPath()
+        {
+            foreach (string fontPath in PreferredTmpFontAssetPaths)
+            {
+                if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(fontPath) != null)
+                    return fontPath;
+            }
+
+            return TmpDefaultFontPath;
         }
 
         private static void RepairTextMeshProFontAssets()

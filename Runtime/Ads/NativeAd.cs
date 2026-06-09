@@ -100,7 +100,7 @@ namespace ZeyWinAds.Ads
                 try
                 {
                     _preferredFont = Font.CreateDynamicFontFromOSFont(
-                        new[] { "Roboto", "Noto Sans", "NotoSans", "Helvetica", "Arial", "Droid Sans", "sans-serif" },
+                        new[] { "Roboto", "Noto Sans", "NotoSans", "Helvetica", "Arial" },
                         32);
                 }
                 catch
@@ -109,7 +109,7 @@ namespace ZeyWinAds.Ads
                 }
 
                 if (_preferredFont == null)
-                    _preferredFont = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+                    _preferredFont = ZeyWinAds.UI.ZeyWinFont.GetPreferred();
 
                 return _preferredFont;
             }

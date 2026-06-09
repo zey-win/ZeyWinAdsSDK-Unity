@@ -33,7 +33,9 @@ namespace ZeyWinAds.Editor
         private const string FirebaseRemoteConfigPackage = "com.google.firebase.remote-config";
         private const string FirebaseMessagingPackage = "com.google.firebase.messaging";
         private const string FirebaseVersion = "13.6.0";
-        private const string FirebaseRegistryBase = "https://dl.google.com/games/registry/unity";
+        private const string FirebaseRegistryName = "Google Unity Package Registry";
+        private const string FirebaseRegistryUrl = "https://dl.google.com/games/registry/unity";
+        private const string FirebaseRegistryScope = "com.google.firebase";
         private const string AndroidPluginsPath = "Assets/Plugins/Android";
         private const string LegacyNoSdkStubsPath = "Assets/Scripts/SDKStubs/NoSdkStubs.cs";
 
@@ -147,28 +149,28 @@ namespace ZeyWinAds.Editor
                 }
             }
 
-            string firebaseAppUpdated = UpsertDependency(content, FirebaseAppPackage, FirebasePackageUrl(FirebaseAppPackage));
+            string firebaseAppUpdated = UpsertDependency(content, FirebaseAppPackage, FirebaseVersion);
             if (firebaseAppUpdated != content)
             {
                 content = firebaseAppUpdated;
                 modified = true;
             }
 
-            string firebaseAnalyticsUpdated = UpsertDependency(content, FirebaseAnalyticsPackage, FirebasePackageUrl(FirebaseAnalyticsPackage));
+            string firebaseAnalyticsUpdated = UpsertDependency(content, FirebaseAnalyticsPackage, FirebaseVersion);
             if (firebaseAnalyticsUpdated != content)
             {
                 content = firebaseAnalyticsUpdated;
                 modified = true;
             }
 
-            string firebaseRemoteConfigUpdated = UpsertDependency(content, FirebaseRemoteConfigPackage, FirebasePackageUrl(FirebaseRemoteConfigPackage));
+            string firebaseRemoteConfigUpdated = UpsertDependency(content, FirebaseRemoteConfigPackage, FirebaseVersion);
             if (firebaseRemoteConfigUpdated != content)
             {
                 content = firebaseRemoteConfigUpdated;
                 modified = true;
             }
 
-            string firebaseMessagingUpdated = UpsertDependency(content, FirebaseMessagingPackage, FirebasePackageUrl(FirebaseMessagingPackage));
+            string firebaseMessagingUpdated = UpsertDependency(content, FirebaseMessagingPackage, FirebaseVersion);
             if (firebaseMessagingUpdated != content)
             {
                 content = firebaseMessagingUpdated;
@@ -191,11 +193,6 @@ namespace ZeyWinAds.Editor
             if (HasRealFirebaseDependencies(content))
                 RemoveLegacyFirebaseStubs();
             return modified;
-        }
-
-        private static string FirebasePackageUrl(string packageName)
-        {
-            return $"{FirebaseRegistryBase}/{packageName}/{packageName}-{FirebaseVersion}.tgz";
         }
 
         private static bool HasRealFirebaseDependencies(string manifest)
@@ -409,51 +406,80 @@ namespace ZeyWinAds.Editor
 
         private static string EnsureScopedRegistry(string manifest)
         {
-            if (!manifest.Contains($"\"{RegistryUrl}\""))
-                return AddScopedRegistry(manifest);
-
-            string updated = AddScopeToExistingRegistry(manifest, AdMobPackage);
-            updated = AddScopeToExistingRegistry(updated, EdmPackage);
+            string updated = EnsureScopedRegistryEntry(
+                manifest,
+                RegistryName,
+                RegistryUrl,
+                new[] { AdMobPackage, EdmPackage });
+            updated = EnsureScopedRegistryEntry(
+                updated,
+                FirebaseRegistryName,
+                FirebaseRegistryUrl,
+                new[] { FirebaseRegistryScope });
             return updated;
         }
 
-        private static string AddScopedRegistry(string manifest)
+        private static string EnsureScopedRegistryEntry(string manifest, string name, string url, string[] scopes)
         {
-            string registryBlock =
-                "\n  \"scopedRegistries\": [\n" +
-                "    {\n" +
-                $"      \"name\": \"{RegistryName}\",\n" +
-                $"      \"url\": \"{RegistryUrl}\",\n" +
-                "      \"scopes\": [\n" +
-                "        \"com.google.ads.mobile\",\n" +
-                "        \"com.google.external-dependency-manager\"\n" +
-                "      ]\n" +
-                "    }\n" +
-                "  ],";
-
-            // If a scopedRegistries array already exists, merge the new scopes into it.
-            int existingIdx = manifest.IndexOf("\"scopedRegistries\"", StringComparison.Ordinal);
-            if (existingIdx >= 0)
+            if (manifest.Contains($"\"{url}\""))
             {
-                // The registry already exists with different content — leave it alone
-                // and let the user resolve manually. Avoid clobbering custom configs.
-                Debug.LogWarning("[ZeyWinAds] scopedRegistries already present in manifest.json; " +
-                                 "ensure com.google.* scopes are mapped to https://package.openupm.com.");
-                return manifest;
+                string updated = manifest;
+                foreach (string scope in scopes)
+                    updated = AddScopeToRegistry(updated, url, scope);
+                return updated;
             }
 
-            // Insert before the dependencies block.
-            int depsIdx = manifest.IndexOf("\"dependencies\"", StringComparison.Ordinal);
-            if (depsIdx < 0) return manifest;
+            string registryObject = BuildRegistryObject(name, url, scopes);
+            int scopedIdx = manifest.IndexOf("\"scopedRegistries\"", StringComparison.Ordinal);
+            if (scopedIdx >= 0)
+            {
+                int arrayStart = manifest.IndexOf('[', scopedIdx);
+                if (arrayStart < 0)
+                    return manifest;
 
-            // Find the indentation start
+                int arrayEnd = FindMatchingBracket(manifest, arrayStart);
+                if (arrayEnd < 0)
+                    return manifest;
+
+                string existing = manifest.Substring(arrayStart + 1, arrayEnd - arrayStart - 1);
+                string insert = string.IsNullOrWhiteSpace(existing)
+                    ? "\n    " + registryObject + "\n  "
+                    : "\n    " + registryObject + ",";
+                return manifest.Insert(arrayStart + 1, insert);
+            }
+
+            int depsIdx = manifest.IndexOf("\"dependencies\"", StringComparison.Ordinal);
+            if (depsIdx < 0)
+                return manifest;
+
+            string registryBlock =
+                "  \"scopedRegistries\": [\n" +
+                "    " + registryObject + "\n" +
+                "  ],\n";
             int insertAt = manifest.LastIndexOf('\n', depsIdx) + 1;
-            return manifest.Insert(insertAt, registryBlock.TrimStart('\n') + "\n  ");
+            return manifest.Insert(insertAt, registryBlock);
         }
 
-        private static string AddScopeToExistingRegistry(string manifest, string scope)
+        private static string BuildRegistryObject(string name, string url, string[] scopes)
         {
-            int registryIdx = manifest.IndexOf($"\"{RegistryUrl}\"", StringComparison.Ordinal);
+            var builder = new StringBuilder();
+            builder.Append("{\n");
+            builder.Append($"      \"name\": \"{name}\",\n");
+            builder.Append($"      \"url\": \"{url}\",\n");
+            builder.Append("      \"scopes\": [\n");
+            for (int i = 0; i < scopes.Length; i++)
+            {
+                string comma = i == scopes.Length - 1 ? "" : ",";
+                builder.Append($"        \"{scopes[i]}\"{comma}\n");
+            }
+            builder.Append("      ]\n");
+            builder.Append("    }");
+            return builder.ToString();
+        }
+
+        private static string AddScopeToRegistry(string manifest, string registryUrl, string scope)
+        {
+            int registryIdx = manifest.IndexOf($"\"{registryUrl}\"", StringComparison.Ordinal);
             if (registryIdx < 0)
                 return manifest;
 
@@ -474,6 +500,46 @@ namespace ZeyWinAds.Editor
                 return manifest;
 
             return manifest.Insert(arrayStart + 1, $"\n        \"{scope}\",");
+        }
+
+        private static int FindMatchingBracket(string text, int openIdx)
+        {
+            int depth = 0;
+            bool inString = false;
+            bool escaped = false;
+
+            for (int i = openIdx; i < text.Length; i++)
+            {
+                char c = text[i];
+                if (escaped)
+                {
+                    escaped = false;
+                    continue;
+                }
+                if (c == '\\' && inString)
+                {
+                    escaped = true;
+                    continue;
+                }
+                if (c == '"')
+                {
+                    inString = !inString;
+                    continue;
+                }
+                if (inString)
+                    continue;
+
+                if (c == '[')
+                    depth++;
+                else if (c == ']')
+                {
+                    depth--;
+                    if (depth == 0)
+                        return i;
+                }
+            }
+
+            return -1;
         }
 
         private static string RemoveScopeFromExistingRegistry(string manifest, string scope)

@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.34
+
+- Fixed automatic Firebase package installation to use the Google Unity scoped registry with semver package versions, matching Unity Package Manager requirements.
+- Enforced SDK UI/TMP font selection through Roboto, Noto, Helvetica, or Arial and stopped adding non-approved TMP fallback fonts during bootstrap.
+- Updated runtime `SdkVersion` reporting to `3.9.34`.
+
 ## 3.9.33
 
 - Added automatic Firebase Unity SDK installation for host games: Firebase App, Analytics, Remote Config, and Messaging are written to `Packages/manifest.json` from the Google Unity package registry.
