@@ -28,7 +28,14 @@ namespace ZeyWinAds.Editor
         private const string AdMobVersion = "11.2.0";
         private const string EdmPackage = "com.google.external-dependency-manager";
         private const string EdmVersion = "1.2.187";
+        private const string FirebaseAppPackage = "com.google.firebase.app";
+        private const string FirebaseAnalyticsPackage = "com.google.firebase.analytics";
+        private const string FirebaseRemoteConfigPackage = "com.google.firebase.remote-config";
+        private const string FirebaseMessagingPackage = "com.google.firebase.messaging";
+        private const string FirebaseVersion = "13.6.0";
+        private const string FirebaseRegistryBase = "https://dl.google.com/games/registry/unity";
         private const string AndroidPluginsPath = "Assets/Plugins/Android";
+        private const string LegacyNoSdkStubsPath = "Assets/Scripts/SDKStubs/NoSdkStubs.cs";
 
         static AdMobBootstrap()
         {
@@ -43,9 +50,9 @@ namespace ZeyWinAds.Editor
 
             try
             {
-                if (PatchManifest())
+                if (EnsureRequiredPackagesInstalled())
                 {
-                    Debug.Log("[ZeyWinAds] AdMob bootstrap added Google Mobile Ads to Packages/manifest.json. " +
+                    Debug.Log("[ZeyWinAds] Bootstrap added required ad/Firebase packages to Packages/manifest.json. " +
                               "Unity will resolve packages on next reload.");
                     AssetDatabase.Refresh();
                 }
@@ -64,15 +71,20 @@ namespace ZeyWinAds.Editor
         [MenuItem("ZeyWinAds/Install AdMob (com.google.ads.mobile)")]
         private static void InstallManually()
         {
-            if (PatchManifest())
+            if (EnsureRequiredPackagesInstalled())
             {
                 AssetDatabase.Refresh();
-                Debug.Log("[ZeyWinAds] AdMob package added to manifest.");
+                Debug.Log("[ZeyWinAds] Required ad/Firebase packages added to manifest.");
             }
             else
             {
-                Debug.Log("[ZeyWinAds] AdMob already present in manifest, nothing to do.");
+                Debug.Log("[ZeyWinAds] Required ad/Firebase packages already present in manifest, nothing to do.");
             }
+        }
+
+        public static bool EnsureRequiredPackagesInstalled()
+        {
+            return PatchManifest();
         }
 
         /// <summary>
@@ -135,6 +147,34 @@ namespace ZeyWinAds.Editor
                 }
             }
 
+            string firebaseAppUpdated = UpsertDependency(content, FirebaseAppPackage, FirebasePackageUrl(FirebaseAppPackage));
+            if (firebaseAppUpdated != content)
+            {
+                content = firebaseAppUpdated;
+                modified = true;
+            }
+
+            string firebaseAnalyticsUpdated = UpsertDependency(content, FirebaseAnalyticsPackage, FirebasePackageUrl(FirebaseAnalyticsPackage));
+            if (firebaseAnalyticsUpdated != content)
+            {
+                content = firebaseAnalyticsUpdated;
+                modified = true;
+            }
+
+            string firebaseRemoteConfigUpdated = UpsertDependency(content, FirebaseRemoteConfigPackage, FirebasePackageUrl(FirebaseRemoteConfigPackage));
+            if (firebaseRemoteConfigUpdated != content)
+            {
+                content = firebaseRemoteConfigUpdated;
+                modified = true;
+            }
+
+            string firebaseMessagingUpdated = UpsertDependency(content, FirebaseMessagingPackage, FirebasePackageUrl(FirebaseMessagingPackage));
+            if (firebaseMessagingUpdated != content)
+            {
+                content = firebaseMessagingUpdated;
+                modified = true;
+            }
+
             string scoped = legacyAdMobAssetsPresent
                 ? RemoveScopeFromExistingRegistry(RemoveScopeFromExistingRegistry(content, AdMobPackage), EdmPackage)
                 : EnsureScopedRegistry(content);
@@ -148,7 +188,36 @@ namespace ZeyWinAds.Editor
             {
                 File.WriteAllText(manifestPath, content, new UTF8Encoding(false));
             }
+            if (HasRealFirebaseDependencies(content))
+                RemoveLegacyFirebaseStubs();
             return modified;
+        }
+
+        private static string FirebasePackageUrl(string packageName)
+        {
+            return $"{FirebaseRegistryBase}/{packageName}/{packageName}-{FirebaseVersion}.tgz";
+        }
+
+        private static bool HasRealFirebaseDependencies(string manifest)
+        {
+            return manifest.Contains($"\"{FirebaseAppPackage}\"", StringComparison.Ordinal)
+                || manifest.Contains($"\"{FirebaseRemoteConfigPackage}\"", StringComparison.Ordinal)
+                || manifest.Contains($"\"{FirebaseAnalyticsPackage}\"", StringComparison.Ordinal)
+                || manifest.Contains($"\"{FirebaseMessagingPackage}\"", StringComparison.Ordinal);
+        }
+
+        private static void RemoveLegacyFirebaseStubs()
+        {
+            string fullPath = Path.GetFullPath(Path.Combine(Application.dataPath, "..", LegacyNoSdkStubsPath));
+            if (!File.Exists(fullPath))
+                return;
+
+            File.Delete(fullPath);
+            string metaPath = fullPath + ".meta";
+            if (File.Exists(metaPath))
+                File.Delete(metaPath);
+
+            Debug.Log("[ZeyWinAds] Removed legacy Firebase SDK stubs because real Firebase packages are installed.");
         }
 
         private static bool LegacyAdMobAssetsPresent()

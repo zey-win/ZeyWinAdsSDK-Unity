@@ -55,6 +55,7 @@ namespace ZeyWinAds.Editor
         {
             var settings = ZeyWinAdsSettingsEditor.LoadOrCreate();
 
+            AdMobBootstrap.EnsureRequiredPackagesInstalled();
             TextMeshProBootstrap.EnsureInstalledAndConfigured();
             ApplyPlayerSettings(args);
             ApplyLowQualitySettings();

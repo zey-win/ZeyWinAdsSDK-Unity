@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.33
+
+- Added automatic Firebase Unity SDK installation for host games: Firebase App, Analytics, Remote Config, and Messaging are written to `Packages/manifest.json` from the Google Unity package registry.
+- Ran the package bootstrap from the batchmode project configurator so GitHub Actions builds receive Firebase dependencies before Android packaging.
+- Removed legacy Firebase stub scripts when real Firebase packages are installed, preventing fake Remote Config reads and duplicate Firebase namespaces.
+- Updated runtime `SdkVersion` reporting to `3.9.33`.
+
 ## 3.9.32
 
 - Stopped Android builds from silently replacing a missing or invalid production AdMob App ID with the Google test App ID.
