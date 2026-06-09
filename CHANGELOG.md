@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.35
+
+- Preserved app-owned `google-services.json` during SDK bootstrap and copied an existing project Firebase config into `Assets/Plugins/Android` only when the Android build target file is missing.
+- Hardened AdMob configuration so invalid or placeholder `APPLICATION_ID` metadata is removed and `enableAdMob=true` cannot create manifest metadata without a real `ca-app-pub-...~...` Android App ID.
+- Updated runtime `SdkVersion` reporting to `3.9.35`.
+
 ## 3.9.34
 
 - Fixed automatic Firebase package installation to use the Google Unity scoped registry with semver package versions, matching Unity Package Manager requirements.

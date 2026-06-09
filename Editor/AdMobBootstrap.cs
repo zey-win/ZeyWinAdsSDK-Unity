@@ -28,16 +28,24 @@ namespace ZeyWinAds.Editor
         private const string AdMobVersion = "11.2.0";
         private const string EdmPackage = "com.google.external-dependency-manager";
         private const string EdmVersion = "1.2.187";
-        private const string FirebaseAppPackage = "com.google.firebase.app";
-        private const string FirebaseAnalyticsPackage = "com.google.firebase.analytics";
-        private const string FirebaseRemoteConfigPackage = "com.google.firebase.remote-config";
-        private const string FirebaseMessagingPackage = "com.google.firebase.messaging";
-        private const string FirebaseVersion = "13.6.0";
-        private const string FirebaseRegistryName = "Google Unity Package Registry";
-        private const string FirebaseRegistryUrl = "https://dl.google.com/games/registry/unity";
-        private const string FirebaseRegistryScope = "com.google.firebase";
+        private const string FirebaseLocalEnv = "ZEYWIN_FIREBASE_SDK_DIR";
+        private const string DefaultFirebaseLocalPath = "/Users/admin/Documents/Data/Unity/sdk/FireBase";
         private const string AndroidPluginsPath = "Assets/Plugins/Android";
+        private const string AndroidGoogleServicesPath = "Assets/Plugins/Android/google-services.json";
         private const string LegacyNoSdkStubsPath = "Assets/Scripts/SDKStubs/NoSdkStubs.cs";
+        private static readonly string[] FirebaseUnityPackageNames =
+        {
+            "FirebaseAnalytics_13.0.0.unitypackage",
+            "FirebaseRemoteConfig_13.0.0.unitypackage",
+            "FirebaseMessaging_13.0.0.unitypackage"
+        };
+        private static readonly string[] GoogleServicesCandidatePaths =
+        {
+            "Assets/Plugins/Android/google-services.json",
+            "Assets/google-services.json",
+            "Assets/StreamingAssets/google-services-desktop.json",
+            "google-services.json"
+        };
 
         static AdMobBootstrap()
         {
@@ -86,7 +94,10 @@ namespace ZeyWinAds.Editor
 
         public static bool EnsureRequiredPackagesInstalled()
         {
-            return PatchManifest();
+            bool changed = PatchManifest();
+            changed |= EnsureGoogleServicesJsonPreserved();
+            changed |= ImportLocalFirebaseUnityPackages();
+            return changed;
         }
 
         /// <summary>
@@ -149,34 +160,6 @@ namespace ZeyWinAds.Editor
                 }
             }
 
-            string firebaseAppUpdated = UpsertDependency(content, FirebaseAppPackage, FirebaseVersion);
-            if (firebaseAppUpdated != content)
-            {
-                content = firebaseAppUpdated;
-                modified = true;
-            }
-
-            string firebaseAnalyticsUpdated = UpsertDependency(content, FirebaseAnalyticsPackage, FirebaseVersion);
-            if (firebaseAnalyticsUpdated != content)
-            {
-                content = firebaseAnalyticsUpdated;
-                modified = true;
-            }
-
-            string firebaseRemoteConfigUpdated = UpsertDependency(content, FirebaseRemoteConfigPackage, FirebaseVersion);
-            if (firebaseRemoteConfigUpdated != content)
-            {
-                content = firebaseRemoteConfigUpdated;
-                modified = true;
-            }
-
-            string firebaseMessagingUpdated = UpsertDependency(content, FirebaseMessagingPackage, FirebaseVersion);
-            if (firebaseMessagingUpdated != content)
-            {
-                content = firebaseMessagingUpdated;
-                modified = true;
-            }
-
             string scoped = legacyAdMobAssetsPresent
                 ? RemoveScopeFromExistingRegistry(RemoveScopeFromExistingRegistry(content, AdMobPackage), EdmPackage)
                 : EnsureScopedRegistry(content);
@@ -190,17 +173,151 @@ namespace ZeyWinAds.Editor
             {
                 File.WriteAllText(manifestPath, content, new UTF8Encoding(false));
             }
-            if (HasRealFirebaseDependencies(content))
+            if (HasFirebaseAssetsInstalled())
                 RemoveLegacyFirebaseStubs();
             return modified;
         }
 
-        private static bool HasRealFirebaseDependencies(string manifest)
+        private static bool EnsureGoogleServicesJsonPreserved()
         {
-            return manifest.Contains($"\"{FirebaseAppPackage}\"", StringComparison.Ordinal)
-                || manifest.Contains($"\"{FirebaseRemoteConfigPackage}\"", StringComparison.Ordinal)
-                || manifest.Contains($"\"{FirebaseAnalyticsPackage}\"", StringComparison.Ordinal)
-                || manifest.Contains($"\"{FirebaseMessagingPackage}\"", StringComparison.Ordinal);
+            string projectRoot = Path.GetFullPath(Path.Combine(Application.dataPath, ".."));
+            string androidTarget = Path.Combine(projectRoot, AndroidGoogleServicesPath);
+
+            if (File.Exists(androidTarget))
+            {
+                Debug.Log("[ZeyWinAds] Existing Assets/Plugins/Android/google-services.json preserved.");
+                return false;
+            }
+
+            string source = FindExistingGoogleServicesJson(projectRoot, androidTarget);
+            if (string.IsNullOrEmpty(source))
+            {
+                Debug.Log("[ZeyWinAds] google-services.json not found in project; Firebase packages are installed but Firebase runtime requires the app-specific file.");
+                return false;
+            }
+
+            Directory.CreateDirectory(Path.GetDirectoryName(androidTarget));
+            File.Copy(source, androidTarget, overwrite: false);
+            Debug.Log($"[ZeyWinAds] Copied existing Firebase config into Android build: {ToUnityPath(source, projectRoot)} -> {AndroidGoogleServicesPath}");
+            return true;
+        }
+
+        private static string FindExistingGoogleServicesJson(string projectRoot, string androidTarget)
+        {
+            foreach (string candidate in GoogleServicesCandidatePaths)
+            {
+                string fullPath = Path.GetFullPath(Path.Combine(projectRoot, candidate));
+                if (PathsEqual(fullPath, androidTarget))
+                    continue;
+
+                if (File.Exists(fullPath))
+                    return fullPath;
+            }
+
+            try
+            {
+                foreach (string fullPath in Directory.GetFiles(projectRoot, "google-services.json", SearchOption.AllDirectories))
+                {
+                    if (fullPath.IndexOf($"{Path.DirectorySeparatorChar}Library{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) >= 0)
+                        continue;
+                    if (fullPath.IndexOf($"{Path.DirectorySeparatorChar}Temp{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) >= 0)
+                        continue;
+                    if (fullPath.IndexOf($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.OrdinalIgnoreCase) >= 0)
+                        continue;
+                    if (PathsEqual(fullPath, androidTarget))
+                        continue;
+
+                    return fullPath;
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[ZeyWinAds] Failed while searching google-services.json: {e.Message}");
+            }
+
+            return null;
+        }
+
+        private static bool ImportLocalFirebaseUnityPackages()
+        {
+            if (HasFirebaseAssetsInstalled())
+            {
+                RemoveLegacyFirebaseStubs();
+                return false;
+            }
+
+            string firebaseRoot = Environment.GetEnvironmentVariable(FirebaseLocalEnv);
+            if (string.IsNullOrWhiteSpace(firebaseRoot))
+                firebaseRoot = DefaultFirebaseLocalPath;
+
+            if (string.IsNullOrWhiteSpace(firebaseRoot) || !Directory.Exists(firebaseRoot))
+            {
+                Debug.Log("[ZeyWinAds] Firebase SDK folder not found; set ZEYWIN_FIREBASE_SDK_DIR or install Firebase Unity packages in CI.");
+                return false;
+            }
+
+            bool importedAny = false;
+            foreach (string packageName in FirebaseUnityPackageNames)
+            {
+                string packagePath = FindFileByName(firebaseRoot, packageName);
+                if (string.IsNullOrEmpty(packagePath))
+                {
+                    Debug.LogWarning($"[ZeyWinAds] Firebase Unity package not found in {firebaseRoot}: {packageName}");
+                    continue;
+                }
+
+                AssetDatabase.ImportPackage(packagePath, interactive: false);
+                importedAny = true;
+                Debug.Log($"[ZeyWinAds] Imported Firebase Unity package: {packagePath}");
+            }
+
+            if (importedAny)
+            {
+                AssetDatabase.Refresh();
+                RemoveLegacyFirebaseStubs();
+            }
+
+            return importedAny;
+        }
+
+        private static bool HasFirebaseAssetsInstalled()
+        {
+            string assetsRoot = Application.dataPath;
+            return File.Exists(Path.Combine(assetsRoot, "Firebase", "Plugins", "Firebase.App.dll"))
+                && File.Exists(Path.Combine(assetsRoot, "Firebase", "Plugins", "Firebase.RemoteConfig.dll"))
+                && File.Exists(Path.Combine(assetsRoot, "Firebase", "Plugins", "Firebase.Analytics.dll"))
+                && File.Exists(Path.Combine(assetsRoot, "Firebase", "Plugins", "Firebase.Messaging.dll"));
+        }
+
+        private static string FindFileByName(string root, string fileName)
+        {
+            try
+            {
+                foreach (string path in Directory.GetFiles(root, fileName, SearchOption.AllDirectories))
+                    return path;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[ZeyWinAds] Failed while searching Firebase package {fileName}: {e.Message}");
+            }
+
+            return null;
+        }
+
+        private static bool PathsEqual(string a, string b)
+        {
+            return string.Equals(
+                Path.GetFullPath(a).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                Path.GetFullPath(b).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar),
+                StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ToUnityPath(string fullPath, string projectRoot)
+        {
+            string relative = fullPath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase)
+                ? fullPath.Substring(projectRoot.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
+                : fullPath;
+            return relative.Replace('\\', '/');
         }
 
         private static void RemoveLegacyFirebaseStubs()
@@ -406,17 +523,11 @@ namespace ZeyWinAds.Editor
 
         private static string EnsureScopedRegistry(string manifest)
         {
-            string updated = EnsureScopedRegistryEntry(
+            return EnsureScopedRegistryEntry(
                 manifest,
                 RegistryName,
                 RegistryUrl,
                 new[] { AdMobPackage, EdmPackage });
-            updated = EnsureScopedRegistryEntry(
-                updated,
-                FirebaseRegistryName,
-                FirebaseRegistryUrl,
-                new[] { FirebaseRegistryScope });
-            return updated;
         }
 
         private static string EnsureScopedRegistryEntry(string manifest, string name, string url, string[] scopes)

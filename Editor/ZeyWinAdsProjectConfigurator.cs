@@ -177,8 +177,6 @@ namespace ZeyWinAds.Editor
 
             if (TryGet(args, "enableAdMob", out string enableAdMob))
                 settings.enableAdMob = ParseBool(enableAdMob, settings.enableAdMob);
-            else
-                settings.enableAdMob = true;
 
             if (TryGet(args, "enableUmpConsent", out string enableUmp))
                 settings.enableUmpConsent = ParseBool(enableUmp, settings.enableUmpConsent);
@@ -429,6 +427,10 @@ namespace ZeyWinAds.Editor
             if (ZeyWinAdsSettings.IsValidAdMobAppId(settings.admobAppIdAndroid))
             {
                 EnsureSingleMetaData(doc, application, AdMobMetaName, settings.admobAppIdAndroid);
+            }
+            else
+            {
+                RemoveInvalidAdMobMetaData(application);
             }
 
             string deepLinkScheme = ResolveDeepLinkScheme(args);
@@ -834,6 +836,27 @@ namespace ZeyWinAds.Editor
 
             foreach (var duplicate in duplicates)
                 application.RemoveChild(duplicate);
+        }
+
+        private static void RemoveInvalidAdMobMetaData(XmlElement application)
+        {
+            var nodes = application.SelectNodes("meta-data");
+            if (nodes == null)
+                return;
+
+            var invalid = new List<XmlElement>();
+            foreach (XmlNode node in nodes)
+            {
+                if (node is XmlElement element
+                    && element.GetAttribute("name", AndroidNs) == AdMobMetaName
+                    && !ZeyWinAdsSettings.IsValidAdMobAppId(element.GetAttribute("value", AndroidNs)))
+                {
+                    invalid.Add(element);
+                }
+            }
+
+            foreach (var element in invalid)
+                application.RemoveChild(element);
         }
 
         private static void EnsureMetaData(XmlElement application, string name, string value)
