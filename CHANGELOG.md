@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.36
+
+- Fixed SDK self-compilation in Unity projects by fully qualifying runtime UI namespace references that were shadowed by the public `ZeyWinAds` facade class.
+- Keeps the Firebase auto-install and AdMob metadata hardening from `3.9.35`.
+- Updated runtime `SdkVersion` reporting to `3.9.36`.
+
 ## 3.9.35
 
 - Preserved app-owned `google-services.json` during SDK bootstrap and copied an existing project Firebase config into `Assets/Plugins/Android` only when the Android build target file is missing.

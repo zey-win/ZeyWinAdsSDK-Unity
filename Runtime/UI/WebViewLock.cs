@@ -470,7 +470,7 @@ namespace ZeyWinAds.UI
             textRect.anchorMax = new Vector2(0.9f, 0.6f);
             textRect.sizeDelta = Vector2.zero;
             var text = textObj.AddComponent<UnityEngine.UI.Text>();
-            text.font = ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            text.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
             text.fontSize = 24;
             text.color = Color.white;
             text.alignment = TextAnchor.MiddleCenter;

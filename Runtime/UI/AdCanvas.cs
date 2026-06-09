@@ -163,7 +163,7 @@ namespace ZeyWinAds.UI
             textRect.sizeDelta = Vector2.zero;
 
             var text = textObj.AddComponent<Text>();
-            text.font = ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            text.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
             text.fontSize = 56;
             text.color = theme.SecondaryButtonText;
             text.alignment = TextAnchor.MiddleCenter;

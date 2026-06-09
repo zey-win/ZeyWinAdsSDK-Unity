@@ -277,7 +277,7 @@ namespace ZeyWinAds.Ads
             headlineRect.offsetMax = new Vector2(-pad, 0);
 
             var headlineText = headlineObj.AddComponent<Text>();
-            headlineText.font = ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            headlineText.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
             headlineText.text = AdData.ad_text ?? "";
             headlineText.fontSize = 20;
             headlineText.color = theme.TextPrimary;
@@ -305,7 +305,7 @@ namespace ZeyWinAds.Ads
             btRect.sizeDelta = Vector2.zero;
 
             var badgeText = badgeTextObj.AddComponent<Text>();
-            badgeText.font = ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            badgeText.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
             badgeText.text = "Ad";
             badgeText.fontSize = 10;
             badgeText.color = Color.white;
@@ -324,7 +324,7 @@ namespace ZeyWinAds.Ads
                 bodyRect.offsetMax = new Vector2(-pad, -4);
 
                 var bodyText = bodyObj.AddComponent<Text>();
-                bodyText.font = ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+                bodyText.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
                 bodyText.text = AdData.ad_body;
                 bodyText.fontSize = 14;
                 bodyText.color = theme.TextSecondary;
@@ -355,7 +355,7 @@ namespace ZeyWinAds.Ads
             ctaTextRect.sizeDelta = Vector2.zero;
 
             var ctaText = ctaTextObj.AddComponent<Text>();
-            ctaText.font = ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            ctaText.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
             ctaText.text = ctaLabel;
             ctaText.fontSize = 18;
             ctaText.color = theme.PrimaryButtonText;
@@ -623,7 +623,7 @@ namespace ZeyWinAds.Ads
             checkTextRect.anchorMax = Vector2.one;
             checkTextRect.sizeDelta = Vector2.zero;
             var checkLabel = checkText.AddComponent<Text>();
-            checkLabel.font = ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            checkLabel.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
             checkLabel.fontSize = 48;
             checkLabel.color = theme.PrimaryButtonText;
             checkLabel.alignment = TextAnchor.MiddleCenter;
@@ -633,7 +633,7 @@ namespace ZeyWinAds.Ads
             var titleObj = new GameObject("TitleText");
             titleObj.transform.SetParent(_rewardPanel.transform, false);
             var titleText = titleObj.AddComponent<Text>();
-            titleText.font = ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            titleText.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
             titleText.fontSize = 28;
             titleText.fontStyle = FontStyle.Bold;
             titleText.color = theme.TextPrimary;
@@ -646,7 +646,7 @@ namespace ZeyWinAds.Ads
             var subtitleObj = new GameObject("SubtitleText");
             subtitleObj.transform.SetParent(_rewardPanel.transform, false);
             var subtitleText = subtitleObj.AddComponent<Text>();
-            subtitleText.font = ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            subtitleText.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
             subtitleText.fontSize = 18;
             subtitleText.color = theme.TextSecondary;
             subtitleText.alignment = TextAnchor.MiddleCenter;
@@ -690,7 +690,7 @@ namespace ZeyWinAds.Ads
             buttonTextRect.sizeDelta = Vector2.zero;
 
             var buttonText = buttonTextObj.AddComponent<Text>();
-            buttonText.font = ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            buttonText.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
             buttonText.fontSize = 22;
             buttonText.fontStyle = FontStyle.Bold;
             buttonText.color = theme.PrimaryButtonText;
