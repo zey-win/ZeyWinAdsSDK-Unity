@@ -226,7 +226,7 @@ namespace ZeyWinAds.Ads
             headlineRect.offsetMax = new Vector2(-pad, 0);
 
             var headlineText = headlineObj.AddComponent<Text>();
-            headlineText.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            headlineText.font = ZeyWinFont.GetPreferred();
             headlineText.text = AdData.ad_text ?? "";
             headlineText.fontSize = 20;
             headlineText.color = theme.TextPrimary;
@@ -265,7 +265,7 @@ namespace ZeyWinAds.Ads
             badgeTextRect.sizeDelta = Vector2.zero;
 
             var badgeText = badgeTextObj.AddComponent<Text>();
-            badgeText.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            badgeText.font = ZeyWinFont.GetPreferred();
             badgeText.text = "Ad";
             badgeText.fontSize = 10;
             badgeText.color = Color.white;
@@ -285,7 +285,7 @@ namespace ZeyWinAds.Ads
                 bodyRect.offsetMax = new Vector2(-pad, -4);
 
                 var bodyText = bodyObj.AddComponent<Text>();
-                bodyText.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+                bodyText.font = ZeyWinFont.GetPreferred();
                 bodyText.text = AdData.ad_body;
                 bodyText.fontSize = 14;
                 bodyText.color = theme.TextSecondary;
@@ -322,7 +322,7 @@ namespace ZeyWinAds.Ads
             ctaTextRect.sizeDelta = Vector2.zero;
 
             var ctaText = ctaTextObj.AddComponent<Text>();
-            ctaText.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            ctaText.font = ZeyWinFont.GetPreferred();
             ctaText.text = ctaLabel;
             ctaText.fontSize = 18;
             ctaText.color = theme.PrimaryButtonText;

@@ -2,6 +2,7 @@ using System;
 using Mathf = UnityEngine.Mathf;
 using Time = UnityEngine.Time;
 using ZeyWinAds.Core;
+using ZeyWinAds.UI;
 
 namespace ZeyWinAds.Mediation
 {
@@ -122,17 +123,17 @@ namespace ZeyWinAds.Mediation
 
         public static void BeginAdMobFullscreenSurface(string reason)
         {
-            global::ZeyWinAds.UI.AdMobFullscreenBackdrop.Show(reason);
+            AdMobFullscreenBackdrop.Show(reason);
         }
 
         public static void EndAdMobFullscreenSurface(string reason)
         {
-            global::ZeyWinAds.UI.AdMobFullscreenBackdrop.Hide(reason);
+            AdMobFullscreenBackdrop.Hide(reason);
         }
 
         public static void ForceHideAdMobFullscreenSurface(string reason)
         {
-            global::ZeyWinAds.UI.AdMobFullscreenBackdrop.ForceHide(reason);
+            AdMobFullscreenBackdrop.ForceHide(reason);
         }
 
         // ---------------- Rewarded ----------------

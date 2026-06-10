@@ -49,7 +49,7 @@ namespace ZeyWinAds.Ads
                 }
 
                 if (_preferredFont == null)
-                    _preferredFont = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+                    _preferredFont = ZeyWinFont.GetPreferred();
 
                 return _preferredFont;
             }

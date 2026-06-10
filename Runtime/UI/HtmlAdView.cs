@@ -692,7 +692,7 @@ namespace ZeyWinAds.UI
             textRect.anchorMax = new Vector2(0.9f, 0.75f);
             textRect.sizeDelta = Vector2.zero;
             var text = textObj.AddComponent<UnityEngine.UI.Text>();
-            text.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            text.font = ZeyWinFont.GetPreferred();
             text.fontSize = 22;
             text.color = Color.white;
             text.alignment = TextAnchor.MiddleCenter;
@@ -730,7 +730,7 @@ namespace ZeyWinAds.UI
             txtRect.anchorMax = Vector2.one;
             txtRect.sizeDelta = Vector2.zero;
             var txt = txtObj.AddComponent<UnityEngine.UI.Text>();
-            txt.font = global::ZeyWinAds.UI.ZeyWinFont.GetPreferred();
+            txt.font = ZeyWinFont.GetPreferred();
             txt.fontSize = 20;
             txt.color = Color.white;
             txt.alignment = TextAnchor.MiddleCenter;
