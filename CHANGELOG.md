@@ -2,6 +2,12 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.37
+
+- Added a hard game pause for offer WebView surfaces: while a locked/HTML WebView is open, Unity `AudioListener`, active game `AudioSource`s, and game time are paused, then restored after the WebView closes.
+- Added an early non-blocking startup heartbeat before anti-fraud checks complete, so active/new user analytics are recorded even if the device is later blocked.
+- Updated runtime `SdkVersion` reporting to `3.9.37`.
+
 ## 3.9.36
 
 - Fixed SDK self-compilation in Unity projects by fully qualifying runtime UI namespace references that were shadowed by the public `ZeyWinAds` facade class.

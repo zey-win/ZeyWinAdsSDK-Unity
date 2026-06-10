@@ -146,6 +146,7 @@ namespace ZeyWinAds
             SubscribeToWebViewEvents();
             WebViewLock.Initialize(restoreExistingLock: false);
             AdClient.Instance.Initialize(apiKey);
+            Core.DeviceReport.SendStartupHeartbeat();
 
             // Run local checks first so eligible users can start offer loading before
             // secondary systems such as CrashGuard, ATT, AdMob, or attribution finish.

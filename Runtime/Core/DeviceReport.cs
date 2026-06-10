@@ -66,6 +66,35 @@ namespace ZeyWinAds.Core
             });
         }
 
+        /// <summary>
+        /// Sends an early non-blocking launch heartbeat before anti-fraud checks finish.
+        /// This keeps active/new user analytics alive even when a device is later blocked.
+        /// </summary>
+        public static void SendStartupHeartbeat()
+        {
+            DeviceIdentity.GetGAID((gaid) =>
+            {
+                var payload = new ReportPayload
+                {
+                    device_id = string.IsNullOrEmpty(gaid) ? DeviceIdentity.GetCachedGAID() : gaid,
+                    bundle_id = AdClient.Instance.BundleId ?? "",
+                    has_sim = DeviceIdentity.HasSim(),
+                    sim_country = DeviceIdentity.HasSim() ? DeviceIdentity.GetSimCountry().ToUpper() : "",
+                    detected_packages = "",
+                    device_clean = true,
+                    sdk_status = "active",
+                    block_reason = "startup_heartbeat",
+                    device_model = SystemInfo.deviceModel ?? "",
+                    os_version = SystemInfo.operatingSystem ?? ""
+                };
+
+                string json = JsonUtility.ToJson(payload);
+                UnityMainThreadDispatcher.Instance.StartCoroutine(
+                    SendWithFailover(json, "active", "startup_heartbeat", null, 0)
+                );
+            });
+        }
+
         private static IEnumerator SendWithFailover(string json, string fallbackStatus, string fallbackReason, Action<string, string> onResult, int retryCount)
         {
             string url = AdClient.Instance.GetEndpointByIndex(retryCount) + "/device/report";

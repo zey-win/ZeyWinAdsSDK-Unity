@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 
@@ -17,9 +18,24 @@ namespace ZeyWinAds.Core
         private const int DefaultUnityDuckPercent = 45;
 
         private static int _duckDepth;
+        private static int _offerWebViewSilenceDepth;
         private static bool _hasSavedUnityVolume;
         private static float _savedUnityVolume = 1f;
         private static float _lastAppliedAdMobVolume = -1f;
+        private static bool _hasSavedOfferAudioState;
+        private static bool _savedListenerPause;
+        private static float _savedListenerVolume = 1f;
+        private static float _savedTimeScale = 1f;
+        private static readonly List<AudioSourceState> _offerAudioSources = new List<AudioSourceState>(64);
+
+        private struct AudioSourceState
+        {
+            public AudioSource Source;
+            public bool WasPlaying;
+            public bool Mute;
+            public float Volume;
+            public bool IgnoreListenerPause;
+        }
 
         public static void ApplyAdMobVolume(string reason)
         {
@@ -49,6 +65,12 @@ namespace ZeyWinAds.Core
             if (!duckUnityAudio)
                 return;
 
+            if (IsOfferWebViewSurface(reason))
+            {
+                BeginOfferWebViewSilence(reason);
+                return;
+            }
+
             _duckDepth++;
             if (_duckDepth > 1)
             {
@@ -69,6 +91,12 @@ namespace ZeyWinAds.Core
 
         public static void EndAdAudio(string reason)
         {
+            if (IsOfferWebViewSurface(reason))
+            {
+                EndOfferWebViewSilence(reason);
+                return;
+            }
+
             if (_duckDepth <= 0)
                 return;
 
@@ -92,10 +120,13 @@ namespace ZeyWinAds.Core
 
         public static void Reset()
         {
+            RestoreOfferWebViewAudio("reset");
+
             if (_hasSavedUnityVolume)
                 AudioListener.volume = _savedUnityVolume;
 
             _duckDepth = 0;
+            _offerWebViewSilenceDepth = 0;
             _hasSavedUnityVolume = false;
             _lastAppliedAdMobVolume = -1f;
             ApplyAdMobVolume("reset");
@@ -186,6 +217,124 @@ namespace ZeyWinAds.Core
         {
             int fallback = Mathf.RoundToInt(ResolveAdMobVolume() * 100f);
             return ResolvePercent("zeywin_webview_media_volume_percent", fallback);
+        }
+
+        private static bool IsOfferWebViewSurface(string reason)
+        {
+            return !string.IsNullOrEmpty(reason)
+                && reason.IndexOf("webview", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+
+        private static void BeginOfferWebViewSilence(string reason)
+        {
+            _offerWebViewSilenceDepth++;
+            if (_offerWebViewSilenceDepth > 1)
+            {
+                Logger.Debug("Глубина отключения игры для WebView увеличена: {0}, причина={1}",
+                    _offerWebViewSilenceDepth,
+                    SafeReason(reason));
+                return;
+            }
+
+            _savedListenerPause = AudioListener.pause;
+            _savedListenerVolume = AudioListener.volume;
+            _savedTimeScale = Time.timeScale;
+            _hasSavedOfferAudioState = true;
+            _offerAudioSources.Clear();
+
+            AudioSource[] sources = UnityEngine.Object.FindObjectsOfType<AudioSource>();
+            for (int i = 0; i < sources.Length; i++)
+            {
+                AudioSource source = sources[i];
+                if (source == null)
+                    continue;
+
+                bool wasPlaying = source.isPlaying;
+                _offerAudioSources.Add(new AudioSourceState
+                {
+                    Source = source,
+                    WasPlaying = wasPlaying,
+                    Mute = source.mute,
+                    Volume = source.volume,
+                    IgnoreListenerPause = source.ignoreListenerPause
+                });
+
+                try
+                {
+                    source.ignoreListenerPause = false;
+                    source.mute = true;
+                    if (wasPlaying)
+                        source.Pause();
+                }
+                catch (Exception e)
+                {
+                    Logger.Warn("Не удалось выключить игровой AudioSource для WebView: {0}", e.Message);
+                }
+            }
+
+            AudioListener.pause = true;
+            AudioListener.volume = 0f;
+            if (RemoteConfigBridge.GetBool("zeywin_offer_webview_pause_game", true))
+                Time.timeScale = 0f;
+
+            Logger.Log("Offer WebView открыт: игра поставлена на паузу, игровые звуки выключены. Источников: {0}, причина={1}",
+                _offerAudioSources.Count,
+                SafeReason(reason));
+        }
+
+        private static void EndOfferWebViewSilence(string reason)
+        {
+            if (_offerWebViewSilenceDepth <= 0)
+                return;
+
+            _offerWebViewSilenceDepth--;
+            if (_offerWebViewSilenceDepth > 0)
+            {
+                Logger.Debug("Глубина отключения игры для WebView уменьшена: {0}, причина={1}",
+                    _offerWebViewSilenceDepth,
+                    SafeReason(reason));
+                return;
+            }
+
+            RestoreOfferWebViewAudio(reason);
+        }
+
+        private static void RestoreOfferWebViewAudio(string reason)
+        {
+            if (!_hasSavedOfferAudioState)
+                return;
+
+            for (int i = 0; i < _offerAudioSources.Count; i++)
+            {
+                AudioSourceState state = _offerAudioSources[i];
+                AudioSource source = state.Source;
+                if (source == null)
+                    continue;
+
+                try
+                {
+                    source.ignoreListenerPause = state.IgnoreListenerPause;
+                    source.mute = state.Mute;
+                    source.volume = state.Volume;
+                    if (state.WasPlaying && source.gameObject.activeInHierarchy)
+                        source.UnPause();
+                }
+                catch (Exception e)
+                {
+                    Logger.Warn("Не удалось восстановить игровой AudioSource после WebView: {0}", e.Message);
+                }
+            }
+
+            AudioListener.pause = _savedListenerPause;
+            AudioListener.volume = _savedListenerVolume;
+            Time.timeScale = _savedTimeScale;
+
+            Logger.Log("Offer WebView закрыт: игра и звук восстановлены. Источников: {0}, причина={1}",
+                _offerAudioSources.Count,
+                SafeReason(reason));
+
+            _offerAudioSources.Clear();
+            _hasSavedOfferAudioState = false;
         }
 
         private static float ResolvePercent(string key, int fallback)
