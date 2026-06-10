@@ -25,9 +25,9 @@ namespace ZeyWinAds.Editor
         private const string RegistryUrl = "https://package.openupm.com";
         private const string DisableEnv = "ZEYWIN_DISABLE_ADMOB_BOOTSTRAP";
         private const string AdMobPackage = "com.google.ads.mobile";
-        private const string AdMobVersion = "11.2.0";
+        private const string AdMobVersion = "10.5.0";
         private const string EdmPackage = "com.google.external-dependency-manager";
-        private const string EdmVersion = "1.2.187";
+        private const string EdmVersion = "1.2.186";
         private const string FirebaseLocalEnv = "ZEYWIN_FIREBASE_SDK_DIR";
         private const string DefaultFirebaseLocalPath = "/Users/admin/Documents/Data/Unity/sdk/FireBase";
         private const string AndroidPluginsPath = "Assets/Plugins/Android";
