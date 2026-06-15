@@ -311,10 +311,11 @@ namespace ZeyWinAds.Editor
             changed |= SetObjectReference(serialized, "m_defaultStyleSheet", TmpDefaultStyleSheetPath, overwriteExisting: false);
 
             var fallbacks = serialized.FindProperty("m_fallbackFontAssets");
+            changed |= AddFallbackFont(fallbacks, TmpDefaultFallbackFontPath);
+            changed |= AddFallbackFont(fallbacks, TmpDefaultFontPath);
             changed |= AddFallbackFont(fallbacks, "Assets/Fonts/Roboto-VariableFont_wdth,wght SDF.asset");
             changed |= AddFallbackFont(fallbacks, "Assets/Fonts/Roboto-Regular SDF.asset");
             changed |= AddFallbackFont(fallbacks, "Assets/Fonts/NotoSans-Regular SDF.asset");
-            changed |= AddFallbackFont(fallbacks, "Assets/TextMesh Pro/Examples & Extras/Resources/Fonts & Materials/Roboto-Bold SDF.asset");
 
             if (changed)
             {
