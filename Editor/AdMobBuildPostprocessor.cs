@@ -81,6 +81,43 @@ namespace ZeyWinAds.Editor
             {
                 PatchGeneratedAndroidManifest(manifestPath, appId, productName);
             }
+            
+            ApplyKotlinResolutionStrategy(path);
+        }
+
+        private void ApplyKotlinResolutionStrategy(string path)
+        {
+            try
+            {
+                string projectRoot = Directory.GetParent(path)?.FullName;
+                if (string.IsNullOrEmpty(projectRoot)) return;
+
+                string buildGradlePath = Path.Combine(projectRoot, "build.gradle");
+                if (File.Exists(buildGradlePath))
+                {
+                    string content = File.ReadAllText(buildGradlePath);
+                    if (!content.Contains("org.jetbrains.kotlin:kotlin-stdlib"))
+                    {
+                        string block = @"
+allprojects {
+    configurations.all {
+        resolutionStrategy {
+            force 'org.jetbrains.kotlin:kotlin-stdlib:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.8.22'
+            force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.8.22'
+        }
+    }
+}
+";
+                        File.AppendAllText(buildGradlePath, block);
+                        Debug.Log("[ZeyWinAds] Applied Kotlin resolution strategy to root build.gradle to prevent Duplicate class errors.");
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[ZeyWinAds] Failed to apply Kotlin resolution strategy: " + ex.Message);
+            }
         }
 
         private static void PatchAndroidManifest(string appId)
