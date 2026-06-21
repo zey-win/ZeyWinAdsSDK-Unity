@@ -210,6 +210,12 @@ namespace ZeyWinAds.Editor
                     scenes.Add(scene.path);
             }
 
+            // Remove SampleScene if there are other scenes in the build
+            if (scenes.Count > 1)
+            {
+                scenes.RemoveAll(path => path.EndsWith("/SampleScene.unity", StringComparison.OrdinalIgnoreCase) || path.Equals("Assets/Scenes/SampleScene.unity", StringComparison.OrdinalIgnoreCase));
+            }
+
             if (scenes.Count == 0)
                 Fail("No enabled scenes found in EditorBuildSettings.");
 
