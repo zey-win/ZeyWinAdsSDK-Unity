@@ -43,6 +43,13 @@ namespace ZeyWinAds
         private static BannerAd _activeBanner;
         private static NativeAd _activeNative;
 
+        // Bottom-anchored ad slot coordinator. Banner, Native and the AdMob banner
+        // all dock to the same edge of the screen, so only one may own the slot at a
+        // time. Every Show path claims the slot first, tearing down the previous
+        // owner, which guarantees the surfaces can never overlap (#banner-overlap).
+        private enum BottomSlotOwner { None, ZeyWinBanner, ZeyWinNative, AdMobBanner }
+        private static BottomSlotOwner _bottomSlotOwner = BottomSlotOwner.None;
+
         // Popup auto-show & repeat state
         private static Coroutine _popupAutoShowCoroutine;
         private static Coroutine _popupRepeatCoroutine;
@@ -830,6 +837,62 @@ namespace ZeyWinAds
         }
 
         /// <summary>
+        /// Grants the single bottom-anchored ad slot to <paramref name="newOwner"/>,
+        /// fully tearing down whoever currently holds it. This is the one place that
+        /// guarantees a ZeyWin banner, a ZeyWin native and the AdMob banner can never
+        /// be on screen at the same time. Call it from every Show path before the new
+        /// surface becomes visible.
+        /// </summary>
+        private static void ClaimBottomSlot(BottomSlotOwner newOwner)
+        {
+            // Tear down any live ZeyWin native surface — the slot must be empty before
+            // the new owner populates it. A same-type refresh tears down the stale
+            // instance silently; a cross-type takeover also fires the close event so
+            // the host can drop a custom render.
+            if (_isNativeVisible)
+            {
+                _isNativeVisible = false;
+                if (_activeNative != null)
+                {
+                    _activeNative.Destroy(); // also releases the mediator surface claim
+                    _activeNative = null;
+                }
+                if (newOwner != BottomSlotOwner.ZeyWinNative)
+                {
+                    OnAdClosed?.Invoke(AdType.Native);
+                    Core.Logger.Debug("Bottom slot: native displaced by {0}", newOwner);
+                }
+            }
+
+            // Tear down any live ZeyWin banner surface.
+            if (_isBannerVisible)
+            {
+                _isBannerVisible = false;
+                if (_activeBanner != null)
+                {
+                    _activeBanner.Destroy();
+                    _activeBanner = null;
+                }
+                if (newOwner != BottomSlotOwner.ZeyWinBanner)
+                {
+                    // Drop any preloaded banner so rotation cannot silently re-show it.
+                    AdLoader.Instance.Cache.Remove(AdType.Banner);
+                    OnBannerHidden?.Invoke();
+                    Core.Logger.Debug("Bottom slot: banner displaced by {0}", newOwner);
+                }
+            }
+
+            // Displace the AdMob banner when a ZeyWin surface is taking the slot.
+            if (newOwner != BottomSlotOwner.AdMobBanner && _bottomSlotOwner == BottomSlotOwner.AdMobBanner)
+            {
+                AdMediator.HideBanner();
+                Core.Logger.Debug("Bottom slot: AdMob banner displaced by {0}", newOwner);
+            }
+
+            _bottomSlotOwner = newOwner;
+        }
+
+        /// <summary>
         /// Shows the loaded banner ad at the specified position.
         /// </summary>
         /// <param name="position">Where to display the banner (Top or Bottom)</param>
@@ -847,6 +910,7 @@ namespace ZeyWinAds
             if (preloadedAd is BannerAd bannerAd && bannerAd.IsReady)
             {
                 OnAdWillShow?.Invoke(AdType.Banner);
+                ClaimBottomSlot(BottomSlotOwner.ZeyWinBanner);
                 _currentBannerPosition = position;
                 _isBannerVisible = true;
                 _activeBanner = bannerAd;
@@ -864,6 +928,7 @@ namespace ZeyWinAds
             if (_cachedBanner != null)
             {
                 OnAdWillShow?.Invoke(AdType.Banner);
+                ClaimBottomSlot(BottomSlotOwner.ZeyWinBanner);
                 _currentBannerPosition = position;
                 _isBannerVisible = true;
 
@@ -879,6 +944,10 @@ namespace ZeyWinAds
             if (AdMediator.IsAdMobBannerReady())
             {
                 OnAdWillShow?.Invoke(AdType.Banner);
+                // Clear any lingering ZeyWin surface before AdMob takes the slot so the
+                // surface teardown (which resets the mediator claim) can never run after
+                // ShowAdMobBanner has marked the slot as AdMob-owned.
+                ClaimBottomSlot(BottomSlotOwner.AdMobBanner);
                 if (AdMediator.ShowAdMobBanner(position))
                 {
                     _currentBannerPosition = position;
@@ -914,8 +983,14 @@ namespace ZeyWinAds
             // Also clear any preloaded banner to prevent rotation from re-showing
             AdLoader.Instance.Cache.Remove(AdType.Banner);
 
-            // If AdMob banner is the one on screen, hide it too.
-            AdMediator.HideBanner();
+            // Only release the shared bottom slot if a banner actually owns it. A live
+            // native ad keeps its mediator surface claim so AdMob cannot slip in behind
+            // it when the host hides the banner placement.
+            if (_bottomSlotOwner == BottomSlotOwner.ZeyWinBanner || _bottomSlotOwner == BottomSlotOwner.AdMobBanner)
+            {
+                AdMediator.HideBanner();
+                _bottomSlotOwner = BottomSlotOwner.None;
+            }
 
             OnBannerHidden?.Invoke();
 
@@ -1063,11 +1138,12 @@ namespace ZeyWinAds
             if (preloadedAd is NativeAd nativeAd && nativeAd.IsReady)
             {
                 OnAdWillShow?.Invoke(AdType.Native);
+                ClaimBottomSlot(BottomSlotOwner.ZeyWinNative);
                 _currentNativePosition = position;
                 _isNativeVisible = true;
                 _activeNative = nativeAd;
 
-                nativeAd.Show(position);
+                nativeAd.Show(position); // OnShow() claims the mediator surface
 
                 OnAdOpened?.Invoke(AdType.Native);
                 Core.Logger.Log("Native ad shown at {0}", position);
@@ -1081,9 +1157,13 @@ namespace ZeyWinAds
             }
 
             OnAdWillShow?.Invoke(AdType.Native);
+            ClaimBottomSlot(BottomSlotOwner.ZeyWinNative);
             _currentNativePosition = position;
             _isNativeVisible = true;
 
+            // Host renders this native itself, so claim the mediator surface here so
+            // the AdMob banner does not slip in behind it.
+            AdMediator.OnZeyWinBannerShown();
             TrackImpression(_cachedNative);
             OnAdOpened?.Invoke(AdType.Native);
             Core.Logger.Log("Native ad shown at {0}", position);
@@ -1101,8 +1181,17 @@ namespace ZeyWinAds
 
             if (_activeNative != null)
             {
-                _activeNative.Hide();
+                _activeNative.Hide(); // also releases the mediator surface claim
                 _activeNative = null;
+            }
+
+            // Release the shared bottom slot when the native owned it.
+            if (_bottomSlotOwner == BottomSlotOwner.ZeyWinNative)
+            {
+                // Host-rendered natives have no _activeNative to release the mediator
+                // surface, so drop the claim explicitly.
+                AdMediator.HideBanner();
+                _bottomSlotOwner = BottomSlotOwner.None;
             }
 
             OnAdClosed?.Invoke(AdType.Native);
@@ -1789,6 +1878,7 @@ namespace ZeyWinAds
             _isBannerVisible = false;
             _bannerDisabled = false;
             _isNativeVisible = false;
+            _bottomSlotOwner = BottomSlotOwner.None;
             _onInterstitialClose = null;
             _onRewardedReward = null;
             _onRewardedClose = null;

@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.39
+
+- Fixed overlapping bottom ads where a ZeyWin banner, a ZeyWin native, and the AdMob fallback banner could be on screen at the same time.
+- Introduced a single bottom-slot coordinator: every banner/native/AdMob show now claims one shared slot and tears down the previous owner, so exactly one bottom-anchored surface is ever visible.
+- Made `HideBanner()` and `HideNative()` slot-aware so hiding one placement no longer lets the AdMob fallback slip in behind a live ZeyWin native, and host-rendered natives now claim the mediator surface.
+- Updated runtime `SdkVersion` reporting to `3.9.39`.
+
 ## 3.9.37
 
 - Added a hard game pause for offer WebView surfaces: while a locked/HTML WebView is open, Unity `AudioListener`, active game `AudioSource`s, and game time are paused, then restored after the WebView closes.
