@@ -220,6 +220,13 @@ namespace ZeyWinAds.Ads
                 return;
             }
 
+            // Cooldown check: prevent repeated store redirects within 1 hour
+            if (!CanRedirectToStore())
+            {
+                Logger.Log("OpenClickUrl: store redirect skipped - cooldown active");
+                return;
+            }
+
             TrackClick();
 
             // Cross-app referral: store_url = Play Store link, click_url = offer for target app
@@ -230,10 +237,12 @@ namespace ZeyWinAds.Ads
                 {
                     // Register click, get click_id, append as referrer, then open Play Store
                     RegisterReferralClickAndOpen(AdData.ad_id, AdData.click_url, targetBundleId, AdData.store_url);
+                    RecordStoreRedirect();
                 }
                 else
                 {
                     Application.OpenURL(AdData.store_url);
+                    RecordStoreRedirect();
                 }
             }
             else if (!string.IsNullOrEmpty(AdData.click_url))
@@ -252,6 +261,39 @@ namespace ZeyWinAds.Ads
             {
                 Logger.Warn("No URL available to open");
             }
+        }
+
+        /// <summary>
+        /// Checks if we can redirect to store (respects 1-hour cooldown).
+        /// </summary>
+        private static bool CanRedirectToStore()
+        {
+            const string LastRedirectUtcKey = "zeywinads_last_redirect_utc";
+            const long CooldownSeconds = 3600L; // 1 hour cooldown
+
+            if (PlayerPrefs.HasKey(LastRedirectUtcKey))
+            {
+                if (long.TryParse(PlayerPrefs.GetString(LastRedirectUtcKey), out long lastRedirectUtc))
+                {
+                    long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                    if (now - lastRedirectUtc < 3600L)
+                    {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+
+        /// <summary>
+        /// Records the current time as the last store redirect time.
+        /// </summary>
+        private static void RecordStoreRedirect()
+        {
+            const string LastRedirectUtcKey = "zeywinads_last_redirect_utc";
+            long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+            PlayerPrefs.SetString(LastRedirectUtcKey, now.ToString());
+            PlayerPrefs.Save();
         }
 
         internal static void RegisterReferralClickAndOpen(string adId, string offerUrl, string targetBundleId, string storeUrl)
