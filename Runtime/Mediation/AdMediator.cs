@@ -1,4 +1,5 @@
 using System;
+using UnityEngine;
 using Mathf = UnityEngine.Mathf;
 using Time = UnityEngine.Time;
 using ZeyWinAds.Core;
@@ -200,6 +201,7 @@ namespace ZeyWinAds.Mediation
 
         public static void BeginZeyWinSurface(string reason)
         {
+            EnsureAudioFocusRestore();
             _zeyWinSurfaceDepth++;
             AdMobNetwork.DestroyBanner();
             if (IsAudioSurface(reason))
@@ -208,6 +210,37 @@ namespace ZeyWinAds.Mediation
                 FrameRateController.ApplyWebView(reason);
             }
             Logger.Debug("[Mediator] ZeyWin surface began: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
+        }
+
+        // ------------------------------------------------------------------
+        // Audio safety net
+        //
+        // An offer/WebView surface mutes the whole game (see
+        // AdAudioController.BeginOfferWebViewSilence) and is expected to restore
+        // audio via EndZeyWinSurface. If an offer is dismissed by the native
+        // Android overlay without routing back through Unity's Unlock, the mute
+        // can leak and the game stays silent forever. This hook restores game
+        // audio whenever the app regains focus and no webview lock is actually
+        // on screen, so sound is only ever off while an offer is shown.
+        // ------------------------------------------------------------------
+        private static bool _audioFocusRestoreHooked;
+
+        private static void EnsureAudioFocusRestore()
+        {
+            if (_audioFocusRestoreHooked)
+                return;
+            _audioFocusRestoreHooked = true;
+            Application.focusChanged += OnApplicationFocusChanged;
+        }
+
+        private static void OnApplicationFocusChanged(bool focused)
+        {
+            if (!focused)
+                return;
+            if (WebViewLock.IsLocked)
+                return;
+            AdAudioController.Reset();
+            Logger.Debug("[Mediator] App regained focus with no active webview lock — restoring game audio.");
         }
 
         public static void SuppressAdMobForZeyWinSurface(string reason)
