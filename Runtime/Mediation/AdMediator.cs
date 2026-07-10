@@ -1,5 +1,4 @@
 using System;
-using UnityEngine;
 using Mathf = UnityEngine.Mathf;
 using Time = UnityEngine.Time;
 using ZeyWinAds.Core;
@@ -230,7 +229,7 @@ namespace ZeyWinAds.Mediation
             if (_audioFocusRestoreHooked)
                 return;
             _audioFocusRestoreHooked = true;
-            Application.focusChanged += OnApplicationFocusChanged;
+            UnityEngine.Application.focusChanged += OnApplicationFocusChanged;
         }
 
         private static void OnApplicationFocusChanged(bool focused)
