@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.40
+
+- Widened native-view font fallback (`ZeyWinFont.GetPreferred`) to cover Chinese
+  (Simplified/Traditional), Japanese, Korean, Thai, and Hebrew glyphs via OS font lookup, in
+  addition to existing Latin/Cyrillic/Greek/Vietnamese coverage. Arabic and Indic scripts remain
+  unsupported (require text shaping, not just font coverage).
+- Added error logging (with the exact searched path(s)) when `TextMeshProBootstrap` can't find the
+  default/fallback TMP font assets during setup, instead of failing silently.
+- Added `README.md` covering installation, project setup, a quick-start integration pattern,
+  verification steps, supported ad formats (including a Native ad usage example), and how the
+  Banner → AdMob fallback works internally.
+- Updated runtime `SdkVersion` reporting to `3.9.40`.
+
 ## 3.9.39
 
 - Fixed overlapping bottom ads where a ZeyWin banner, a ZeyWin native, and the AdMob fallback banner could be on screen at the same time.

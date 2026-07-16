@@ -330,6 +330,10 @@ namespace ZeyWinAds.Editor
                     return fontPath;
             }
 
+            Debug.LogError(
+                $"[ZeyWinAds] No preferred TMP font asset found. Searched: {string.Join(", ", PreferredTmpFontAssetPaths)}. " +
+                $"Falling back to default font asset: {TmpDefaultFontPath}");
+
             return TmpDefaultFontPath;
         }
 
@@ -501,7 +505,10 @@ namespace ZeyWinAds.Editor
 
             var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
             if (asset == null)
+            {
+                Debug.LogError($"[ZeyWinAds] Fallback TMP font asset not found. Searched: {assetPath}");
                 return false;
+            }
 
             for (int i = 0; i < array.arraySize; i++)
             {
