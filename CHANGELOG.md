@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.37 (SIM-check hardening)
+
+- SIM check now blocks all ZeyWin-owned non-banner/non-popup surfaces when the device has no SIM card OR the SIM country does not match the IP country (geo mismatch). The device is marked `_simBlocked` and `IsBlocked` is set, so the offer WebView (`CanShowOfferWebView`), ZeyWin video (interstitial/rewarded), and ZeyWin server surfaces are suppressed.
+- `ShowInterstitial` / `ShowRewarded` skip ZeyWin video paths while `_simBlocked` and fall straight through to the AdMob fallback, so reward-for-video still works without ever invoking ZeyWin video.
+- The custom popup (`ShowPopup`), ZeyWin banner (`ShowBanner`/`LoadBanner`), and the AdMob fallback continue to run normally so the bottom slot is always occupied.
+- `GeoCheck` mismatch is no longer ignored on the client: it now blocks the device (reason `geo_mismatch`) instead of `geo_mismatch_ignored`.
+
 ## 3.9.39
 
 - Fixed overlapping bottom ads where a ZeyWin banner, a ZeyWin native, and the AdMob fallback banner could be on screen at the same time.

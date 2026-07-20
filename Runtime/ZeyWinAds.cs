@@ -67,6 +67,11 @@ namespace ZeyWinAds
         private static bool _startupInterstitialOpening;
         private static bool _startupReferralCheckPending;
         private static bool _startupEligibilityAllowed;
+        // Set when the device fails the SIM check: no SIM card, or the SIM country
+        // does not match the IP country (geo mismatch). While true, ZeyWin-owned
+        // surfaces that are not strictly banner/popup must NOT be shown or invoked;
+        // only the AdMob fallback may serve (so reward-for-video still works).
+        private static bool _simBlocked;
         private static Coroutine _startupLoadingTimeoutCoroutine;
         private static int _startupLoadingGeneration;
         private static string _startupFallbackReason;
@@ -177,7 +182,10 @@ namespace ZeyWinAds
             else if (!deviceClean)
                 blockReason = "suspicious_apps";
             else if (!hasSim)
+            {
                 blockReason = "no_sim";
+                _simBlocked = true;
+            }
 
             if (blockReason == "none")
             {
@@ -258,11 +266,22 @@ namespace ZeyWinAds
             {
                 Core.GeoCheck.Verify(simCountry, (ipCountry, geoMatch) =>
                 {
-                    // VPN/IP mismatch must not block worldwide traffic on the client.
-                    // Keep reporting it for analytics, but let the server decide if a
-                    // device must be blocked for another reason.
+                    // A SIM card whose country does not match the IP country is treated
+                    // the same as having no SIM: the device fails the SIM check, so
+                    // ZeyWin-owned non-banner/non-popup surfaces must not be shown.
+                    // Only the AdMob fallback may serve (reward-for-video still works).
+                    if (!geoMatch)
+                    {
+                        Core.Logger.Log($"Device SIM country '{simCountry}' does not match IP country '{ipCountry}'; blocking ZeyWin surfaces (AdMob fallback only).");
+                        _simBlocked = true;
+                        BlockDevice("geo_mismatch");
+                        TryAbortPendingStartupForGoogleFallback("geo_mismatch");
+                        Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", "geo_mismatch");
+                        return;
+                    }
+
                     string geoStatus = "active";
-                    string geoReason = geoMatch ? "none" : "geo_mismatch_ignored";
+                    string geoReason = "none";
 
                     Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason, (serverStatus, serverReason) =>
                     {
@@ -639,6 +658,29 @@ namespace ZeyWinAds
                 return;
             }
 
+            // SIM check failed (no SIM or SIM country != IP country): ZeyWin-owned
+            // video must not be shown or invoked. Skip straight to the AdMob fallback
+            // so reward-for-video still works, but never call ZeyWin video paths.
+            if (_simBlocked)
+            {
+                Core.Logger.Log("Interstitial: ZeyWin video suppressed by SIM check; using AdMob fallback only.");
+                if (AdMediator.IsAdMobInterstitialReady())
+                {
+                    OnAdWillShow?.Invoke(AdType.Interstitial);
+                    AdMediator.RecordAutoFullscreenShown();
+                    AdMediator.ShowAdMobInterstitial(() =>
+                    {
+                        OnAdClosed?.Invoke(AdType.Interstitial);
+                        onClose?.Invoke();
+                    });
+                    OnAdOpened?.Invoke(AdType.Interstitial);
+                    return;
+                }
+                Core.Logger.Warn("Interstitial: SIM check failed and no AdMob interstitial available.");
+                onClose?.Invoke();
+                return;
+            }
+
             if (!AdMediator.CanShowAutoFullscreen(out float remainingSeconds))
             {
                 Core.Logger.Log("Interstitial auto-show skipped by cooldown: {0}s remaining", Mathf.CeilToInt(remainingSeconds));
@@ -738,6 +780,34 @@ namespace ZeyWinAds
             if (AdMediator.IsZeyWinSurfaceActive)
             {
                 Core.Logger.Log("Rewarded skipped while ZeyWin surface is active.");
+                onClose?.Invoke();
+                return;
+            }
+
+            // SIM check failed (no SIM or SIM country != IP country): ZeyWin-owned
+            // video must not be shown or invoked. Skip straight to the AdMob fallback
+            // so reward-for-video still works, but never call ZeyWin video paths.
+            if (_simBlocked)
+            {
+                Core.Logger.Log("Rewarded: ZeyWin video suppressed by SIM check; using AdMob fallback only.");
+                if (AdMediator.IsAdMobRewardedReady())
+                {
+                    OnAdWillShow?.Invoke(AdType.Rewarded);
+                    AdMediator.ShowAdMobRewarded(
+                        onReward: amount =>
+                        {
+                            onReward?.Invoke(amount);
+                            OnRewardEarned?.Invoke(amount);
+                        },
+                        onClose: () =>
+                        {
+                            OnAdClosed?.Invoke(AdType.Rewarded);
+                            onClose?.Invoke();
+                        });
+                    OnAdOpened?.Invoke(AdType.Rewarded);
+                    return;
+                }
+                Core.Logger.Warn("Rewarded: SIM check failed and no AdMob rewarded available.");
                 onClose?.Invoke();
                 return;
             }
