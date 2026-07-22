@@ -20,7 +20,7 @@ namespace ZeyWinAds.Editor
     [InitializeOnLoad]
     public static class AdMobBootstrap
     {
-        private const string MarkerKey = "ZeyWinAds_AdMobBootstrap_Done_v2";
+        private const string MarkerKey = "ZeyWinAds_AdMobBootstrap_Done_v3";
         private const string RegistryName = "package.openupm.com";
         private const string RegistryUrl = "https://package.openupm.com";
         private const string DisableEnv = "ZEYWIN_DISABLE_ADMOB_BOOTSTRAP";
@@ -33,11 +33,15 @@ namespace ZeyWinAds.Editor
         private const string AndroidPluginsPath = "Assets/Plugins/Android";
         private const string AndroidGoogleServicesPath = "Assets/Plugins/Android/google-services.json";
         private const string LegacyNoSdkStubsPath = "Assets/Scripts/SDKStubs/NoSdkStubs.cs";
+        // FirebaseMessaging is intentionally not listed here — it now ships
+        // vendored inside ThirdParty/Firebase/ and is always present for any
+        // consumer of this package, so it no longer needs this local-folder
+        // import mechanism (and never reliably worked for it anyway, see
+        // ImportLocalFirebaseUnityPackages).
         private static readonly string[] FirebaseUnityPackageNames =
         {
             "FirebaseAnalytics_13.0.0.unitypackage",
-            "FirebaseRemoteConfig_13.0.0.unitypackage",
-            "FirebaseMessaging_13.0.0.unitypackage"
+            "FirebaseRemoteConfig_13.0.0.unitypackage"
         };
         private static readonly string[] GoogleServicesCandidatePaths =
         {
@@ -97,7 +101,72 @@ namespace ZeyWinAds.Editor
             bool changed = PatchManifest();
             changed |= EnsureGoogleServicesJsonPreserved();
             changed |= ImportLocalFirebaseUnityPackages();
+            changed |= EnsureFirebasePythonScriptsCopied();
             return changed;
+        }
+
+        /// <summary>
+        /// Firebase's own compiled Editor tooling (Firebase.Editor.dll) invokes a
+        /// couple of small Python helper scripts by a hardcoded path relative to
+        /// the project root — "Assets/Firebase/Editor/&lt;script&gt;.py" — assuming
+        /// the classic .unitypackage-style install where Firebase's Editor folder
+        /// sits directly under Assets. Since we vendor Firebase under
+        /// ThirdParty/Firebase/ inside this package instead (for portability
+        /// across file:/git/registry references), that hardcoded lookup fails
+        /// with "No such file or directory" for anyone not using the legacy
+        /// layout. This copies just those loose utility scripts (plain Python
+        /// text, not compiled code, so no duplicate-assembly risk) to the exact
+        /// Assets-rooted path Firebase's tooling expects — the rest of Firebase
+        /// (DLLs, native libs, asmdef-relevant content) stays vendored as-is.
+        /// </summary>
+        private static bool EnsureFirebasePythonScriptsCopied([System.Runtime.CompilerServices.CallerFilePath] string sourceFilePath = "")
+        {
+            string editorDir = Path.GetDirectoryName(sourceFilePath);
+            string packageRoot = Path.GetDirectoryName(editorDir);
+            string sourceScriptsDir = Path.Combine(packageRoot, "ThirdParty", "Firebase", "Editor");
+
+            if (!Directory.Exists(sourceScriptsDir))
+                return false;
+
+            string targetScriptsDir = Path.Combine(Application.dataPath, "Firebase", "Editor");
+            bool changed = false;
+
+            foreach (string sourceScript in Directory.GetFiles(sourceScriptsDir, "*.py"))
+            {
+                string fileName = Path.GetFileName(sourceScript);
+                string targetScript = Path.Combine(targetScriptsDir, fileName);
+
+                if (File.Exists(targetScript) && FilesAreIdentical(sourceScript, targetScript))
+                    continue;
+
+                Directory.CreateDirectory(targetScriptsDir);
+                File.Copy(sourceScript, targetScript, overwrite: true);
+
+                string sourceMeta = sourceScript + ".meta";
+                if (File.Exists(sourceMeta))
+                    File.Copy(sourceMeta, targetScript + ".meta", overwrite: true);
+
+                changed = true;
+                Debug.Log($"[ZeyWinAds] Copied Firebase Editor helper script: Assets/Firebase/Editor/{fileName}");
+            }
+
+            return changed;
+        }
+
+        private static bool FilesAreIdentical(string a, string b)
+        {
+            byte[] bytesA = File.ReadAllBytes(a);
+            byte[] bytesB = File.ReadAllBytes(b);
+            if (bytesA.Length != bytesB.Length)
+                return false;
+
+            for (int i = 0; i < bytesA.Length; i++)
+            {
+                if (bytesA[i] != bytesB[i])
+                    return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -280,13 +349,15 @@ namespace ZeyWinAds.Editor
             return importedAny;
         }
 
+        // Messaging is deliberately excluded from this check — it's vendored
+        // inside ThirdParty/Firebase/ (see FirebaseUnityPackageNames above),
+        // not something this method needs to detect/import.
         private static bool HasFirebaseAssetsInstalled()
         {
             string assetsRoot = Application.dataPath;
             return File.Exists(Path.Combine(assetsRoot, "Firebase", "Plugins", "Firebase.App.dll"))
                 && File.Exists(Path.Combine(assetsRoot, "Firebase", "Plugins", "Firebase.RemoteConfig.dll"))
-                && File.Exists(Path.Combine(assetsRoot, "Firebase", "Plugins", "Firebase.Analytics.dll"))
-                && File.Exists(Path.Combine(assetsRoot, "Firebase", "Plugins", "Firebase.Messaging.dll"));
+                && File.Exists(Path.Combine(assetsRoot, "Firebase", "Plugins", "Firebase.Analytics.dll"));
         }
 
         private static string FindFileByName(string root, string fileName)
