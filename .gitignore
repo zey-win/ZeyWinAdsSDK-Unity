@@ -1,3 +1,16 @@
 .DS_Store
 *.log
 *.tgz
+
+# Firebase's x86_64 desktop stub for the App module - only used for local
+# Editor Play-mode testing, never touched by real Android/iOS builds. Too
+# large (180MB+) to distribute via a git-URL UPM dependency (Unity's git
+# package resolver doesn't reliably support Git LFS), so it's kept local-only.
+# Copy it in manually from a real Firebase Unity SDK download if you want to
+# Play-test Firebase Messaging in the Editor.
+ThirdParty/Firebase/Plugins/x86_64/FirebaseCppApp-13_0_0.bundle
+ThirdParty/Firebase/Plugins/x86_64/FirebaseCppApp-13_0_0.bundle.meta
+ThirdParty/Firebase/Plugins/x86_64/FirebaseCppApp-13_0_0.so
+ThirdParty/Firebase/Plugins/x86_64/FirebaseCppApp-13_0_0.so.meta
+ThirdParty/Firebase/Plugins/x86_64/FirebaseCppApp-13_0_0.dll
+ThirdParty/Firebase/Plugins/x86_64/FirebaseCppApp-13_0_0.dll.meta

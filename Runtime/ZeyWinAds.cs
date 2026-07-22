@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using UnityEngine;
 using ZeyWinAds.Ads;
 using ZeyWinAds.Core;
@@ -91,6 +92,38 @@ namespace ZeyWinAds
         public static event Action<string> OnWebViewLocked;
         public static event Action OnWebViewUnlocked;
         public static event Action<string> OnDeviceBlocked;
+
+        /// <summary>
+        /// Fired when the user taps a push notification. deeplink may be an
+        /// empty string, meaning "no specific route — just open the main screen".
+        /// scheduleId identifies the backend push schedule that sent it, for analytics.
+        /// </summary>
+        public static event Action<string, string> OnPushDeeplinkReceived;
+
+        /// <summary>
+        /// Raised internally by FirebaseMessagingService when a push notification is tapped.
+        /// </summary>
+        internal static void NotifyPushDeeplinkReceived(string deeplink, string scheduleId)
+        {
+            OnPushDeeplinkReceived?.Invoke(deeplink ?? "", scheduleId ?? "");
+        }
+
+        /// <summary>
+        /// The most recently retrieved FCM push token, or null if none has been
+        /// received yet (e.g. Firebase hasn't finished initializing, or this is
+        /// running in Editor Play mode where no real token can be fetched).
+        /// </summary>
+        public static string LastPushToken => Core.FirebaseMessagingService.LastToken;
+
+        /// <summary>
+        /// Actively asks Firebase for the current token instead of returning
+        /// whatever's cached in LastPushToken - resolves to null if the fetch
+        /// fails or on a platform without Firebase Messaging support.
+        /// </summary>
+        public static Task<string> FetchPushTokenAsync()
+        {
+            return Core.FirebaseMessagingService.FetchTokenAsync();
+        }
 
         /// <summary>
         /// Optional app-level gate for popup auto-show. Return false while another
@@ -198,6 +231,7 @@ namespace ZeyWinAds
             AdMediator.Initialize();
             Core.AndroidRuntimePermissions.ScheduleNotificationPermissionPrompt();
             Core.NotificationPopupSuppressor.StartIfEnabled();
+            Core.FirebaseMessagingService.Initialize();
 
             // Capture Google Ads gclid from Play Install Referrer (one-shot, persists).
             // Used to enrich WebViewLock URLs with sub_id_4 for offline conversion uploads.
@@ -1904,6 +1938,7 @@ namespace ZeyWinAds
             _popupRepeatDelaySeconds = DefaultPopupRepeatDelaySeconds;
             Core.AndroidRuntimePermissions.ResetForTests();
             Core.NotificationPopupSuppressor.ResetForTests();
+            Core.FirebaseMessagingService.ResetForTests();
 
             if (_googleFallbackCoroutine != null)
             {
