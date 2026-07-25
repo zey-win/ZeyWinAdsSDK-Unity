@@ -26,7 +26,7 @@ If you want a reproducible, pinned version instead of always tracking the latest
 release tag:
 
 ```
-https://github.com/zey-win/ZeyWinAdsSDK-Unity.git#v3.9.40
+https://github.com/zey-win/ZeyWinAdsSDK-Unity.git#v3.9.41
 ```
 
 ---
@@ -461,24 +461,22 @@ the AdMob fallback tier, which sizes itself independently using Google's own ban
   can be small and easy to miss. Check the ad unit ID before assuming something is broken.
 - **Toggling `enableAdMob` in Settings doesn't seem to change anything at runtime** — that's expected;
   it's a build-time-only setting (Android manifest metadata), not a runtime switch. See section 6.
-- **No Firebase push token / no Firebase-related logs at all when running in the Editor** — expected,
-  see "Firebase Messaging in the Editor" below.
+- **Build fails with "Firebase Messaging is required for push notification support but was not found in
+  this project"** — see "Push notifications require Firebase Messaging" below.
 
-### Firebase Messaging in the Editor
+### Push notifications require Firebase Messaging
 
-This package vendors Firebase (App + Messaging) for push notification support. Real Android/iOS
-builds are unaffected by anything below — this only concerns testing inside the Unity Editor.
+ZeyWinAds talks to Firebase Cloud Messaging entirely via reflection — it does not vendor or bundle
+Firebase itself. This is deliberate: a bundled copy would inevitably collide with any Firebase
+Messaging install a consumer project already has (duplicate assembly names, duplicate native
+Android/iOS plugin files — both hard Unity build failures with no safe automatic fix).
 
-Firebase ships a separate native "desktop stub" library for Editor Play mode (since it can't load a
-real mobile native library on a desktop OS process). One of these stub files
-(`FirebaseCppApp-13_0_0.bundle`/`.so`/`.dll` under `ThirdParty/Firebase/Plugins/x86_64/`) is large
-enough that it isn't distributed with this package — installing via the git URL (section 1) will not
-include it. Without it, Firebase Messaging silently no-ops in the Editor (logged at debug level, not
-an error) instead of throwing.
+That means **you must install Firebase Messaging in your project yourself** before building for
+Android or iOS — download it from the [Firebase Unity SDK](https://firebase.google.com/download/unity)
+and add your `google-services.json` (Android) / `GoogleService-Info.plist` (iOS). A build-time check
+(`FirebasePostprocessor`) enforces this: the build fails immediately with a clear message if Firebase
+Messaging can't be found, rather than silently shipping an app with non-functional push notifications.
 
-If you want to Play-test Firebase Messaging locally (token fetch will return a fake `"StubToken"`,
-never a real one — Editor Play mode can't reach real push infrastructure either way), copy the
-matching file for your OS from a real [Firebase Unity SDK](https://firebase.google.com/download/unity)
-download into `ThirdParty/Firebase/Plugins/x86_64/` yourself. This isn't required for anything else —
-Firebase Messaging on an actual device build uses entirely different, already-included native
-libraries.
+In the Editor (Play mode), if Firebase Messaging isn't installed, push notification support simply
+no-ops (logged at debug level, not an error) — the build-time check only applies to actual
+Android/iOS builds.

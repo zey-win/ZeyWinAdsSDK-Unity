@@ -1,0 +1,6 @@
+<linker>
+  <assembly fullname="Firebase.App" preserve="all" />
+  <assembly fullname="Firebase.Messaging" preserve="all" />
+  <assembly fullname="Firebase.Platform" preserve="all" />
+  <assembly fullname="Firebase.TaskExtension" preserve="all" />
+</linker>

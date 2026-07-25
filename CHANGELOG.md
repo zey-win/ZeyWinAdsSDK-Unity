@@ -2,6 +2,26 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.41
+
+- Removed the vendored Firebase Messaging library (`ThirdParty/Firebase/`) from the
+  package along with the bootstrap machinery that installed/copied it
+  (`AdMobBootstrap`'s Firebase package import, Python helper script copying, and
+  `google-services.json` preservation). The consumer now installs Firebase
+  Messaging themselves; ZeyWinAds talks to it purely via reflection
+  (`Core/FirebaseMessagingService.cs`), removing the risk of duplicate-assembly
+  build failures against a consumer's own Firebase install.
+- Added `Runtime/link.xml` to preserve the Firebase assemblies (`Firebase.App`,
+  `Firebase.Messaging`, `Firebase.Platform`, `Firebase.TaskExtension`) from IL2CPP
+  code stripping. Without it, `FirebaseMessagingService`'s reflection-only lookups
+  found nothing at runtime on IL2CPP builds even when Firebase Messaging was
+  correctly installed, since the linker never saw a static reference into those
+  assemblies to keep them.
+- Extracted the build-time `RequireFirebaseMessagingInstalled` check out of
+  `AdMobBuildPostprocessor` into its own `FirebasePostprocessor` (`Editor/FirebasePostprocessor.cs`)
+  and re-enabled it for Android/iOS builds.
+- Updated runtime `SdkVersion` reporting to `3.9.41`.
+
 ## 3.9.40
 
 - Widened native-view font fallback (`ZeyWinFont.GetPreferred`) to cover Chinese
