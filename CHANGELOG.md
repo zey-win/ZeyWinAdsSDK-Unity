@@ -2,7 +2,7 @@
 
 All notable changes to this package are documented in this file.
 
-## 3.9.41
+## 3.9.42
 
 - Removed the vendored Firebase Messaging library (`ThirdParty/Firebase/`) from the
   package along with the bootstrap machinery that installed/copied it
@@ -11,16 +11,20 @@ All notable changes to this package are documented in this file.
   Messaging themselves; ZeyWinAds talks to it purely via reflection
   (`Core/FirebaseMessagingService.cs`), removing the risk of duplicate-assembly
   build failures against a consumer's own Firebase install.
-- Added `Runtime/link.xml` to preserve the Firebase assemblies (`Firebase.App`,
-  `Firebase.Messaging`, `Firebase.Platform`, `Firebase.TaskExtension`) from IL2CPP
-  code stripping. Without it, `FirebaseMessagingService`'s reflection-only lookups
-  found nothing at runtime on IL2CPP builds even when Firebase Messaging was
-  correctly installed, since the linker never saw a static reference into those
-  assemblies to keep them.
 - Extracted the build-time `RequireFirebaseMessagingInstalled` check out of
   `AdMobBuildPostprocessor` into its own `FirebasePostprocessor` (`Editor/FirebasePostprocessor.cs`)
   and re-enabled it for Android/iOS builds.
-- Updated runtime `SdkVersion` reporting to `3.9.41`.
+- Fixed Firebase assemblies (`Firebase.App`, `Firebase.Messaging`, `Firebase.Platform`,
+  `Firebase.TaskExtension`) getting silently stripped out of IL2CPP builds even when
+  Firebase Messaging was correctly installed, so `FirebaseMessagingService`'s
+  reflection-only lookups found nothing at runtime. Root cause: UnityLinker only
+  collects `link.xml` preserve rules from the consumer's own `Assets` folder (or
+  embedded/local packages) — not from a package resolved via git/registry into the
+  read-only `Library/PackageCache`, which is where this package's own `link.xml`
+  lived. `FirebasePostprocessor` now writes/verifies `Assets/ZeyWinAds/link.xml` on
+  every Android/iOS build instead, mirroring how GoogleMobileAds' own package places
+  its link.xml under `Assets/GoogleMobileAds/` for the same reason.
+- Updated runtime `SdkVersion` reporting to `3.9.42`.
 
 ## 3.9.40
 
