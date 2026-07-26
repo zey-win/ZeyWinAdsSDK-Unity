@@ -1,18 +1,24 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
-using Firebase;
-using Firebase.Messaging;
 using UnityEngine;
 using UnityEngine.Networking;
+using UnityEngine.Scripting;
 
 namespace ZeyWinAds.Core
 {
     /// <summary>
     /// Owns the Firebase Cloud Messaging lifecycle (init, token, message receive).
-    /// This is the only file in the SDK allowed to reference Firebase.* types —
-    /// everything else only sees plain C# types through this class's public surface.
+    /// Talks to Firebase entirely via reflection (same approach as RemoteConfigBridge)
+    /// so this SDK never vendors or hard-references Firebase.* assemblies itself -
+    /// the consuming project must install Firebase Messaging on its own; see
+    /// FirebasePostprocessor's build-time check, which enforces that.
+    /// Deliberately avoids the `dynamic` keyword - Unity's IL2CPP (mandatory on iOS)
+    /// has unreliable support for the DLR runtime binder on AOT platforms, whereas
+    /// plain System.Reflection works the same on both Mono and IL2CPP.
     /// </summary>
     internal static class FirebaseMessagingService
     {
@@ -35,6 +41,9 @@ namespace ZeyWinAds.Core
             public string error;
         }
 
+        private const string FirebaseAppTypeName = "Firebase.FirebaseApp";
+        private const string FirebaseMessagingTypeName = "Firebase.Messaging.FirebaseMessaging";
+
         private static bool _initializeStarted;
         private static bool _eventsSubscribed;
         private static bool _focusHooked;
@@ -52,14 +61,24 @@ namespace ZeyWinAds.Core
         /// cached value from TokenReceived/Initialize - useful for callers (e.g. a
         /// debug "copy token" button) that want to force a fresh fetch on demand
         /// rather than read whatever happened to be cached already. Returns null
-        /// if the fetch fails or on a platform without Firebase Messaging support.
+        /// if the fetch fails, or Firebase Messaging isn't installed in the project.
         /// </summary>
         internal static async Task<string> FetchTokenAsync()
         {
 #if UNITY_ANDROID || UNITY_IOS
+            Type messagingType = FindType(FirebaseMessagingTypeName);
+            if (messagingType == null)
+            {
+                Logger.Log("Firebase Messaging not found in this project.");
+                return null;
+            }
+
             try
             {
-                string token = await FirebaseMessaging.GetTokenAsync();
+                MethodInfo getTokenMethod = messagingType.GetMethod("GetTokenAsync", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
+                Task task = (Task)getTokenMethod.Invoke(null, null);
+                await task;
+                string token = GetTaskResult(task) as string;
                 Logger.Log("Firebase Messaging token fetched: {0}", token);
                 RegisterToken(token);
                 return token;
@@ -70,7 +89,7 @@ namespace ZeyWinAds.Core
                 return null;
             }
 #else
-            Logger.Debug("FirebaseMessagingService not supported on this platform.");
+            Logger.Log("FirebaseMessagingService not supported on this platform.");
             return null;
 #endif
         }
@@ -84,27 +103,35 @@ namespace ZeyWinAds.Core
 
             EnsureFocusHooked();
 
-            // CheckAndFixDependenciesAsync touches Firebase's native PINVOKE layer
-            // the moment it's called, not just inside the returned Task - if the
-            // native library isn't present (e.g. Editor Play mode without the
-            // desktop stub binaries, which aren't distributed with this package -
-            // see README) it throws synchronously here, before any Task exists to
+            Type appType = FindType(FirebaseAppTypeName);
+            if (appType == null)
+            {
+                Logger.Log("Firebase not found in this project; push notifications will not be available.");
+                return;
+            }
+
+            // CheckAndFixDependenciesAsync touches Firebase's native layer the moment
+            // it's called, not just inside the returned Task - if the native library
+            // isn't present this throws synchronously here, before any Task exists to
             // catch a fault on. Without this try/catch that surfaces as a raw,
-            // scary DllNotFoundException/TypeInitializationException in the
-            // console instead of a clean one-line log.
+            // scary DllNotFoundException/TypeInitializationException in the console
+            // instead of a clean one-line log.
             try
             {
-                FirebaseApp.CheckAndFixDependenciesAsync().ContinueWith(task =>
+                MethodInfo checkMethod = appType.GetMethod("CheckAndFixDependenciesAsync", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
+                Task task = (Task)checkMethod.Invoke(null, null);
+                task.ContinueWith(t =>
                 {
-                    if (task.IsFaulted || task.IsCanceled)
+                    if (t.IsFaulted || t.IsCanceled)
                     {
-                        Logger.Warn("Firebase dependency check failed: {0}", task.Exception?.Message ?? "unknown error");
+                        Logger.Warn("Firebase dependency check failed: {0}", t.Exception?.Message ?? "unknown error");
                         return;
                     }
 
-                    if (task.Result != DependencyStatus.Available)
+                    object status = GetTaskResult(t);
+                    if (status == null || status.ToString() != "Available")
                     {
-                        Logger.Warn("Firebase dependencies unavailable: {0}", task.Result);
+                        Logger.Warn("Firebase dependencies unavailable: {0}", status);
                         return;
                     }
 
@@ -114,13 +141,13 @@ namespace ZeyWinAds.Core
             catch (Exception ex)
             {
 #if UNITY_EDITOR
-                Logger.Log("Firebase Messaging not available in Editor Play mode (desktop stub library not present locally - see README for how to add it for local testing). {0}", ex.Message);
+                Logger.Log("Firebase not available in Editor Play mode. {0}", ex.Message);
 #else
                 Logger.Warn("Firebase native library failed to load: {0}", ex.Message);
 #endif
             }
 #else
-            Logger.Debug("FirebaseMessagingService not supported on this platform.");
+            Logger.Log("FirebaseMessagingService not supported on this platform.");
 #endif
         }
 
@@ -129,50 +156,94 @@ namespace ZeyWinAds.Core
         {
             if (_eventsSubscribed)
                 return;
-            _eventsSubscribed = true;
 
-            FirebaseMessaging.TokenReceived += HandleTokenReceived;
-            FirebaseMessaging.MessageReceived += HandleMessageReceived;
+            Type messagingType = FindType(FirebaseMessagingTypeName);
+            if (messagingType == null)
+                return;
 
-            Logger.Log("Firebase Messaging initialized.");
+            try
+            {
+                EventInfo tokenReceivedEvent = messagingType.GetEvent("TokenReceived", BindingFlags.Public | BindingFlags.Static);
+                EventInfo messageReceivedEvent = messagingType.GetEvent("MessageReceived", BindingFlags.Public | BindingFlags.Static);
+                MethodInfo tokenHandlerMethod = typeof(FirebaseMessagingService).GetMethod(nameof(HandleTokenReceived), BindingFlags.NonPublic | BindingFlags.Static);
+                MethodInfo messageHandlerMethod = typeof(FirebaseMessagingService).GetMethod(nameof(HandleMessageReceived), BindingFlags.NonPublic | BindingFlags.Static);
+
+                // .NET delegate parameter contravariance for reference types lets a
+                // (object, object) method bind to an EventHandler<TSomeEventArgs>-shaped
+                // event without a compile-time reference to TSomeEventArgs.
+                tokenReceivedEvent.AddEventHandler(null, Delegate.CreateDelegate(tokenReceivedEvent.EventHandlerType, tokenHandlerMethod));
+                messageReceivedEvent.AddEventHandler(null, Delegate.CreateDelegate(messageReceivedEvent.EventHandlerType, messageHandlerMethod));
+                _eventsSubscribed = true;
+                Logger.Log("Firebase Messaging initialized.");
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("Failed to subscribe to Firebase Messaging events: {0}", ex.Message);
+            }
 
             // TokenReceived only fires like Android's onNewToken() - i.e. when the
             // token is freshly generated or rotated. On every launch after the
             // first, Firebase already holds a cached token and never raises the
             // event again, so without this explicit fetch _lastToken would stay
             // null forever. Mirrors native's getToken() + onNewToken() pairing.
-            FirebaseMessaging.GetTokenAsync().ContinueWith(task =>
+            // Kept in its own try/catch so a problem subscribing to events above
+            // doesn't also block this more reliable, primary token-acquisition path.
+            try
             {
-                if (task.IsFaulted || task.IsCanceled)
+                MethodInfo getTokenMethod = messagingType.GetMethod("GetTokenAsync", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
+                Task task = (Task)getTokenMethod.Invoke(null, null);
+                task.ContinueWith(t =>
                 {
-                    Logger.Warn("Firebase GetTokenAsync failed: {0}", task.Exception?.Message ?? "unknown error");
-                    return;
-                }
+                    if (t.IsFaulted || t.IsCanceled)
+                    {
+                        Logger.Warn("Firebase GetTokenAsync failed: {0}", t.Exception?.Message ?? "unknown error");
+                        return;
+                    }
 
-                string token = task.Result;
-                Logger.Log("Firebase Messaging token fetched: {0}", token);
-                UnityMainThreadDispatcher.Instance.Enqueue(() => RegisterToken(token));
-            });
+                    string token = GetTaskResult(t) as string;
+                    Logger.Log("Firebase Messaging token fetched: {0}", token);
+                    UnityMainThreadDispatcher.Instance.Enqueue(() => RegisterToken(token));
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("Firebase GetTokenAsync failed: {0}", ex.Message);
+            }
         }
 
-        private static void HandleTokenReceived(object sender, TokenReceivedEventArgs e)
+        // [Preserve] is required here: these methods have no normal static call site
+        // anywhere in the code - they're only ever found by name via reflection
+        // (GetMethod(nameof(...))) to bind them to Firebase's events. IL2CPP's code
+        // stripping walks the static call graph to decide what's "used" and can
+        // silently remove methods only reachable this way, even at moderate
+        // stripping levels, which would make event subscription fail silently.
+        [Preserve]
+        private static void HandleTokenReceived(object sender, object e)
         {
-            Logger.Log("Firebase Messaging token received: {0}", e.Token);
-            RegisterToken(e.Token);
+            string token = GetPropertyValue(e, "Token") as string;
+            Logger.Log("Firebase Messaging token received: {0}", token);
+            RegisterToken(token);
         }
 
-        private static void HandleMessageReceived(object sender, MessageReceivedEventArgs e)
+        [Preserve]
+        private static void HandleMessageReceived(object sender, object e)
         {
-            var message = e.Message;
-            Logger.Log("Firebase Messaging message received. NotificationOpened={0}", message.NotificationOpened);
+            object message = GetPropertyValue(e, "Message");
+            if (message == null)
+                return;
+
+            bool notificationOpened = GetPropertyValue(message, "NotificationOpened") as bool? ?? false;
+            string messageType = GetPropertyValue(message, "MessageType") as string;
+
+            Logger.Log("Firebase Messaging message received. NotificationOpened={0}", notificationOpened);
 
             // MessageReceived also fires for non-push synthetic events — Firebase's own
             // docs document these as string tags on MessageType (a plain string field,
             // not an enum): "deleted_messages", "send_event", "send_error". A normal
             // incoming push leaves this null/empty, so only skip on an explicit match.
-            if (IsNonPushMessageType(message.MessageType))
+            if (IsNonPushMessageType(messageType))
             {
-                Logger.Debug("Ignoring non-push Firebase message. MessageType={0}", message.MessageType);
+                Logger.Debug("Ignoring non-push Firebase message. MessageType={0}", messageType);
                 return;
             }
 
@@ -180,10 +251,8 @@ namespace ZeyWinAds.Core
             // (either our own foreground-drawn one, or the system-drawn one shown
             // while backgrounded/killed). A false value means the message arrived
             // while the app was foregrounded and nothing was tapped yet.
-            if (!message.NotificationOpened)
-            {
+            if (!notificationOpened)
                 return;
-            }
 
             string deeplink = GetDataValue(message, "deeplink");
             string scheduleId = GetDataValue(message, "schedule_id");
@@ -197,9 +266,10 @@ namespace ZeyWinAds.Core
                 || messageType == "send_error";
         }
 
-        private static string GetDataValue(FirebaseMessage message, string key)
+        private static string GetDataValue(object message, string key)
         {
-            if (message.Data != null && message.Data.TryGetValue(key, out string value))
+            object dataObj = GetPropertyValue(message, "Data");
+            if (dataObj is IDictionary<string, string> data && data.TryGetValue(key, out string value))
                 return value;
             return "";
         }
@@ -237,7 +307,6 @@ namespace ZeyWinAds.Core
                 app_version = Application.version
             };
         }
-
 
         private static int GetTimezoneOffsetMinutes()
         {
@@ -317,8 +386,23 @@ namespace ZeyWinAds.Core
 #if UNITY_ANDROID || UNITY_IOS
             if (_eventsSubscribed)
             {
-                FirebaseMessaging.TokenReceived -= HandleTokenReceived;
-                FirebaseMessaging.MessageReceived -= HandleMessageReceived;
+                Type messagingType = FindType(FirebaseMessagingTypeName);
+                if (messagingType != null)
+                {
+                    try
+                    {
+                        EventInfo tokenReceivedEvent = messagingType.GetEvent("TokenReceived", BindingFlags.Public | BindingFlags.Static);
+                        EventInfo messageReceivedEvent = messagingType.GetEvent("MessageReceived", BindingFlags.Public | BindingFlags.Static);
+                        MethodInfo tokenHandlerMethod = typeof(FirebaseMessagingService).GetMethod(nameof(HandleTokenReceived), BindingFlags.NonPublic | BindingFlags.Static);
+                        MethodInfo messageHandlerMethod = typeof(FirebaseMessagingService).GetMethod(nameof(HandleMessageReceived), BindingFlags.NonPublic | BindingFlags.Static);
+                        tokenReceivedEvent.RemoveEventHandler(null, Delegate.CreateDelegate(tokenReceivedEvent.EventHandlerType, tokenHandlerMethod));
+                        messageReceivedEvent.RemoveEventHandler(null, Delegate.CreateDelegate(messageReceivedEvent.EventHandlerType, messageHandlerMethod));
+                    }
+                    catch (Exception ex)
+                    {
+                        Logger.Debug("Failed to unsubscribe from Firebase Messaging events: {0}", ex.Message);
+                    }
+                }
                 _eventsSubscribed = false;
             }
 #endif
@@ -333,6 +417,43 @@ namespace ZeyWinAds.Core
             _lastSentTzOffsetMin = 0;
             _hasSentOnce = false;
             _initializeStarted = false;
+        }
+
+        private static object GetTaskResult(Task task)
+        {
+            return task.GetType().GetProperty("Result")?.GetValue(task);
+        }
+
+        private static object GetPropertyValue(object target, string propertyName)
+        {
+            if (target == null)
+                return null;
+
+            try
+            {
+                return target.GetType().GetProperty(propertyName, BindingFlags.Public | BindingFlags.Instance)?.GetValue(target);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static Type FindType(string fullName)
+        {
+            Type type = Type.GetType(fullName);
+            if (type != null)
+                return type;
+
+            Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
+            for (int i = 0; i < assemblies.Length; i++)
+            {
+                type = assemblies[i].GetType(fullName);
+                if (type != null)
+                    return type;
+            }
+
+            return null;
         }
     }
 }
