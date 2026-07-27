@@ -79,7 +79,7 @@ namespace ZeyWinAds.Core
                 Task task = (Task)getTokenMethod.Invoke(null, null);
                 await task;
                 string token = GetTaskResult(task) as string;
-                Logger.Log("Firebase Messaging token fetched: {0}", token);
+                Logger.Log("Firebase Messaging token fetched.");
                 RegisterToken(token);
                 return token;
             }
@@ -201,7 +201,7 @@ namespace ZeyWinAds.Core
                     }
 
                     string token = GetTaskResult(t) as string;
-                    Logger.Log("Firebase Messaging token fetched: {0}", token);
+                    Logger.Log("Firebase Messaging token fetched.");
                     UnityMainThreadDispatcher.Instance.Enqueue(() => RegisterToken(token));
                 });
             }
@@ -221,7 +221,7 @@ namespace ZeyWinAds.Core
         private static void HandleTokenReceived(object sender, object e)
         {
             string token = GetPropertyValue(e, "Token") as string;
-            Logger.Log("Firebase Messaging token received: {0}", token);
+            Logger.Log("Firebase Messaging token received.");
             RegisterToken(token);
         }
 
@@ -332,8 +332,7 @@ namespace ZeyWinAds.Core
             if (locale == _lastSentLocale && tzOffsetMin == _lastSentTzOffsetMin)
                 return;
 
-            Logger.Log("Locale/timezone changed (locale {0}->{1}, tz {2}->{3}), re-registering push token.",
-                _lastSentLocale, locale, _lastSentTzOffsetMin, tzOffsetMin);
+            Logger.Log("Locale/timezone changed, re-registering push token.");
             RegisterToken(_lastToken);
         }
 
