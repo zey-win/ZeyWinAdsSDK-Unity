@@ -51,9 +51,15 @@ namespace ZeyWinAds.Editor
             }
         }
 
+        // The real Firebase Unity SDK ships Firebase.Messaging.FirebaseMessaging inside
+        // an assembly named "Firebase.Messaging". A same-named type defined elsewhere
+        // (e.g. a consumer's own stand-in stub for builds without Firebase) would
+        // otherwise satisfy a name-only lookup and silently defeat this check.
+        private const string RequiredAssemblyName = "Firebase.Messaging";
+
         private static void RequireFirebaseMessagingInstalled()
         {
-            if (FindType("Firebase.Messaging.FirebaseMessaging") != null)
+            if (FindType("Firebase.Messaging.FirebaseMessaging", RequiredAssemblyName) != null)
                 return;
 
             throw new BuildFailedException(
@@ -74,16 +80,15 @@ namespace ZeyWinAds.Editor
             AssetDatabase.ImportAsset(LinkXmlAssetPath);
         }
 
-        private static Type FindType(string fullName)
+        private static Type FindType(string fullName, string requiredAssemblyName)
         {
-            Type type = Type.GetType(fullName);
-            if (type != null)
-                return type;
-
             Assembly[] assemblies = AppDomain.CurrentDomain.GetAssemblies();
             for (int i = 0; i < assemblies.Length; i++)
             {
-                type = assemblies[i].GetType(fullName);
+                if (assemblies[i].GetName().Name != requiredAssemblyName)
+                    continue;
+
+                Type type = assemblies[i].GetType(fullName);
                 if (type != null)
                     return type;
             }
