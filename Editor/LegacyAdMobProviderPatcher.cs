@@ -19,10 +19,15 @@ namespace ZeyWinAds.Editor
 
         static LegacyAdMobProviderPatcher()
         {
-            EditorApplication.delayCall += () => Apply(logWhenNoChanges: false);
+            // Disabled: auto-patching was silently rewriting AdMobProvider.cs to gate
+            // rewarded/interstitial ads behind AdMediator.IsZeyWinSurfaceActive, which
+            // combined with the banner being pinned to ZeyWin permanently blocked AdMob
+            // rewarded ads from ever showing. Use the "ZeyWinAds/Patch Legacy AdMobProvider"
+            // menu item to apply manually if needed.
+            // EditorApplication.delayCall += () => Apply(logWhenNoChanges: false);
         }
 
-        [MenuItem("ZeyWinAds/Patch Legacy AdMobProvider", priority = 11)]
+        // [MenuItem("ZeyWinAds/Patch Legacy AdMobProvider", priority = 11)]
         public static void ApplyFromMenu()
         {
             Apply(logWhenNoChanges: true);
@@ -273,10 +278,13 @@ namespace ZeyWinAds.Editor
                 "        if (!_adsEnabled)\n            return;\n\n        if (BannerIsReady)",
                 "        if (!_adsEnabled)\n            return;\n\n        if (SuppressBannerForZeyWinSurface(\"show\"))\n            return;\n\n        if (BannerIsReady)",
                 ref guardCount);
-            text = ReplaceOnce(text,
-                "        if (_bannerRetry == null && _adsEnabled)\n            _bannerRetry = StartCoroutine(RetryRoutine(() =>",
-                "        if (SuppressBannerForZeyWinSurface(\"retry\"))\n            return;\n\n        if (_bannerRetry == null && _adsEnabled)\n            _bannerRetry = StartCoroutine(RetryRoutine(() =>",
-                ref guardCount);
+            if (!text.Contains("if (SuppressBannerForZeyWinSurface(\"retry\"))\n            return;\n\n        if (_bannerRetry == null && _adsEnabled)"))
+            {
+                text = ReplaceOnce(text,
+                    "        if (_bannerRetry == null && _adsEnabled)\n            _bannerRetry = StartCoroutine(RetryRoutine(() =>",
+                    "        if (SuppressBannerForZeyWinSurface(\"retry\"))\n            return;\n\n        if (_bannerRetry == null && _adsEnabled)\n            _bannerRetry = StartCoroutine(RetryRoutine(() =>",
+                    ref guardCount);
+            }
             return text;
         }
 
