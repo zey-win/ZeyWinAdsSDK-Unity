@@ -17,10 +17,15 @@ namespace ZeyWinAds.Editor
 
         static LegacyAdManagerBannerPatcher()
         {
-            EditorApplication.delayCall += () => Apply(logWhenNoChanges: false);
+            // Disabled: auto-patching was silently pinning AdManager's banner network to
+            // AdNetwork.ZeyWin permanently, which (together with LegacyAdMobProviderPatcher's
+            // IsZeyWinSurfaceActive guards) blocked AdMob rewarded/interstitial ads from ever
+            // showing. Use the "ZeyWinAds/Patch Legacy AdManager Banner Rotation" menu item to
+            // apply manually if needed.
+            // EditorApplication.delayCall += () => Apply(logWhenNoChanges: false);
         }
 
-        [MenuItem("ZeyWinAds/Patch Legacy AdManager Banner Rotation", priority = 12)]
+        // [MenuItem("ZeyWinAds/Patch Legacy AdManager Banner Rotation", priority = 12)]
         public static void ApplyFromMenu()
         {
             Apply(logWhenNoChanges: true);

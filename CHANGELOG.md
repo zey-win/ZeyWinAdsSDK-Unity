@@ -2,6 +2,25 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.44
+
+- Fixed `FirebasePostprocessor`'s `RequireFirebaseMessagingInstalled` build check being
+  satisfiable by any consumer-defined type named `Firebase.Messaging.FirebaseMessaging`
+  (e.g. a no-op stub used for builds without Firebase installed), letting Android/iOS
+  builds pass without Firebase Messaging actually being present. The check now also
+  verifies the type's assembly is literally named `Firebase.Messaging`, matching the
+  real Firebase Unity SDK.
+- Disabled `LegacyAdMobProviderPatcher` and `LegacyAdManagerBannerPatcher`'s automatic
+  `[InitializeOnLoad]` patching of consumer `AdMobProvider.cs`/`AdManager.cs` files, and
+  removed their `ZeyWinAds/Patch Legacy ...` menu items. Together, these patchers gated
+  AdMob rewarded/interstitial behind `AdMediator.IsZeyWinSurfaceActive` and pinned the
+  legacy banner rotator to `AdNetwork.ZeyWin` — once a game's banner is shown via ZeyWin,
+  `IsZeyWinSurfaceActive` stays permanently true, which silently blocked AdMob rewarded
+  and interstitial ads from ever showing again, with no visible log on-device (the only
+  log on that path was a `Logger.Debug` call, which is compiled out entirely outside
+  `UNITY_EDITOR`/`ZEYWINADS_DEBUG`).
+- Updated runtime `SdkVersion` reporting to `3.9.44`.
+
 ## 3.9.42
 
 - Removed the vendored Firebase Messaging library (`ThirdParty/Firebase/`) from the
