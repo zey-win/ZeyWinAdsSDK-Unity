@@ -407,6 +407,16 @@ namespace ZeyWinAds.Editor
             foreach (string guid in AssetDatabase.FindAssets("t:Material"))
             {
                 string path = AssetDatabase.GUIDToAssetPath(guid);
+
+                // Only touch materials inside the consuming project's own Assets folder.
+                // Other installed packages (e.g. GoogleMobileAds) can ship their own TMP
+                // materials under Packages/..., which Unity treats as immutable - trying
+                // to retarget and save those fails the build with "Saving Prefab to
+                // immutable folder is not allowed", even though the SDK has no reason to
+                // touch assets it doesn't own.
+                if (!path.StartsWith("Assets/", StringComparison.Ordinal))
+                    continue;
+
                 var material = AssetDatabase.LoadAssetAtPath<Material>(path);
                 if (material == null || material.shader == null)
                     continue;

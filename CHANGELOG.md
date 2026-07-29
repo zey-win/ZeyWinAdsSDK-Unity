@@ -2,6 +2,16 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.45
+
+- Fixed `TextMeshProBootstrap.RetargetTextMeshProMaterials` scanning and attempting to
+  modify TextMeshPro materials belonging to *other* installed packages (e.g. GoogleMobileAds'
+  placeholder ad prefabs), not just the consuming project's own `Assets/` folder. Since
+  registry-sourced packages are immutable to Unity, `AssetDatabase.SaveAssets()` would then
+  fail with "Saving Prefab to immutable folder is not allowed", failing the whole build even
+  though the SDK had no reason to touch those assets in the first place. The material scan is
+  now scoped to paths under `Assets/` only.
+
 ## 3.9.44
 
 - Fixed `FirebasePostprocessor`'s `RequireFirebaseMessagingInstalled` build check being
