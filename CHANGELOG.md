@@ -2,6 +2,18 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.46
+
+- Bumped bootstrapped `com.google.ads.mobile` to `11.3.0` and `com.google.external-dependency-manager`
+  to `1.2.188`.
+- `AdMobBootstrap`'s manifest patcher now only overwrites a consumer's pinned AdMob/EDM4U version
+  when it's genuinely older than the SDK's pinned version — a consumer already on the same or a
+  newer version is left alone, with a log explaining why nothing changed.
+- The `Install AdMob` menu item label is now generated from the pinned version constant, so it
+  can't drift out of sync with what actually gets installed.
+- Removed `AdMobBootstrap`'s dead local-Firebase `.unitypackage` import path, which only worked
+  against one developer's machine-specific folder and never functioned for other SDK consumers.
+
 ## 3.9.45
 
 - Fixed `TextMeshProBootstrap.RetargetTextMeshProMaterials` scanning and attempting to
