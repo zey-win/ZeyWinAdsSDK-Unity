@@ -25,22 +25,14 @@ namespace ZeyWinAds.Editor
         private const string RegistryUrl = "https://package.openupm.com";
         private const string DisableEnv = "ZEYWIN_DISABLE_ADMOB_BOOTSTRAP";
         private const string AdMobPackage = "com.google.ads.mobile";
-        private const string AdMobVersion = "10.5.0";
+        private const string AdMobVersion = "11.3.0";
         private const string EdmPackage = "com.google.external-dependency-manager";
-        private const string EdmVersion = "1.2.186";
-        private const string FirebaseLocalEnv = "ZEYWIN_FIREBASE_SDK_DIR";
-        private const string DefaultFirebaseLocalPath = "/Users/admin/Documents/Data/Unity/sdk/FireBase";
+        private const string EdmVersion = "1.2.188";
         private const string AndroidPluginsPath = "Assets/Plugins/Android";
         private const string LegacyNoSdkStubsPath = "Assets/Scripts/SDKStubs/NoSdkStubs.cs";
-        // FirebaseMessaging is intentionally not listed here — ZeyWinAds talks to it
-        // purely via reflection (see Core/FirebaseMessagingService.cs) and requires
-        // the consumer to install it themselves; FirebasePostprocessor enforces
-        // that at build time instead of this SDK vendoring/importing it.
-        private static readonly string[] FirebaseUnityPackageNames =
-        {
-            "FirebaseAnalytics_13.0.0.unitypackage",
-            "FirebaseRemoteConfig_13.0.0.unitypackage"
-        };
+        // Firebase is intentionally not vendored/imported by this SDK — ZeyWinAds talks to it
+        // purely via reflection (see Core/FirebaseMessagingService.cs) and requires the consumer
+        // to install it themselves; FirebasePostprocessor enforces that at build time instead.
 
         static AdMobBootstrap()
         {
@@ -57,7 +49,7 @@ namespace ZeyWinAds.Editor
             {
                 if (EnsureRequiredPackagesInstalled())
                 {
-                    Debug.Log("[ZeyWinAds] Bootstrap added required ad/Firebase packages to Packages/manifest.json. " +
+                    Debug.Log("[ZeyWinAds] Bootstrap added required ad packages to Packages/manifest.json. " +
                               "Unity will resolve packages on next reload.");
                     AssetDatabase.Refresh();
                 }
@@ -70,28 +62,30 @@ namespace ZeyWinAds.Editor
             }
         }
 
+        // Built from AdMobVersion so the button label can never drift from the version
+        // that InstallManually() actually patches into the manifest.
+        private const string InstallMenuPath = "ZeyWinAds/Install AdMob (com.google.ads.mobile " + AdMobVersion + ")";
+
         /// <summary>
         /// Manual trigger from the menu — useful after deleting Library or for re-runs.
         /// </summary>
-        [MenuItem("ZeyWinAds/Install AdMob (com.google.ads.mobile)")]
+        [MenuItem(InstallMenuPath)]
         private static void InstallManually()
         {
             if (EnsureRequiredPackagesInstalled())
             {
                 AssetDatabase.Refresh();
-                Debug.Log("[ZeyWinAds] Required ad/Firebase packages added to manifest.");
+                Debug.Log("[ZeyWinAds] Required ad packages added to manifest.");
             }
             else
             {
-                Debug.Log("[ZeyWinAds] Required ad/Firebase packages already present in manifest, nothing to do.");
+                Debug.Log("[ZeyWinAds] Required ad packages already present in manifest, nothing to do.");
             }
         }
 
         public static bool EnsureRequiredPackagesInstalled()
         {
-            bool changed = PatchManifest();
-            changed |= ImportLocalFirebaseUnityPackages();
-            return changed;
+            return PatchManifest();
         }
 
         /// <summary>
@@ -172,48 +166,6 @@ namespace ZeyWinAds.Editor
             return modified;
         }
 
-        private static bool ImportLocalFirebaseUnityPackages()
-        {
-            if (HasFirebaseAssetsInstalled())
-            {
-                RemoveLegacyFirebaseStubs();
-                return false;
-            }
-
-            string firebaseRoot = Environment.GetEnvironmentVariable(FirebaseLocalEnv);
-            if (string.IsNullOrWhiteSpace(firebaseRoot))
-                firebaseRoot = DefaultFirebaseLocalPath;
-
-            if (string.IsNullOrWhiteSpace(firebaseRoot) || !Directory.Exists(firebaseRoot))
-            {
-                Debug.Log("[ZeyWinAds] Firebase SDK folder not found; set ZEYWIN_FIREBASE_SDK_DIR or install Firebase Unity packages in CI.");
-                return false;
-            }
-
-            bool importedAny = false;
-            foreach (string packageName in FirebaseUnityPackageNames)
-            {
-                string packagePath = FindFileByName(firebaseRoot, packageName);
-                if (string.IsNullOrEmpty(packagePath))
-                {
-                    Debug.LogWarning($"[ZeyWinAds] Firebase Unity package not found in {firebaseRoot}: {packageName}");
-                    continue;
-                }
-
-                AssetDatabase.ImportPackage(packagePath, interactive: false);
-                importedAny = true;
-                Debug.Log($"[ZeyWinAds] Imported Firebase Unity package: {packagePath}");
-            }
-
-            if (importedAny)
-            {
-                AssetDatabase.Refresh();
-                RemoveLegacyFirebaseStubs();
-            }
-
-            return importedAny;
-        }
-
         // Messaging is deliberately excluded from this check — ZeyWinAds talks to it
         // purely via reflection and never vendors/imports it itself; see
         // AdMobBuildPostprocessor for the build-time requirement check instead.
@@ -223,21 +175,6 @@ namespace ZeyWinAds.Editor
             return File.Exists(Path.Combine(assetsRoot, "Firebase", "Plugins", "Firebase.App.dll"))
                 && File.Exists(Path.Combine(assetsRoot, "Firebase", "Plugins", "Firebase.RemoteConfig.dll"))
                 && File.Exists(Path.Combine(assetsRoot, "Firebase", "Plugins", "Firebase.Analytics.dll"));
-        }
-
-        private static string FindFileByName(string root, string fileName)
-        {
-            try
-            {
-                foreach (string path in Directory.GetFiles(root, fileName, SearchOption.AllDirectories))
-                    return path;
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"[ZeyWinAds] Failed while searching Firebase package {fileName}: {e.Message}");
-            }
-
-            return null;
         }
 
         private static void RemoveLegacyFirebaseStubs()
@@ -346,10 +283,32 @@ namespace ZeyWinAds.Editor
                 return manifest;
 
             string current = manifest.Substring(valueStart + 1, valueEnd - valueStart - 1);
-            if (current == version)
-                return manifest;
+            switch (CompareVersions(current, version))
+            {
+                case 0:
+                    Debug.Log($"[ZeyWinAds] {package} {current} already installed — matches pinned version, nothing to do.");
+                    return manifest;
+                case > 0:
+                    Debug.Log($"[ZeyWinAds] {package} {current} is newer than pinned {version} — leaving it as-is.");
+                    return manifest;
+            }
 
             return manifest.Substring(0, valueStart + 1) + version + manifest.Substring(valueEnd);
+        }
+
+        /// <summary>
+        /// Compares <paramref name="current"/> against <paramref name="pinned"/>: negative if
+        /// current is older, zero if equal, positive if current is newer. Consumers who are
+        /// already on the pinned version or have deliberately moved ahead of it are left alone —
+        /// this only bumps projects that are behind. If either string can't be parsed as a dotted
+        /// numeric version, falls back to treating any mismatch as "older" so it still gets pinned.
+        /// </summary>
+        private static int CompareVersions(string current, string pinned)
+        {
+            if (Version.TryParse(current, out var currentVersion) && Version.TryParse(pinned, out var pinnedVersion))
+                return currentVersion.CompareTo(pinnedVersion);
+
+            return current == pinned ? 0 : -1;
         }
 
         private static string RemoveDependency(string manifest, string package)
