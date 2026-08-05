@@ -239,6 +239,10 @@ namespace ZeyWinAds
             // ad serving is blocked.
             Core.GoogleAdsAttribution.Capture();
 
+            // Capture aso_market_id from an app-open deeplink (e.g. com.bundle.id://open?aso_market_id=...),
+            // if present. Used to enrich WebViewLock URLs with a freelancer=0/1 flag. Independent of anti-fraud.
+            Core.DeepLinkAttribution.Capture();
+
             // If already blocked locally, block ad requests and send report
             if (blockReason != "none")
             {
