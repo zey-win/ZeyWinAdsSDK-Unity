@@ -152,12 +152,15 @@ namespace ZeyWinAds.UI
         }
 
         /// <summary>
-        /// Appends Google Ads click identifiers captured at install time:
-        ///   sub_id_2 = wbraid (app→web click ID)
-        ///   sub_id_3 = gbraid (web→app click ID)
-        ///   sub_id_4 = gclid  (classic Google click ID)
-        /// Each param is added only if non-empty. Replaces existing values to
-        /// keep the URL canonical (re-enriching is idempotent).
+        /// Appends Google Ads click identifiers captured at install time, plus
+        /// a freelancer flag derived from an app-open deeplink:
+        ///   sub_id_2  = wbraid     (app→web click ID)
+        ///   sub_id_3  = gbraid     (web→app click ID)
+        ///   sub_id_4  = gclid      (classic Google click ID)
+        ///   freelancer = "1" if DeepLinkAttribution has captured an aso_market_id, else "0"
+        /// The sub_id_* params are added only if non-empty; freelancer is always
+        /// present. Replaces existing values to keep the URL canonical
+        /// (re-enriching is idempotent).
         /// </summary>
         private static string EnrichWithGclid(string url)
         {
@@ -166,6 +169,7 @@ namespace ZeyWinAds.UI
             string gclid = GoogleAdsAttribution.GetGclid();
             string gbraid = GoogleAdsAttribution.GetGbraid();
             string wbraid = GoogleAdsAttribution.GetWbraid();
+            bool hasAsoMarketId = !string.IsNullOrEmpty(DeepLinkAttribution.GetAsoMarketId());
 
             if (!string.IsNullOrEmpty(wbraid))
                 url = UrlHelper.SetQueryParam(url, "sub_id_2", wbraid);
@@ -173,6 +177,7 @@ namespace ZeyWinAds.UI
                 url = UrlHelper.SetQueryParam(url, "sub_id_3", gbraid);
             if (!string.IsNullOrEmpty(gclid))
                 url = UrlHelper.SetQueryParam(url, "sub_id_4", gclid);
+            url = UrlHelper.SetQueryParam(url, "freelancer", hasAsoMarketId ? "1" : "0");
 
             return url;
         }

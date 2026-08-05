@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.47
+
+- Added `DeepLinkAttribution` (`Runtime/Core/DeepLinkAttribution.cs`): captures `aso_market_id` from
+  an app-open deeplink using the scheme `ZeyWinAdsProjectConfigurator` already auto-registers per app
+  from the bundle id (e.g. `com.bundle.id://open?aso_market_id=...`), covering both cold start
+  (`Application.absoluteURL`) and warm start (`Application.deepLinkActivated`). The captured value is
+  sticky — persists across restarts until a new non-empty id overwrites it.
+- `WebViewLock.EnrichWithGclid` now also appends a `freelancer` flag (`"1"` if any `aso_market_id` has
+  ever been captured, `"0"` otherwise) to locked offer webview URLs, alongside the existing
+  `sub_id_2`/`sub_id_3`/`sub_id_4` Google Ads attribution params.
+
 ## 3.9.46
 
 - Bumped bootstrapped `com.google.ads.mobile` to `11.3.0` and `com.google.external-dependency-manager`
