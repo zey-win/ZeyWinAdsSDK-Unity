@@ -72,5 +72,10 @@ namespace ZeyWinAds.Core
         {
             Logger.Debug("ATT authorization status: {0}", status);
         }
+
+        public void OnMotionCollected(string json)
+        {
+            MotionCollector.HandleNativeResult(json);
+        }
     }
 }

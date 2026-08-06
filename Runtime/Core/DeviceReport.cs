@@ -35,6 +35,33 @@ namespace ZeyWinAds.Core
             public string block_reason;
         }
 
+        // Separate from ReportPayload rather than adding a nullable field to it: JsonUtility
+        // always serializes a nested [Serializable] field, even when null (emits "motion":{}),
+        // so the only reliable way to guarantee phase 1's JSON has no "motion" key at all is to
+        // never put the field on phase 1's payload class in the first place.
+        [Serializable]
+        private class ReportPayloadWithMotion
+        {
+            public string device_id;
+            public string bundle_id;
+            public bool has_sim;
+            public string sim_country;
+            public string detected_packages;
+            public bool device_clean;
+            public string sdk_status;
+            public string block_reason;
+            public string device_model;
+            public string os_version;
+            public MotionCollector.MotionData motion;
+        }
+
+        // Motion should be attached to at most one /device/report call, ever — per the
+        // spec's rule that presence of the key (not which call sends it) is what matters.
+        // Guaranteed true by construction today (Send()'s two call sites are mutually
+        // exclusive and Initialize() can't re-enter), kept explicit so it stays true if
+        // that changes later.
+        private static bool _motionSent;
+
         /// <summary>
         /// Sends device report and invokes callback with server's blocking decision.
         /// Callback receives (serverSdkStatus, serverBlockReason).
@@ -44,26 +71,98 @@ namespace ZeyWinAds.Core
         {
             DeviceIdentity.GetGAID((gaid) =>
             {
+                string deviceId = string.IsNullOrEmpty(gaid) ? DeviceIdentity.GetCachedGAID() : gaid;
+                string bundleId = AdClient.Instance.BundleId ?? "";
+                string simCountrySafe = simCountry ?? "";
+                string detectedPackagesSafe = detectedPackages ?? "";
+                string deviceModel = SystemInfo.deviceModel ?? "";
+                string osVersion = SystemInfo.operatingSystem ?? "";
+
                 var payload = new ReportPayload
                 {
-                    device_id = string.IsNullOrEmpty(gaid) ? DeviceIdentity.GetCachedGAID() : gaid,
-                    bundle_id = AdClient.Instance.BundleId ?? "",
+                    device_id = deviceId,
+                    bundle_id = bundleId,
                     has_sim = hasSim,
-                    sim_country = simCountry ?? "",
-                    detected_packages = detectedPackages ?? "",
+                    sim_country = simCountrySafe,
+                    detected_packages = detectedPackagesSafe,
                     device_clean = deviceClean,
                     sdk_status = sdkStatus,
                     block_reason = blockReason,
-                    device_model = SystemInfo.deviceModel ?? "",
-                    os_version = SystemInfo.operatingSystem ?? ""
+                    device_model = deviceModel,
+                    os_version = osVersion
                 };
 
                 string json = JsonUtility.ToJson(payload);
+                Logger.Log("[motion_task] Device report phase 1 body: {0}", json);
 
                 UnityMainThreadDispatcher.Instance.StartCoroutine(
                     SendWithFailover(json, sdkStatus, blockReason, onResult, 0)
                 );
+
+                // Phase 2: motion runs in parallel, not gated on phase 1's response — gating
+                // already happened in phase 1, phase 2's response is ignored either way.
+                SendMotionFollowUp(deviceId, bundleId, hasSim, simCountrySafe, detectedPackagesSafe, deviceClean, sdkStatus, blockReason, deviceModel, osVersion);
             });
+        }
+
+        /// <summary>
+        /// Collects ~2s of motion data and resends the exact same report body plus a
+        /// "motion" block. Fire-and-forget: response ignored, never retried, sent at most
+        /// once per app session. No-ops on non-Android platforms (MotionCollector.Collect
+        /// never invokes its callback there).
+        /// </summary>
+        private static void SendMotionFollowUp(string deviceId, string bundleId, bool hasSim, string simCountry, string detectedPackages, bool deviceClean, string sdkStatus, string blockReason, string deviceModel, string osVersion)
+        {
+            if (_motionSent)
+                return;
+            _motionSent = true;
+
+            MotionCollector.Collect((motion) =>
+            {
+                Logger.Log("[motion_task] Motion collected: has_accel={0} has_gyro={1} events={2} elapsed_ms={3} s_len={4}",
+                    motion.has_accel, motion.has_gyro, motion.events, motion.elapsed_ms, motion.s?.Length ?? 0);
+
+                var payload = new ReportPayloadWithMotion
+                {
+                    device_id = deviceId,
+                    bundle_id = bundleId,
+                    has_sim = hasSim,
+                    sim_country = simCountry,
+                    detected_packages = detectedPackages,
+                    device_clean = deviceClean,
+                    sdk_status = sdkStatus,
+                    block_reason = blockReason,
+                    device_model = deviceModel,
+                    os_version = osVersion,
+                    motion = motion
+                };
+
+                string json = JsonUtility.ToJson(payload);
+                Logger.Log("[motion_task] Motion phase 2 body: {0}", json);
+                UnityMainThreadDispatcher.Instance.StartCoroutine(SendOnce(json));
+            });
+        }
+
+        /// <summary>
+        /// Single POST attempt, no failover/retry across endpoints — unlike SendWithFailover.
+        /// Response and errors are intentionally ignored (phase 2 is fire-and-forget).
+        /// </summary>
+        private static IEnumerator SendOnce(string json)
+        {
+            string url = AdClient.Instance.GetEndpointByIndex(0) + "/device/report";
+
+            using (UnityWebRequest request = new UnityWebRequest(ProxyConfig.WrapUrl(url), "POST"))
+            {
+                byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+                request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                request.downloadHandler = new DownloadHandlerBuffer();
+                request.SetRequestHeader("Content-Type", "application/json");
+                ProxyConfig.AddAuthHeader(request);
+                request.timeout = 3;
+                yield return request.SendWebRequest();
+
+                Logger.Log("[motion_task] Motion phase 2 request: {0} ({1})", request.result, request.responseCode);
+            }
         }
 
         /// <summary>

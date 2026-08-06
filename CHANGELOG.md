@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.48
+
+- Added the motion anti-fraud signal (Android only): after the device report that carries the
+  real block/allow verdict (`DeviceReport.Send`), the SDK now samples ~2s of accelerometer data
+  via a new native `ZeyWinAdsMotionCollector` (`SENSOR_DELAY_GAME`, throttled to one frame per
+  60ms, capped at 32 frames) and resends the exact same report body plus a `motion` block —
+  fire-and-forget, never retried, sent at most once per app session. The initial device report
+  is unaffected: it never contains a `motion` key. The startup heartbeat is deliberately excluded
+  from this, since its status is always `active` and could otherwise overwrite a real verdict
+  arriving earlier from a stale, delayed follow-up.
+
 ## 3.9.47
 
 - Added `DeepLinkAttribution` (`Runtime/Core/DeepLinkAttribution.cs`): captures `aso_market_id` from
