@@ -1,10 +1,8 @@
 using System;
-using System.IO;
 using System.Reflection;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
-using UnityEngine;
 
 namespace ZeyWinAds.Editor
 {
@@ -21,25 +19,6 @@ namespace ZeyWinAds.Editor
     /// </summary>
     public class FirebasePostprocessor : IPreprocessBuildWithReport
     {
-        // UnityLinker only collects link.xml files from under the consumer's own
-        // Assets folder (or embedded/local packages) - not from a package resolved
-        // via git/registry into the read-only Library/PackageCache. Shipping this
-        // link.xml inside the package's own Runtime folder is therefore silently
-        // ineffective: the assembly-preserve rule never reaches the linker, and
-        // Firebase.Messaging gets stripped out of IL2CPP builds even though it's
-        // installed. So it's written into the consumer's Assets/ZeyWinAds/ instead,
-        // mirroring how GoogleMobileAds' own package places its link.xml under
-        // Assets/GoogleMobileAds/ for the same reason.
-        private const string LinkXmlAssetPath = "Assets/ZeyWinAds/link.xml";
-
-        private const string LinkXmlContent =
-            "<linker>\n" +
-            "  <assembly fullname=\"Firebase.App\" preserve=\"all\" />\n" +
-            "  <assembly fullname=\"Firebase.Messaging\" preserve=\"all\" />\n" +
-            "  <assembly fullname=\"Firebase.Platform\" preserve=\"all\" />\n" +
-            "  <assembly fullname=\"Firebase.TaskExtension\" preserve=\"all\" />\n" +
-            "</linker>\n";
-
         public int callbackOrder => 100;
 
         public void OnPreprocessBuild(BuildReport report)
@@ -47,7 +26,11 @@ namespace ZeyWinAds.Editor
             if (report.summary.platform == BuildTarget.Android || report.summary.platform == BuildTarget.iOS)
             {
                 RequireFirebaseMessagingInstalled();
-                EnsureLinkXmlInAssets();
+
+                // Belt-and-suspenders: normally already done by
+                // ZeyWinAdsAssetsBootstrap's [InitializeOnLoad] hook, but a fresh
+                // checkout built straight away in batch mode may never have run it.
+                ZeyWinAdsAssetsBootstrap.EnsureAssetsInstalled(force: false);
             }
         }
 
@@ -66,18 +49,6 @@ namespace ZeyWinAds.Editor
                 "[ZeyWinAds] Firebase Messaging is required for push notification support but was not found in " +
                 "this project. Install it via the Firebase Unity SDK (https://firebase.google.com/download/unity) " +
                 "and add your google-services.json (Android) / GoogleService-Info.plist (iOS), then rebuild.");
-        }
-
-        private static void EnsureLinkXmlInAssets()
-        {
-            string fullPath = Path.Combine(Path.GetDirectoryName(Application.dataPath), LinkXmlAssetPath);
-
-            if (File.Exists(fullPath) && File.ReadAllText(fullPath) == LinkXmlContent)
-                return;
-
-            Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
-            File.WriteAllText(fullPath, LinkXmlContent);
-            AssetDatabase.ImportAsset(LinkXmlAssetPath);
         }
 
         private static Type FindType(string fullName, string requiredAssemblyName)
