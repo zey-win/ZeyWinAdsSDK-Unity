@@ -2,6 +2,13 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.49
+
+- Added a `Samples~/CustomNativeBanner` scaffold: `CustomNativeBannerView.cs` plus a starter prefab and
+  background texture for building a fully custom-designed native banner (via `GetNativeAdInfo()`) instead
+  of relying on the SDK's own built-in native ad rendering. Not currently wired up via `package.json`'s
+  `samples` field — for now this is just a reference copy for consuming projects to pull in manually.
+
 ## 3.9.48
 
 - Added the motion anti-fraud signal (Android only): after the device report that carries the
