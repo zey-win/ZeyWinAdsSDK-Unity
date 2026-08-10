@@ -46,27 +46,33 @@ namespace ZeyWinAds.Editor
             ("CustomNativeBannerView.cs", "Scripts/CustomNativeBannerView.cs"),
             ("Prefabs/CustomNativeBannerCanvas (Horizontal).prefab",
                 "Prefabs/CustomNativeBanner/CustomNativeBannerCanvas (Horizontal).prefab"),
+            ("Prefabs/CustomNativeBannerCanvas (Vertical).prefab",
+                "Prefabs/CustomNativeBanner/CustomNativeBannerCanvas (Vertical).prefab"),
             ("Textures/native_banner_bg.jpg", "Textures/CustomNativeBanner/native_banner_bg.jpg"),
         };
 
         static ZeyWinAdsAssetsBootstrap()
         {
-            EditorApplication.delayCall += () => EnsureAssetsInstalled(force: false);
+            EditorApplication.delayCall += EnsureAssetsInstalled;
         }
 
+        // Only ever fills in whatever's missing (e.g. a file a consumer accidentally
+        // deleted) — never overwrites an existing file, so a consumer's own edits to
+        // their copy of the banner sample are never at risk, whether this runs
+        // automatically on domain reload or is triggered from this menu item by hand.
         [MenuItem("ZeyWinAds/Install Custom Native Banner Sample", priority = 3)]
         public static void InstallSampleFromMenu()
         {
-            EnsureAssetsInstalled(force: true);
+            EnsureAssetsInstalled();
         }
 
-        internal static void EnsureAssetsInstalled(bool force)
+        internal static void EnsureAssetsInstalled()
         {
             try
             {
                 bool changed = false;
                 changed |= EnsureLinkXml();
-                changed |= EnsureCustomNativeBannerSample(force);
+                changed |= EnsureCustomNativeBannerSample();
 
                 if (changed)
                     AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
@@ -90,7 +96,7 @@ namespace ZeyWinAds.Editor
             return true;
         }
 
-        private static bool EnsureCustomNativeBannerSample(bool force)
+        private static bool EnsureCustomNativeBannerSample()
         {
             string sampleRoot = FindSampleRoot();
             if (string.IsNullOrEmpty(sampleRoot))
@@ -106,15 +112,15 @@ namespace ZeyWinAds.Editor
                     continue;
 
                 string targetFile = Path.Combine(projectRoot, TargetRoot, target);
-                if (!force && File.Exists(targetFile))
+                if (File.Exists(targetFile))
                     continue;
 
                 Directory.CreateDirectory(Path.GetDirectoryName(targetFile));
-                File.Copy(sourceFile, targetFile, force);
+                File.Copy(sourceFile, targetFile, overwrite: false);
 
                 string sourceMeta = sourceFile + ".meta";
                 if (File.Exists(sourceMeta))
-                    File.Copy(sourceMeta, targetFile + ".meta", force);
+                    File.Copy(sourceMeta, targetFile + ".meta", overwrite: false);
 
                 copiedAny = true;
             }
