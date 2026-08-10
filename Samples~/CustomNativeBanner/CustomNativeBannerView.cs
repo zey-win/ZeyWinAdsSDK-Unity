@@ -1,5 +1,4 @@
 using System.Collections;
-using TMPro;
 using UnityEngine;
 using UnityEngine.Networking;
 using UnityEngine.UI;
@@ -17,12 +16,19 @@ public class CustomNativeBannerView : MonoBehaviour
     // still below interstitials/rewarded (1000/1001) and popups (32760).
     private const int CanvasSortingOrder = 998;
 
+    // Legacy UI.Text + the SDK's own OS-backed dynamic font instead of TextMeshPro: ad
+    // copy language is unpredictable (whatever the ad network serves), and TMP has no
+    // complex-script shaping (Tamil, Arabic, Thai, CJK, ...) no matter which font/atlas
+    // mode is used — glyphs may exist but render unshaped or not at all. Routing through
+    // the OS's own text renderer sidesteps that entirely. Using ZeyWinAds.GetPreferredFont()
+    // (rather than duplicating its family list here) means this stays in sync with
+    // whatever the SDK's own built-in ad views use, automatically.
     [Header("Content")]
     [SerializeField] private RawImage iconImage;
-    [SerializeField] private TMP_Text headlineText;
-    [SerializeField] private TMP_Text bodyText;
-    [SerializeField] private TMP_Text ctaText;
-    
+    [SerializeField] private Text headlineText;
+    [SerializeField] private Text bodyText;
+    [SerializeField] private Text ctaText;
+
     private System.Action _registerClick;
     private Coroutine _iconLoadRoutine;
     private string _loadedIconUrl;
@@ -39,9 +45,9 @@ public class CustomNativeBannerView : MonoBehaviour
 
         _registerClick = info.RegisterClick;
 
-        if (headlineText != null) headlineText.text = info.Headline;
-        if (bodyText != null) bodyText.text = info.Body;
-        if (ctaText != null) ctaText.text = info.CtaText;
+        SetText(headlineText, info.Headline);
+        SetText(bodyText, info.Body);
+        SetText(ctaText, info.CtaText);
 
         if (iconImage != null && !string.IsNullOrEmpty(info.IconUrl) && info.IconUrl != _loadedIconUrl)
         {
@@ -51,6 +57,21 @@ public class CustomNativeBannerView : MonoBehaviour
         }
 
         info.TrackImpression?.Invoke();
+    }
+
+    private static void SetText(Text field, string value)
+    {
+        if (field == null) return;
+
+        Font preferredFont = ZeyWinAds.ZeyWinAds.GetPreferredFont();
+        if (preferredFont != null)
+            field.font = preferredFont;
+
+        // Ad copy comes from the ad network and is untrusted — a stray '<' in a creative
+        // (e.g. "Save <3 now") gets parsed as a rich text tag and swallows the rest of the
+        // string, which is why some creatives rendered fine and others silently lost text.
+        field.supportRichText = false;
+        field.text = value;
     }
 
     private IEnumerator LoadIcon(string url)

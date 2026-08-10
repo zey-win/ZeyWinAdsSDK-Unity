@@ -1675,6 +1675,24 @@ namespace ZeyWinAds
 
         #endregion
 
+        #region Fonts
+
+        /// <summary>
+        /// The font every built-in ad view (native, interstitial, rewarded, popup, HTML)
+        /// renders its text with — an OS-backed dynamic font covering Latin, Cyrillic,
+        /// Greek, Vietnamese, CJK, Thai, and Hebrew, so ad copy in any of those scripts
+        /// renders correctly regardless of which font the host app otherwise uses.
+        /// Exposed so a host app building its own custom ad view (e.g. a custom native
+        /// banner) can render SDK-served ad copy with this exact same font instead of
+        /// maintaining its own separate, possibly stale copy of the family list.
+        /// </summary>
+        public static Font GetPreferredFont(int size = 32)
+        {
+            return ZeyWinFont.GetPreferred(size);
+        }
+
+        #endregion
+
         #region Internal Methods
 
         private static void OnAdPreloaded(AdType adType)
