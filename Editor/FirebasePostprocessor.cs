@@ -30,7 +30,7 @@ namespace ZeyWinAds.Editor
                 // Belt-and-suspenders: normally already done by
                 // ZeyWinAdsAssetsBootstrap's [InitializeOnLoad] hook, but a fresh
                 // checkout built straight away in batch mode may never have run it.
-                ZeyWinAdsAssetsBootstrap.EnsureAssetsInstalled(force: false);
+                ZeyWinAdsAssetsBootstrap.EnsureAssetsInstalled();
             }
         }
 
