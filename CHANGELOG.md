@@ -2,6 +2,20 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.50
+
+- Added `ZeyWinAds.GetPreferredFont(int size = 32)`: a public wrapper around the internal
+  `ZeyWinFont.GetPreferred()` used by every built-in ad view (native, interstitial, rewarded, popup,
+  HTML). Lets a host app building its own custom ad view (e.g. `Samples~/CustomNativeBanner`) render
+  SDK-served ad copy with the exact same OS-backed, multi-script font instead of maintaining its own
+  separate, possibly stale copy of the family list.
+- Updated the `Samples~/CustomNativeBanner` scaffold: `CustomNativeBannerView.cs` now renders through
+  legacy `UnityEngine.UI.Text` + `GetPreferredFont()` instead of TextMeshPro — TMP has no complex-script
+  shaping (Tamil, Arabic, Thai, CJK, ...), so ad copy in those scripts could silently fail to render
+  regardless of font/atlas settings. Also added a second starter prefab
+  (`CustomNativeBannerCanvas (Vertical)`) alongside the existing horizontal one, and updated the
+  horizontal prefab's icon to use `AspectRatioFitter` instead of stretching to fill.
+
 ## 3.9.49
 
 - Added a `Samples~/CustomNativeBanner` scaffold: `CustomNativeBannerView.cs` plus a starter prefab and

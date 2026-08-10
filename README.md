@@ -26,7 +26,7 @@ If you want a reproducible, pinned version instead of always tracking the latest
 release tag:
 
 ```
-https://github.com/zey-win/ZeyWinAdsSDK-Unity.git#v3.9.49
+https://github.com/zey-win/ZeyWinAdsSDK-Unity.git#v3.9.50
 ```
 
 ---
