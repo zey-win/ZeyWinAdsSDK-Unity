@@ -37,9 +37,8 @@ namespace ZeyWinAds.Core
                     cls.CallStatic("collect", UnityMainThreadDispatcher.Instance.gameObject.name, "OnMotionCollected");
                 }
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                Logger.Error("[motion_task] Failed to start motion collection: {0}", e.Message);
                 _pendingCallback = null;
             }
 #endif
@@ -60,9 +59,8 @@ namespace ZeyWinAds.Core
                 var data = JsonUtility.FromJson<MotionData>(json);
                 callback.Invoke(data);
             }
-            catch (Exception e)
+            catch (Exception)
             {
-                Logger.Error("[motion_task] Failed to parse motion result: {0}", e.Message);
             }
         }
     }

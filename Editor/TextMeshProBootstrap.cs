@@ -25,17 +25,17 @@ namespace ZeyWinAds.Editor
         private const string TmpDefaultFontSourcePath = "Assets/TextMesh Pro/Fonts/LiberationSans.ttf";
         private const string TmpDefaultSpritePath = "Assets/TextMesh Pro/Resources/Sprite Assets/Default Sprite Asset.asset";
         private const string TmpDefaultStyleSheetPath = "Assets/TextMesh Pro/Resources/Style Sheets/Default Style Sheet.asset";
-        private const string TmpExamplesPath = "Assets/TextMesh Pro/Examples & Extras";
         private const string TmpExamplesScriptsPath = "Assets/TextMesh Pro/Examples & Extras/Scripts";
         private const string TmpExamplesAsmdefPath = "Assets/TextMesh Pro/Examples & Extras/Scripts/ZeyWinTmpExamplesDisabled.asmdef";
         private const string TmpExamplesCompileDefine = "ZEYWIN_TMP_EXAMPLES_ENABLED";
-        private const int MinimumExamplesFileCount = 50;
+        // Examples & Extras is Unity's TMP demo content - never required at runtime. The
+        // consuming project is expected to ship its own fonts under Assets/Fonts/ (they're
+        // required for the build to complete anyway), so that's the only fallback chain.
         private static readonly string[] PreferredTmpFontAssetPaths =
         {
             "Assets/Fonts/Roboto-VariableFont_wdth,wght SDF.asset",
             "Assets/Fonts/Roboto-Regular SDF.asset",
-            "Assets/Fonts/NotoSans-Regular SDF.asset",
-            "Assets/TextMesh Pro/Examples & Extras/Resources/Fonts & Materials/Roboto-Bold SDF.asset"
+            "Assets/Fonts/NotoSans-Regular SDF.asset"
         };
         private static readonly string[] RequiredEssentialAssetPaths =
         {
@@ -79,24 +79,15 @@ namespace ZeyWinAds.Editor
             }
 
             bool essentialsMissing = !HasEssentialResources() || !HasUsableDefaultFontAsset();
-            bool examplesMissing = !HasExamplesAndExtras();
 
-            if (force || essentialsMissing || examplesMissing)
+            if (force || essentialsMissing)
             {
-                bool importEssentials = force || essentialsMissing;
-                bool importExamples = force || examplesMissing;
-                ImportTextMeshProResources(importEssentials, importExamples);
+                ImportTextMeshProResources(force || essentialsMissing);
                 DisableExamplesScriptsByDefault();
                 AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
 
                 if (force || !HasEssentialResources() || !HasUsableDefaultFontAsset())
                     ExtractUnityPackage(FindTmpUnityPackage("TMP Essential Resources.unitypackage"), "TMP Essential Resources");
-
-                if (force || !HasExamplesAndExtras())
-                {
-                    ExtractUnityPackage(FindTmpUnityPackage("TMP Examples & Extras.unitypackage"), "TMP Examples & Extras");
-                    DisableExamplesScriptsByDefault();
-                }
 
                 AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
             }
@@ -107,15 +98,15 @@ namespace ZeyWinAds.Editor
             ConfigureTextMeshProShaders();
             AssetDatabase.SaveAssets();
 
-            bool ready = HasEssentialResources() && HasExamplesAndExtras() && HasExamplesCompilationGuard();
-            Debug.Log($"[ZeyWinAds] TextMesh Pro assets ready: essentials={HasEssentialResources()}, examples={HasExamplesAndExtras()}, examplesGuard={HasExamplesCompilationGuard()}");
+            bool ready = HasEssentialResources();
+            Debug.Log($"[ZeyWinAds] TextMesh Pro assets ready: essentials={ready}");
             return ready;
         }
 
         private static void RunBootstrap()
         {
             string marker = Application.dataPath + "::" + MarkerKey;
-            if (EditorPrefs.GetBool(marker, false) && HasEssentialResources() && HasUsableDefaultFontAsset() && HasExamplesAndExtras() && HasExamplesCompilationGuard())
+            if (EditorPrefs.GetBool(marker, false) && HasEssentialResources() && HasUsableDefaultFontAsset())
                 return;
 
             try
@@ -162,26 +153,6 @@ namespace ZeyWinAds.Editor
             return true;
         }
 
-        private static bool HasExamplesAndExtras()
-        {
-            if (!Directory.Exists(TmpExamplesPath))
-                return false;
-
-            try
-            {
-                return Directory.GetFiles(TmpExamplesPath, "*", SearchOption.AllDirectories).Length >= MinimumExamplesFileCount;
-            }
-            catch
-            {
-                return false;
-            }
-        }
-
-        private static bool HasExamplesCompilationGuard()
-        {
-            return !Directory.Exists(TmpExamplesScriptsPath) || File.Exists(TmpExamplesAsmdefPath);
-        }
-
         private static bool EnsureManifestDependency(string packageName, string version)
         {
             string manifestPath = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "Packages", "manifest.json"));
@@ -205,19 +176,14 @@ namespace ZeyWinAds.Editor
             return true;
         }
 
-        private static void ImportTextMeshProResources(bool importEssentials, bool importExamples)
+        private static void ImportTextMeshProResources(bool importEssentials)
         {
+            if (!importEssentials)
+                return;
+
             string essentials = FindTmpUnityPackage("TMP Essential Resources.unitypackage");
-            string examples = FindTmpUnityPackage("TMP Examples & Extras.unitypackage");
-
-            if (importEssentials && !string.IsNullOrEmpty(essentials))
+            if (!string.IsNullOrEmpty(essentials))
                 AssetDatabase.ImportPackage(essentials, false);
-
-            if (importExamples && !string.IsNullOrEmpty(examples))
-            {
-                AssetDatabase.ImportPackage(examples, false);
-                DisableExamplesScriptsByDefault();
-            }
         }
 
         private static void DisableExamplesScriptsByDefault()
