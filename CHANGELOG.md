@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.52
+
+- Fixed a JNI local reference leak causing production `SIGABRT` crashes
+  (`JNI DETECTED ERROR IN APPLICATION: jlr_method == null`) on Android. `WebViewLock` and
+  `HtmlAdView` each created an `AndroidJavaClass("com.unity3d.player.UnityPlayer")` and its
+  `currentActivity` on every `Update()` frame while an offer/HTML ad surface was visible, without
+  ever disposing them — exhausting the JNI reference table within seconds and aborting the process.
+  `FrameRateController` and `AdAudioController` had the same undisposed-`activity` pattern on their
+  (lower-frequency) native calls. All four now dispose their `AndroidJavaObject`/`AndroidJavaClass`
+  references.
+
 ## 3.9.51
 
 - Fixed `TextMeshProBootstrap` unconditionally requiring `Assets/TextMesh Pro/Examples & Extras`

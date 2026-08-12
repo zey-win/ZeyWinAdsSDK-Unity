@@ -663,37 +663,39 @@ namespace ZeyWinAds.UI
 
             try
             {
-                AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-                AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
-                activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+                using (AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
                 {
-                    try
+                    activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
                     {
-                        if (_nativeWebViewContainer == null)
-                            return;
+                        try
+                        {
+                            if (_nativeWebViewContainer == null)
+                                return;
 
-                        _nativeWebViewContainer.Call("bringToFront");
-                        _nativeWebViewContainer.Call("setElevation", AndroidOfferSurfaceElevation);
-                        _nativeWebViewContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
-                        if (_nativeSafeAreaContainer != null)
-                        {
-                            _nativeSafeAreaContainer.Call("bringToFront");
-                            _nativeSafeAreaContainer.Call("setElevation", AndroidOfferSurfaceElevation);
-                            _nativeSafeAreaContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                            _nativeWebViewContainer.Call("bringToFront");
+                            _nativeWebViewContainer.Call("setElevation", AndroidOfferSurfaceElevation);
+                            _nativeWebViewContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                            if (_nativeSafeAreaContainer != null)
+                            {
+                                _nativeSafeAreaContainer.Call("bringToFront");
+                                _nativeSafeAreaContainer.Call("setElevation", AndroidOfferSurfaceElevation);
+                                _nativeSafeAreaContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                            }
+                            if (_webView != null)
+                            {
+                                _webView.Call("bringToFront");
+                                _webView.Call("setElevation", AndroidOfferSurfaceElevation);
+                                _webView.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                            }
+                            _nativeWebViewContainer.Call("invalidate");
                         }
-                        if (_webView != null)
+                        catch (Exception e)
                         {
-                            _webView.Call("bringToFront");
-                            _webView.Call("setElevation", AndroidOfferSurfaceElevation);
-                            _webView.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                            Logger.Warn("Failed to promote Android locked WebView surface: {0}", e.Message);
                         }
-                        _nativeWebViewContainer.Call("invalidate");
-                    }
-                    catch (Exception e)
-                    {
-                        Logger.Warn("Failed to promote Android locked WebView surface: {0}", e.Message);
-                    }
-                }));
+                    }));
+                }
             }
             catch (Exception e)
             {
@@ -791,22 +793,24 @@ namespace ZeyWinAds.UI
             // Handle Android system back button for webview navigation
             if (IsAndroidBackPressed() && _webView != null)
             {
-                AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-                AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
-                activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+                using (AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
                 {
-                    try
+                    activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
                     {
-                        if (_webView != null && _webView.Call<bool>("canGoBack"))
+                        try
                         {
-                            _webView.Call("goBack");
+                            if (_webView != null && _webView.Call<bool>("canGoBack"))
+                            {
+                                _webView.Call("goBack");
+                            }
                         }
-                    }
-                    catch (Exception e)
-                    {
-                        Logger.Error("Failed to go back in WebView: {0}", e.Message);
-                    }
-                }));
+                        catch (Exception e)
+                        {
+                            Logger.Error("Failed to go back in WebView: {0}", e.Message);
+                        }
+                    }));
+                }
             }
 #endif
         }

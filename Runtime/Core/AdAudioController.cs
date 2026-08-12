@@ -180,8 +180,8 @@ namespace ZeyWinAds.Core
             try
             {
                 using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
                 {
-                    AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
                     activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
                     {
                         try
