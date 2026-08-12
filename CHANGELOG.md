@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.51
+
+- Fixed `TextMeshProBootstrap` unconditionally requiring `Assets/TextMesh Pro/Examples & Extras`
+  to be present, re-extracting `TMP Examples & Extras.unitypackage` on any build where a consuming
+  project had trimmed or removed it. The bootstrap now only ensures TMP's base essentials and falls
+  back to the consuming project's own fonts under `Assets/Fonts/` (already required for `TMP
+  Settings`'s default font asset) — Examples & Extras is demo content and was never actually needed
+  at runtime.
+
 ## 3.9.50
 
 - Added `ZeyWinAds.GetPreferredFont(int size = 32)`: a public wrapper around the internal

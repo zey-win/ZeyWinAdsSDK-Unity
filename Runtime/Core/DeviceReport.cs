@@ -93,7 +93,6 @@ namespace ZeyWinAds.Core
                 };
 
                 string json = JsonUtility.ToJson(payload);
-                Logger.Log("[motion_task] Device report phase 1 body: {0}", json);
 
                 UnityMainThreadDispatcher.Instance.StartCoroutine(
                     SendWithFailover(json, sdkStatus, blockReason, onResult, 0)
@@ -119,9 +118,6 @@ namespace ZeyWinAds.Core
 
             MotionCollector.Collect((motion) =>
             {
-                Logger.Log("[motion_task] Motion collected: has_accel={0} has_gyro={1} events={2} elapsed_ms={3} s_len={4}",
-                    motion.has_accel, motion.has_gyro, motion.events, motion.elapsed_ms, motion.s?.Length ?? 0);
-
                 var payload = new ReportPayloadWithMotion
                 {
                     device_id = deviceId,
@@ -138,7 +134,6 @@ namespace ZeyWinAds.Core
                 };
 
                 string json = JsonUtility.ToJson(payload);
-                Logger.Log("[motion_task] Motion phase 2 body: {0}", json);
                 UnityMainThreadDispatcher.Instance.StartCoroutine(SendOnce(json));
             });
         }
@@ -160,8 +155,6 @@ namespace ZeyWinAds.Core
                 ProxyConfig.AddAuthHeader(request);
                 request.timeout = 3;
                 yield return request.SendWebRequest();
-
-                Logger.Log("[motion_task] Motion phase 2 request: {0} ({1})", request.result, request.responseCode);
             }
         }
 
