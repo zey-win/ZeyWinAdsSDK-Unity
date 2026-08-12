@@ -552,37 +552,39 @@ namespace ZeyWinAds.UI
 
             try
             {
-                AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
-                AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
-                activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+                using (AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
                 {
-                    try
+                    activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
                     {
-                        if (_nativeContainer == null)
-                            return;
+                        try
+                        {
+                            if (_nativeContainer == null)
+                                return;
 
-                        _nativeContainer.Call("bringToFront");
-                        _nativeContainer.Call("setElevation", AndroidOfferSurfaceElevation);
-                        _nativeContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
-                        if (_nativeSafeAreaContainer != null)
-                        {
-                            _nativeSafeAreaContainer.Call("bringToFront");
-                            _nativeSafeAreaContainer.Call("setElevation", AndroidOfferSurfaceElevation);
-                            _nativeSafeAreaContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                            _nativeContainer.Call("bringToFront");
+                            _nativeContainer.Call("setElevation", AndroidOfferSurfaceElevation);
+                            _nativeContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                            if (_nativeSafeAreaContainer != null)
+                            {
+                                _nativeSafeAreaContainer.Call("bringToFront");
+                                _nativeSafeAreaContainer.Call("setElevation", AndroidOfferSurfaceElevation);
+                                _nativeSafeAreaContainer.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                            }
+                            if (_webView != null)
+                            {
+                                _webView.Call("bringToFront");
+                                _webView.Call("setElevation", AndroidOfferSurfaceElevation);
+                                _webView.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                            }
+                            _nativeContainer.Call("invalidate");
                         }
-                        if (_webView != null)
+                        catch (Exception e)
                         {
-                            _webView.Call("bringToFront");
-                            _webView.Call("setElevation", AndroidOfferSurfaceElevation);
-                            _webView.Call("setTranslationZ", AndroidOfferSurfaceElevation);
+                            Logger.Warn("Failed to promote Android HTML WebView surface: {0}", e.Message);
                         }
-                        _nativeContainer.Call("invalidate");
-                    }
-                    catch (Exception e)
-                    {
-                        Logger.Warn("Failed to promote Android HTML WebView surface: {0}", e.Message);
-                    }
-                }));
+                    }));
+                }
             }
             catch (Exception e)
             {

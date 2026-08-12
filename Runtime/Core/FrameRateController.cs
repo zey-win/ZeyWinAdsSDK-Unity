@@ -61,8 +61,8 @@ namespace ZeyWinAds.Core
             try
             {
                 using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
                 {
-                    AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
                     activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
                     {
                         try
@@ -102,25 +102,30 @@ namespace ZeyWinAds.Core
 #if UNITY_ANDROID && !UNITY_EDITOR
             try
             {
-                using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
+                var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
+                activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
                 {
-                    AndroidJavaObject activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity");
-                    activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+                    try
                     {
-                        try
+                        using (AndroidJavaObject window = activity.Call<AndroidJavaObject>("getWindow"))
+                        using (AndroidJavaObject attributes = window.Call<AndroidJavaObject>("getAttributes"))
                         {
-                            AndroidJavaObject window = activity.Call<AndroidJavaObject>("getWindow");
-                            AndroidJavaObject attributes = window.Call<AndroidJavaObject>("getAttributes");
                             attributes.Set("preferredRefreshRate", (float)targetFps);
                             window.Call("setAttributes", attributes);
                             Logger.Debug("Android preferred refresh rate применён: {0} FPS, причина={1}", targetFps, SafeReason(reason));
                         }
-                        catch (Exception e)
-                        {
-                            Logger.Warn("Не удалось применить Android preferred refresh rate: {0}", e.Message);
-                        }
-                    }));
-                }
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.Warn("Не удалось применить Android preferred refresh rate: {0}", e.Message);
+                    }
+                    finally
+                    {
+                        activity.Dispose();
+                        unityPlayer.Dispose();
+                    }
+                }));
             }
             catch (Exception e)
             {
