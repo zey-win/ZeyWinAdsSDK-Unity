@@ -3,6 +3,9 @@ using System.Reflection;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
+#if UNITY_IOS
+using UnityEditor.iOS.Xcode;
+#endif
 
 namespace ZeyWinAds.Editor
 {
@@ -17,7 +20,7 @@ namespace ZeyWinAds.Editor
     /// fails the build loudly instead of silently shipping a non-functional
     /// push notification feature.
     /// </summary>
-    public class FirebasePostprocessor : IPreprocessBuildWithReport
+    public class FirebasePostprocessor : IPreprocessBuildWithReport, IPostprocessBuildWithReport
     {
         public int callbackOrder => 100;
 
@@ -32,6 +35,29 @@ namespace ZeyWinAds.Editor
                 // checkout built straight away in batch mode may never have run it.
                 ZeyWinAdsAssetsBootstrap.EnsureAssetsInstalled();
             }
+        }
+
+        public void OnPostprocessBuild(BuildReport report)
+        {
+#if UNITY_IOS
+            if (report.summary.platform != BuildTarget.iOS)
+                return;
+
+            // Firebase Messaging's iOS notification-permission flow (RequestPermissionAsync,
+            // see Core/FirebaseMessagingService.cs) goes through UNUserNotificationCenter.
+            // With this project's static Pod linkage, that symbol isn't guaranteed to resolve
+            // in the app target unless the system framework is linked explicitly - and Unity
+            // regenerates the Xcode project from scratch on every export, so a framework added
+            // by hand in Xcode doesn't survive the next build.
+            string pbxPath = PBXProject.GetPBXProjectPath(report.summary.outputPath);
+            var pbxProject = new PBXProject();
+            pbxProject.ReadFromFile(pbxPath);
+
+            string targetGuid = pbxProject.GetUnityMainTargetGuid();
+            pbxProject.AddFrameworkToProject(targetGuid, "UserNotifications.framework", false);
+
+            pbxProject.WriteToFile(pbxPath);
+#endif
         }
 
         // The real Firebase Unity SDK ships Firebase.Messaging.FirebaseMessaging inside

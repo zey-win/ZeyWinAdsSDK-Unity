@@ -181,13 +181,53 @@ namespace ZeyWinAds.Core
                 Logger.Warn("Failed to subscribe to Firebase Messaging events: {0}", ex.Message);
             }
 
-            // TokenReceived only fires like Android's onNewToken() - i.e. when the
-            // token is freshly generated or rotated. On every launch after the
-            // first, Firebase already holds a cached token and never raises the
-            // event again, so without this explicit fetch _lastToken would stay
-            // null forever. Mirrors native's getToken() + onNewToken() pairing.
-            // Kept in its own try/catch so a problem subscribing to events above
-            // doesn't also block this more reliable, primary token-acquisition path.
+#if UNITY_IOS
+            // iOS never hands FCM an APNS token - and GetTokenAsync() throws "No APNS
+            // token specified" because of it - until the app has explicitly requested
+            // notification permission. Android has no such prerequisite, so this step
+            // only runs here.
+            RequestIOSPermissionThenFetchToken(messagingType);
+#else
+            FetchAndRegisterToken(messagingType);
+#endif
+        }
+
+#if UNITY_IOS
+        private static void RequestIOSPermissionThenFetchToken(Type messagingType)
+        {
+            try
+            {
+                MethodInfo requestPermissionMethod = messagingType.GetMethod("RequestPermissionAsync", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
+                if (requestPermissionMethod == null)
+                {
+                    FetchAndRegisterToken(messagingType);
+                    return;
+                }
+
+                Task task = (Task)requestPermissionMethod.Invoke(null, null);
+                task.ContinueWith(t =>
+                {
+                    if (t.IsFaulted || t.IsCanceled)
+                        Logger.Warn("Firebase RequestPermissionAsync failed: {0}", t.Exception?.Message ?? "unknown error");
+
+                    UnityMainThreadDispatcher.Instance.Enqueue(() => FetchAndRegisterToken(messagingType));
+                });
+            }
+            catch (Exception ex)
+            {
+                Logger.Warn("Firebase RequestPermissionAsync failed: {0}", ex.Message);
+                FetchAndRegisterToken(messagingType);
+            }
+        }
+#endif
+
+        // TokenReceived only fires like Android's onNewToken() - i.e. when the
+        // token is freshly generated or rotated. On every launch after the
+        // first, Firebase already holds a cached token and never raises the
+        // event again, so without this explicit fetch _lastToken would stay
+        // null forever. Mirrors native's getToken() + onNewToken() pairing.
+        private static void FetchAndRegisterToken(Type messagingType)
+        {
             try
             {
                 MethodInfo getTokenMethod = messagingType.GetMethod("GetTokenAsync", BindingFlags.Public | BindingFlags.Static, null, Type.EmptyTypes, null);
