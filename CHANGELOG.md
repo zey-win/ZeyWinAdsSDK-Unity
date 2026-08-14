@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.53
+
+- `/device/report` heartbeat payloads (`Send`, the motion follow-up, and `SendStartupHeartbeat`) now
+  include `battery_level` and `is_charging`.
+
 ## 3.9.52
 
 - Fixed a JNI local reference leak causing production `SIGABRT` crashes

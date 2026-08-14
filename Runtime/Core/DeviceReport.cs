@@ -25,6 +25,8 @@ namespace ZeyWinAds.Core
             public string block_reason;
             public string device_model;
             public string os_version;
+            public int battery_level;
+            public bool is_charging;
         }
 
         [Serializable]
@@ -52,6 +54,8 @@ namespace ZeyWinAds.Core
             public string block_reason;
             public string device_model;
             public string os_version;
+            public int battery_level;
+            public bool is_charging;
             public MotionCollector.MotionData motion;
         }
 
@@ -61,6 +65,26 @@ namespace ZeyWinAds.Core
         // exclusive and Initialize() can't re-enter), kept explicit so it stays true if
         // that changes later.
         private static bool _motionSent;
+
+        private static int GetBatteryLevelPercent()
+        {
+            float level = SystemInfo.batteryLevel;
+            if (level < 0f)
+                return 0;
+            return Mathf.Clamp(Mathf.RoundToInt(level * 100f), 0, 100);
+        }
+
+        private static bool GetIsCharging()
+        {
+            switch (SystemInfo.batteryStatus)
+            {
+                case BatteryStatus.Charging:
+                case BatteryStatus.Full:
+                    return true;
+                default:
+                    return false;
+            }
+        }
 
         /// <summary>
         /// Sends device report and invokes callback with server's blocking decision.
@@ -89,7 +113,9 @@ namespace ZeyWinAds.Core
                     sdk_status = sdkStatus,
                     block_reason = blockReason,
                     device_model = deviceModel,
-                    os_version = osVersion
+                    os_version = osVersion,
+                    battery_level = GetBatteryLevelPercent(),
+                    is_charging = GetIsCharging()
                 };
 
                 string json = JsonUtility.ToJson(payload);
@@ -130,6 +156,8 @@ namespace ZeyWinAds.Core
                     block_reason = blockReason,
                     device_model = deviceModel,
                     os_version = osVersion,
+                    battery_level = GetBatteryLevelPercent(),
+                    is_charging = GetIsCharging(),
                     motion = motion
                 };
 
@@ -177,7 +205,9 @@ namespace ZeyWinAds.Core
                     sdk_status = "active",
                     block_reason = "startup_heartbeat",
                     device_model = SystemInfo.deviceModel ?? "",
-                    os_version = SystemInfo.operatingSystem ?? ""
+                    os_version = SystemInfo.operatingSystem ?? "",
+                    battery_level = GetBatteryLevelPercent(),
+                    is_charging = GetIsCharging()
                 };
 
                 string json = JsonUtility.ToJson(payload);
