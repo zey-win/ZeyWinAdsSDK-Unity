@@ -29,6 +29,7 @@ namespace ZeyWinAds.Editor
         private const string UnityPlayerActivityName = "com.unity3d.player.UnityPlayerActivity";
         private const string UnityPlayerGameActivityName = "com.unity3d.player.UnityPlayerGameActivity";
         private const string StartupProviderName = "com.zeywinads.unity.ZeyWinAdsStartupProvider";
+        private const string StartupProviderAuthoritySuffix = ".zeywinads.startup";
         private const string UnityActivityConfigChanges =
             "mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|fontScale|layoutDirection|colorMode";
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
@@ -448,8 +449,37 @@ allprojects {
             EnsureViewQueryIntent(doc, queries, AndroidNs, "intent");
 
             EnsureDeepLink(doc, manifest, AndroidNs);
+            EnsureStartupProviderAuthority(doc, manifest, AndroidNs);
 
             SaveXml(doc, fullPath);
+        }
+
+        private static void EnsureStartupProviderAuthority(XmlDocument doc, XmlElement manifest, string ns)
+        {
+            XmlElement application = manifest.SelectSingleNode("application") as XmlElement;
+            if (application == null)
+            {
+                application = doc.CreateElement("application");
+                manifest.AppendChild(application);
+            }
+
+            string packageId = PlayerSettings.GetApplicationIdentifier(BuildTargetGroup.Android);
+            if (string.IsNullOrEmpty(packageId))
+                packageId = PlayerSettings.applicationIdentifier;
+            if (string.IsNullOrEmpty(packageId))
+                return;
+
+            XmlElement provider = FindProvider(application, ns, StartupProviderName);
+            if (provider == null)
+            {
+                provider = doc.CreateElement("provider");
+                application.AppendChild(provider);
+            }
+
+            provider.SetAttribute("name", ns, StartupProviderName);
+            provider.SetAttribute("authorities", ns, packageId + StartupProviderAuthoritySuffix);
+            provider.SetAttribute("exported", ns, "false");
+            provider.SetAttribute("initOrder", ns, "1000");
         }
 
         private static void EnsureViewQueryIntent(XmlDocument doc, XmlElement queries, string ns, string scheme)

@@ -357,7 +357,7 @@ namespace ZeyWinAds.Core
     /// </summary>
     public static class ZeyWinAdsConfig
     {
-        public const string SdkVersion = "3.9.52";
+        public const string SdkVersion = "3.9.53";
         public const int DefaultRewardAmount = 1;
         public const float RequestTimeoutSeconds = 30f;
         public const int MaxRetries = 2;
