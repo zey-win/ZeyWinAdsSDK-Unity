@@ -29,10 +29,26 @@ public class ZeyWinAdsWebChromeClient extends WebChromeClient {
     private static final int REQUEST_CODE = 9716;
     private static final long PERMISSION_POLL_INTERVAL_MS = 250L;
     private static final int PERMISSION_POLL_MAX_ATTEMPTS = 40;
-    private final Handler handler = new Handler(Looper.getMainLooper());
+    private static final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     public void onPermissionRequest(final PermissionRequest request) {
+        handlePermissionRequest(request);
+    }
+
+    @Override
+    public void onPermissionRequestCanceled(PermissionRequest request) {
+        super.onPermissionRequestCanceled(request);
+        denyQuietly(request);
+    }
+
+    /**
+     * Shared by this class and the popup child's own WebChromeClient (see
+     * configurePopupWebView) - the base WebChromeClient.onPermissionRequest is a
+     * no-op, so a popup that doesn't wire this up leaves getUserMedia() hanging
+     * forever with no dialog, no grant, no deny, and no console error.
+     */
+    private static void handlePermissionRequest(final PermissionRequest request) {
         if (request == null) {
             return;
         }
@@ -58,15 +74,15 @@ public class ZeyWinAdsWebChromeClient extends WebChromeClient {
         });
     }
 
-    @Override
-    public void onPermissionRequestCanceled(PermissionRequest request) {
-        super.onPermissionRequestCanceled(request);
-        if (request != null) {
-            try {
-                request.deny();
-            } catch (Exception ignored) {
-                // PermissionRequest may already be closed by WebView.
-            }
+    private static void denyQuietly(PermissionRequest request) {
+        if (request == null) {
+            return;
+        }
+
+        try {
+            request.deny();
+        } catch (Exception ignored) {
+            // PermissionRequest may already be closed by WebView.
         }
     }
 
@@ -111,7 +127,7 @@ public class ZeyWinAdsWebChromeClient extends WebChromeClient {
         return true;
     }
 
-    private void waitForAndroidPermissions(
+    private static void waitForAndroidPermissions(
         final Activity activity,
         final PermissionRequest request,
         final String[] resources,
@@ -218,6 +234,17 @@ public class ZeyWinAdsWebChromeClient extends WebChromeClient {
             @Override
             public void onCloseWindow(WebView window) {
                 destroyChild(child);
+            }
+
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                handlePermissionRequest(request);
+            }
+
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest request) {
+                super.onPermissionRequestCanceled(request);
+                denyQuietly(request);
             }
 
             @Override
