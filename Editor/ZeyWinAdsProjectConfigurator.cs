@@ -387,6 +387,10 @@ namespace ZeyWinAds.Editor
             EnsurePermission(doc, manifest, "android.permission.POST_NOTIFICATIONS", "33");
             EnsurePermission(doc, manifest, "android.permission.CAMERA");
             EnsurePermission(doc, manifest, "android.permission.RECORD_AUDIO");
+            // Chromium's WebView audio capture (media/audio/android/audio_manager_android.cc)
+            // refuses to select a recording device for getUserMedia() without this, even
+            // with RECORD_AUDIO already granted - it fails with NotReadableError instead.
+            EnsurePermission(doc, manifest, "android.permission.MODIFY_AUDIO_SETTINGS");
             EnsureFeature(doc, manifest, "android.hardware.camera", required: false);
             EnsureFeature(doc, manifest, "android.hardware.microphone", required: false);
 

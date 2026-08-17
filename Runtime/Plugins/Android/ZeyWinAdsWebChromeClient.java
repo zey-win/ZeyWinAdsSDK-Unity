@@ -7,8 +7,10 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.net.Uri;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
+import android.webkit.ValueCallback;
 import android.webkit.WebSettings;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
@@ -27,10 +29,26 @@ public class ZeyWinAdsWebChromeClient extends WebChromeClient {
     private static final int REQUEST_CODE = 9716;
     private static final long PERMISSION_POLL_INTERVAL_MS = 250L;
     private static final int PERMISSION_POLL_MAX_ATTEMPTS = 40;
-    private final Handler handler = new Handler(Looper.getMainLooper());
+    private static final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     public void onPermissionRequest(final PermissionRequest request) {
+        handlePermissionRequest(request);
+    }
+
+    @Override
+    public void onPermissionRequestCanceled(PermissionRequest request) {
+        super.onPermissionRequestCanceled(request);
+        denyQuietly(request);
+    }
+
+    /**
+     * Shared by this class and the popup child's own WebChromeClient (see
+     * configurePopupWebView) - the base WebChromeClient.onPermissionRequest is a
+     * no-op, so a popup that doesn't wire this up leaves getUserMedia() hanging
+     * forever with no dialog, no grant, no deny, and no console error.
+     */
+    private static void handlePermissionRequest(final PermissionRequest request) {
         if (request == null) {
             return;
         }
@@ -56,16 +74,42 @@ public class ZeyWinAdsWebChromeClient extends WebChromeClient {
         });
     }
 
-    @Override
-    public void onPermissionRequestCanceled(PermissionRequest request) {
-        super.onPermissionRequestCanceled(request);
-        if (request != null) {
-            try {
-                request.deny();
-            } catch (Exception ignored) {
-                // PermissionRequest may already be closed by WebView.
-            }
+    private static void denyQuietly(PermissionRequest request) {
+        if (request == null) {
+            return;
         }
+
+        try {
+            request.deny();
+        } catch (Exception ignored) {
+            // PermissionRequest may already be closed by WebView.
+        }
+    }
+
+    @Override
+    public boolean onShowFileChooser(
+        WebView webView,
+        final ValueCallback<Uri[]> filePathCallback,
+        final WebChromeClient.FileChooserParams fileChooserParams
+    ) {
+        final Activity activity = UnityPlayer.currentActivity;
+        if (activity == null) {
+            filePathCallback.onReceiveValue(null);
+            return true;
+        }
+
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                ZeyWinAdsFileChooserFragment fragment = ZeyWinAdsFileChooserFragment.attach(activity);
+                if (fragment == null) {
+                    filePathCallback.onReceiveValue(null);
+                    return;
+                }
+                fragment.showChooser(fileChooserParams, filePathCallback);
+            }
+        });
+        return true;
     }
 
     @Override
@@ -83,7 +127,7 @@ public class ZeyWinAdsWebChromeClient extends WebChromeClient {
         return true;
     }
 
-    private void waitForAndroidPermissions(
+    private static void waitForAndroidPermissions(
         final Activity activity,
         final PermissionRequest request,
         final String[] resources,
@@ -190,6 +234,43 @@ public class ZeyWinAdsWebChromeClient extends WebChromeClient {
             @Override
             public void onCloseWindow(WebView window) {
                 destroyChild(child);
+            }
+
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                handlePermissionRequest(request);
+            }
+
+            @Override
+            public void onPermissionRequestCanceled(PermissionRequest request) {
+                super.onPermissionRequestCanceled(request);
+                denyQuietly(request);
+            }
+
+            @Override
+            public boolean onShowFileChooser(
+                WebView webView,
+                final ValueCallback<Uri[]> filePathCallback,
+                final WebChromeClient.FileChooserParams fileChooserParams
+            ) {
+                final Activity activity = UnityPlayer.currentActivity;
+                if (activity == null) {
+                    filePathCallback.onReceiveValue(null);
+                    return true;
+                }
+
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        ZeyWinAdsFileChooserFragment fragment = ZeyWinAdsFileChooserFragment.attach(activity);
+                        if (fragment == null) {
+                            filePathCallback.onReceiveValue(null);
+                            return;
+                        }
+                        fragment.showChooser(fileChooserParams, filePathCallback);
+                    }
+                });
+                return true;
             }
         });
 
