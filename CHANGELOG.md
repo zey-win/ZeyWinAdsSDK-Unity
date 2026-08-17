@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.55
+
+- Fixed `getUserMedia()` microphone capture inside ZeyWin-owned WebViews failing with
+  `NotReadableError` even after the permission prompt was granted. Chromium's Android audio
+  manager requires `MODIFY_AUDIO_SETTINGS` in addition to `RECORD_AUDIO` before it will select a
+  recording device; the manifest now declares both. Also fixed `getUserMedia()` hanging forever
+  with no dialog and no error when called from a page opened in a popup WebView (`window.open()`/
+  `target="_blank"`) — that popup's chrome client never handled `onPermissionRequest` at all.
+
 ## 3.9.54
 
 - Fixed `OpenClickUrl` blocking every ad click SDK-wide for an hour after any single Play Store
