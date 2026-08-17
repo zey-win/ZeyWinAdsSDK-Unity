@@ -220,79 +220,133 @@ namespace ZeyWinAds.Ads
                 return;
             }
 
-            // Cooldown check: prevent repeated store redirects within 1 hour
-            if (!CanRedirectToStore())
-            {
-                Logger.Log("OpenClickUrl: store redirect skipped - cooldown active");
-                return;
-            }
-
             TrackClick();
 
             // Cross-app referral: store_url = Play Store link, click_url = offer for target app
             if (!string.IsNullOrEmpty(AdData.store_url))
             {
                 string targetBundleId = UrlHelper.ExtractBundleIdFromPlayStoreUrl(AdData.store_url);
+
+                // Cooldown never blocks the link — it only stops us from registering a
+                // second referral click for the same target within the hour. A repeat
+                // tap reopens the very same Play Store URL with the click_id we already
+                // registered, so attribution stays on the first click.
+                if (!CanRedirectToStore(targetBundleId))
+                {
+                    string cachedClickId = CachedClickId(targetBundleId);
+                    Logger.Log("OpenClickUrl: reopening store with the click registered earlier");
+                    Application.OpenURL(string.IsNullOrEmpty(cachedClickId)
+                        ? AdData.store_url
+                        : UrlHelper.AppendReferrer(AdData.store_url, cachedClickId));
+                    return;
+                }
+
                 if (!string.IsNullOrEmpty(targetBundleId))
                 {
-                    // Register click, get click_id, append as referrer, then open Play Store
+                    // Register click, get click_id, append as referrer, then open Play Store.
+                    // The cooldown is stamped there, on a click we actually registered.
                     RegisterReferralClickAndOpen(AdData.ad_id, AdData.click_url, targetBundleId, AdData.store_url);
-                    RecordStoreRedirect();
                 }
                 else
                 {
                     Application.OpenURL(AdData.store_url);
-                    RecordStoreRedirect();
-                }
-            }
-            else if (!string.IsNullOrEmpty(AdData.click_url))
-            {
-                if (AdData.lock_webview)
-                {
-                    Logger.Log("Opening click URL with lock_webview");
-                    WebViewLock.Lock(AdData.click_url);
-                }
-                else
-                {
-                    Application.OpenURL(AdData.click_url);
+                    RecordStoreRedirect(targetBundleId);
                 }
             }
             else
             {
-                Logger.Warn("No URL available to open");
+                OpenOfferUrl();
             }
         }
 
         /// <summary>
-        /// Checks if we can redirect to store (respects 1-hour cooldown).
+        /// Opens the plain offer URL (webview or browser). Never touches the store
+        /// cooldown — offers are not store redirects.
         /// </summary>
-        private static bool CanRedirectToStore()
+        private void OpenOfferUrl()
         {
-            const string LastRedirectUtcKey = "zeywinads_last_redirect_utc";
-            const long CooldownSeconds = 3600L; // 1 hour cooldown
-
-            if (PlayerPrefs.HasKey(LastRedirectUtcKey))
+            if (string.IsNullOrEmpty(AdData?.click_url))
             {
-                if (long.TryParse(PlayerPrefs.GetString(LastRedirectUtcKey), out long lastRedirectUtc))
-                {
-                    long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-                    if (now - lastRedirectUtc < 3600L)
-                    {
-                        return false;
-                    }
-                }
+                Logger.Warn("No URL available to open");
+                return;
+            }
+
+            if (AdData.lock_webview)
+            {
+                Logger.Log("Opening click URL with lock_webview");
+                WebViewLock.Lock(AdData.click_url);
+            }
+            else
+            {
+                Application.OpenURL(AdData.click_url);
+            }
+        }
+
+        private const string LastRedirectUtcKeyPrefix = "zeywinads_last_redirect_utc";
+        private const long StoreRedirectCooldownSeconds = 3600L; // 1 hour per target app
+
+        /// <summary>
+        /// Cooldown is stored per target bundle, so a redirect to one app never
+        /// silences banners pointing at another. Targets we cannot parse out of the
+        /// store URL share the legacy global key.
+        /// </summary>
+        private static string LastRedirectKeyFor(string targetBundleId)
+        {
+            return string.IsNullOrEmpty(targetBundleId)
+                ? LastRedirectUtcKeyPrefix
+                : LastRedirectUtcKeyPrefix + "_" + targetBundleId;
+        }
+
+        /// <summary>
+        /// Checks if we can redirect to the store for this target (1-hour cooldown).
+        /// </summary>
+        private static bool CanRedirectToStore(string targetBundleId)
+        {
+            string key = LastRedirectKeyFor(targetBundleId);
+            if (!PlayerPrefs.HasKey(key)) return true;
+
+            if (long.TryParse(PlayerPrefs.GetString(key), out long lastRedirectUtc))
+            {
+                long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
+                // A clock moved backwards would otherwise hold the cooldown forever.
+                if (now < lastRedirectUtc) return true;
+                if (now - lastRedirectUtc < StoreRedirectCooldownSeconds) return false;
             }
             return true;
         }
 
         /// <summary>
-        /// Records the current time as the last store redirect time.
+        /// Records the current time as the last store redirect time for this target.
         /// </summary>
-        private static void RecordStoreRedirect()
+        private static void RecordStoreRedirect(string targetBundleId)
         {
-            const string LastRedirectUtcKey = "zeywinads_last_redirect_utc";
             long now = DateTimeOffset.UtcNow.ToUnixTimeSeconds();
-            PlayerPrefs.SetString(LastRedirectUtcKey, now.ToString());
+            PlayerPrefs.SetString(LastRedirectKeyFor(targetBundleId), now.ToString());
+            PlayerPrefs.Save();
+        }
+
+        private const string LastClickIdKeyPrefix = "zeywinads_last_click_id";
+
+        private static string LastClickIdKeyFor(string targetBundleId)
+        {
+            return string.IsNullOrEmpty(targetBundleId)
+                ? LastClickIdKeyPrefix
+                : LastClickIdKeyPrefix + "_" + targetBundleId;
+        }
+
+        /// <summary>
+        /// The click_id registered for this target, reused as the Play referrer while
+        /// the cooldown is active so repeat taps keep the original attribution.
+        /// </summary>
+        private static string CachedClickId(string targetBundleId)
+        {
+            return PlayerPrefs.GetString(LastClickIdKeyFor(targetBundleId), "");
+        }
+
+        private static void RememberClickId(string targetBundleId, string clickId)
+        {
+            if (string.IsNullOrEmpty(clickId)) return;
+            PlayerPrefs.SetString(LastClickIdKeyFor(targetBundleId), clickId);
             PlayerPrefs.Save();
         }
 
@@ -325,12 +379,17 @@ namespace ZeyWinAds.Ads
                     onSuccess: (resp) =>
                     {
                         Logger.Debug("Click registered");
+                        // Remember the click so repeat taps within the cooldown reopen the
+                        // store with this same referrer instead of registering another one.
+                        RememberClickId(targetBundleId, resp.click_id);
+                        RecordStoreRedirect(targetBundleId);
                         // Append click_id as referrer to Play Store URL
                         string urlWithReferrer = UrlHelper.AppendReferrer(storeUrl, resp.click_id);
                         Application.OpenURL(urlWithReferrer);
                     },
                     onError: (err) =>
                     {
+                        // No cooldown stamp: nothing was registered, so the next tap retries.
                         Logger.Warn("Click registration failed: {0}", err);
                         Application.OpenURL(storeUrl);
                     }

@@ -2,6 +2,14 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.54
+
+- Fixed `OpenClickUrl` blocking every ad click SDK-wide for an hour after any single Play Store
+  redirect. The 1-hour cooldown now only applies to repeat Play Store redirects for the *same
+  target app* (keyed by target bundle ID, not global), and no longer suppresses click tracking or
+  plain `click_url` offers. While the cooldown is active, a repeat tap still reopens the store
+  using the previously registered `click_id` instead of silently doing nothing.
+
 ## 3.9.53
 
 - `/device/report` heartbeat payloads (`Send`, the motion follow-up, and `SendStartupHeartbeat`) now
