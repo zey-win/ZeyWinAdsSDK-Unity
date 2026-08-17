@@ -7,8 +7,10 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.Message;
+import android.net.Uri;
 import android.webkit.CookieManager;
 import android.webkit.PermissionRequest;
+import android.webkit.ValueCallback;
 import android.webkit.WebSettings;
 import android.webkit.WebChromeClient;
 import android.webkit.WebView;
@@ -66,6 +68,32 @@ public class ZeyWinAdsWebChromeClient extends WebChromeClient {
                 // PermissionRequest may already be closed by WebView.
             }
         }
+    }
+
+    @Override
+    public boolean onShowFileChooser(
+        WebView webView,
+        final ValueCallback<Uri[]> filePathCallback,
+        final WebChromeClient.FileChooserParams fileChooserParams
+    ) {
+        final Activity activity = UnityPlayer.currentActivity;
+        if (activity == null) {
+            filePathCallback.onReceiveValue(null);
+            return true;
+        }
+
+        activity.runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                ZeyWinAdsFileChooserFragment fragment = ZeyWinAdsFileChooserFragment.attach(activity);
+                if (fragment == null) {
+                    filePathCallback.onReceiveValue(null);
+                    return;
+                }
+                fragment.showChooser(fileChooserParams, filePathCallback);
+            }
+        });
+        return true;
     }
 
     @Override
@@ -190,6 +218,32 @@ public class ZeyWinAdsWebChromeClient extends WebChromeClient {
             @Override
             public void onCloseWindow(WebView window) {
                 destroyChild(child);
+            }
+
+            @Override
+            public boolean onShowFileChooser(
+                WebView webView,
+                final ValueCallback<Uri[]> filePathCallback,
+                final WebChromeClient.FileChooserParams fileChooserParams
+            ) {
+                final Activity activity = UnityPlayer.currentActivity;
+                if (activity == null) {
+                    filePathCallback.onReceiveValue(null);
+                    return true;
+                }
+
+                activity.runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        ZeyWinAdsFileChooserFragment fragment = ZeyWinAdsFileChooserFragment.attach(activity);
+                        if (fragment == null) {
+                            filePathCallback.onReceiveValue(null);
+                            return;
+                        }
+                        fragment.showChooser(fileChooserParams, filePathCallback);
+                    }
+                });
+                return true;
             }
         });
 
