@@ -214,10 +214,7 @@ namespace ZeyWinAds
 
             if (blockReason == "none")
             {
-                if (Core.AndroidDeviceProfile.IsStartupAdPreloadConstrained)
-                    Core.Logger.Warn("Startup interstitial warmup skipped for compatibility: {0}", Core.AndroidDeviceProfile.StartupAdPreloadConstraintReason);
-                else
-                    WarmStartupInterstitial(preloadSettings);
+                WarmStartupInterstitial(preloadSettings);
             }
 
             // CrashGuard is an optional sibling package auto-installed via CrashGuardBootstrap.
@@ -341,17 +338,7 @@ namespace ZeyWinAds
                 return;
             }
 
-            if (Core.AndroidDeviceProfile.IsStartupAdPreloadConstrained)
-            {
-                Core.Logger.Warn(
-                    "Secondary SDK surface preload delayed for compatibility; ZeyWin checks and startup offer continue first: {0}",
-                    Core.AndroidDeviceProfile.StartupAdPreloadConstraintReason);
-                ConfigureRuntime(null, false);
-            }
-            else
-            {
-                StartAutomaticSurfacePreload();
-            }
+            StartAutomaticSurfacePreload();
 
             StartStartupReferralCheck();
             StartStartupOfferFlow();

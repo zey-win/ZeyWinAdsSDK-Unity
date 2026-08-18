@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.57
+
+- Removed the low-memory startup guard (`AndroidDeviceProfile.IsStartupAdPreloadConstrained`, added in
+  3.x for "deferring" ad preload on low-RAM Android devices). In practice it didn't defer anything — on
+  any device under the RAM threshold (default 4096MB), it permanently skipped `AdLoader.OnSDKInitialize()`
+  (and therefore the entire automatic preload/auto-show path, including popup) for the whole session, with
+  no retry despite the log wording implying one. AdMob's own startup init/preload was silently skipped the
+  same way. Both now always run normally regardless of device memory.
+
 ## 3.9.56
 
 - Fixed the popup ad's second button (right-hand, primary-styled) not opening the ad's click URL —
