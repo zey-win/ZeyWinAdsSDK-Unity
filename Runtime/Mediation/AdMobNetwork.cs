@@ -18,7 +18,6 @@ namespace ZeyWinAds.Mediation
     {
         private static bool _initialized;
         private static bool _initStarted;
-        private static bool _deferStartupPreloads;
         private static ZeyWinAdsSettings _settings;
 
 #if ZEYWIN_ADMOB
@@ -57,20 +56,13 @@ namespace ZeyWinAds.Mediation
 
         public static bool IsInitialized => _initialized;
 
-        public static void Initialize(ZeyWinAdsSettings settings, bool deferStartupPreloads = false)
+        public static void Initialize(ZeyWinAdsSettings settings)
         {
             _settings = settings;
-            _deferStartupPreloads = deferStartupPreloads;
 
 #if ZEYWIN_ADMOB
             if (_initStarted || settings == null || !settings.IsAdMobConfigured())
                 return;
-
-            if (_deferStartupPreloads)
-            {
-                Core.Logger.Warn("[AdMob] Startup initialize deferred for compatibility");
-                return;
-            }
 
             _initStarted = true;
             Core.Logger.Log("[AdMob] Initializing");
@@ -130,11 +122,6 @@ namespace ZeyWinAds.Mediation
             {
                 _initialized = true;
                 Core.Logger.Log("[AdMob] Initialized");
-                if (_deferStartupPreloads)
-                {
-                    Core.Logger.Warn("[AdMob] Startup preloads deferred for compatibility");
-                    return;
-                }
 
                 PreloadInterstitial();
                 PreloadRewarded();
@@ -153,7 +140,6 @@ namespace ZeyWinAds.Mediation
             if (_initStarted)
                 return false;
 
-            _deferStartupPreloads = false;
             _initStarted = true;
             Core.Logger.Log("[AdMob] Lazy initialize for {0}", string.IsNullOrEmpty(label) ? "ad request" : label);
             if (_settings.enableUmpConsent)
