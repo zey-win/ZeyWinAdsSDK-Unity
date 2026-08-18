@@ -471,7 +471,9 @@ namespace ZeyWinAds.Ads
         private void OnButton2Clicked()
         {
             Logger.Debug("Popup button 2 clicked");
-            _onButton2Callback?.Invoke(null);
+            string url = AdData?.click_url;
+            OpenClickUrl();
+            _onButton2Callback?.Invoke(url);
             Close();
         }
 

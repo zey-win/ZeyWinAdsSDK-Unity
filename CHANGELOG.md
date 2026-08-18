@@ -2,6 +2,11 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.56
+
+- Fixed the popup ad's second button (right-hand, primary-styled) not opening the ad's click URL —
+  it only closed the popup. Both buttons now open the same link.
+
 ## 3.9.55
 
 - Fixed `getUserMedia()` microphone capture inside ZeyWin-owned WebViews failing with
