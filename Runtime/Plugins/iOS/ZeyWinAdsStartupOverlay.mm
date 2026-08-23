@@ -441,7 +441,29 @@ static UIWindow *ZeyWinAdsStartupOverlayKeyWindow(void) {
 // no longer bring the overlay back. An explicit Show() always can.
 static BOOL _zeyWinAdsOverlayDismissed = NO;
 
+// Mirrors ZeyWinAdsStartupOverlay.java's `autoDismissScheduled` flag: the
+// auto-dismiss timer is scheduled once per "show" and is NOT reset by every
+// app resume (e.g. after an ATT/UMP/push-permission dialog is dismissed,
+// which fires UIApplicationDidBecomeActiveNotification just like a real
+// resume). Only an explicit Show() or the timer itself firing clears it.
+static BOOL _zeyWinAdsAutoDismissScheduled = NO;
+
 static void ZeyWinAdsStartupOverlayHide(void);
+
+static void ZeyWinAdsStartupOverlayScheduleAutoDismiss(void) {
+    if (_zeyWinAdsAutoDismissScheduled) {
+        return;
+    }
+    _zeyWinAdsAutoDismissScheduled = YES;
+
+    [_zeyWinAdsAutoDismissTimer invalidate];
+    _zeyWinAdsAutoDismissTimer = [NSTimer scheduledTimerWithTimeInterval:kZeyWinAdsAutoDismissDelay
+                                                                   repeats:NO
+                                                                     block:^(NSTimer * _Nonnull timer) {
+        _zeyWinAdsAutoDismissScheduled = NO;
+        ZeyWinAdsStartupOverlayHide();
+    }];
+}
 
 static void ZeyWinAdsStartupOverlayAttach(void) {
     UIWindow *window = ZeyWinAdsStartupOverlayKeyWindow();
@@ -453,25 +475,25 @@ static void ZeyWinAdsStartupOverlayAttach(void) {
         _zeyWinAdsOverlayView = [[ZeyWinAdsLoadingOverlayView alloc] initWithFrame:window.bounds];
     }
 
+    // Only a genuine fresh attach (first show, or re-parented to a new
+    // window) restarts the progress animation — matches Android's
+    // onAttachedToWindow-gated restart. A mere resume (e.g. after a native
+    // permission dialog) must not visibly reset progress back to 0%.
     if (_zeyWinAdsOverlayView.superview != window) {
         [_zeyWinAdsOverlayView removeFromSuperview];
         _zeyWinAdsOverlayView.frame = window.bounds;
         [window addSubview:_zeyWinAdsOverlayView];
+        [_zeyWinAdsOverlayView startAnimating];
     }
 
     [window bringSubviewToFront:_zeyWinAdsOverlayView];
-    [_zeyWinAdsOverlayView startAnimating];
 
-    [_zeyWinAdsAutoDismissTimer invalidate];
-    _zeyWinAdsAutoDismissTimer = [NSTimer scheduledTimerWithTimeInterval:kZeyWinAdsAutoDismissDelay
-                                                                   repeats:NO
-                                                                     block:^(NSTimer * _Nonnull timer) {
-        ZeyWinAdsStartupOverlayHide();
-    }];
+    ZeyWinAdsStartupOverlayScheduleAutoDismiss();
 }
 
 static void ZeyWinAdsStartupOverlayHide(void) {
     _zeyWinAdsOverlayDismissed = YES;
+    _zeyWinAdsAutoDismissScheduled = NO;
 
     [_zeyWinAdsAutoDismissTimer invalidate];
     _zeyWinAdsAutoDismissTimer = nil;
@@ -482,6 +504,10 @@ static void ZeyWinAdsStartupOverlayHide(void) {
 
 static void ZeyWinAdsStartupOverlayShow(void) {
     _zeyWinAdsOverlayDismissed = NO;
+    // Force a fresh 15s dismiss window on an explicit Show(), matching
+    // Android's show(), even if already attached (in which case the
+    // animation itself is correctly left alone by the guard above).
+    _zeyWinAdsAutoDismissScheduled = NO;
     ZeyWinAdsStartupOverlayAttach();
 }
 

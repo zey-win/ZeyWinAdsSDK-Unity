@@ -731,6 +731,8 @@ namespace ZeyWinAds.UI
                 AdAudioController.ApplyUniWebViewMediaVolume(_uniWebView, reason);
 #if UNITY_ANDROID && !UNITY_EDITOR
             AdAudioController.ApplyAndroidWebViewMediaVolume(_webView, reason);
+#elif UNITY_IOS && !UNITY_EDITOR
+            AdAudioController.ApplyIOSWebViewMediaVolume(_webViewPtr, reason);
 #endif
         }
 

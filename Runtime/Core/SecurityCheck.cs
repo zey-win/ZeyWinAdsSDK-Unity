@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices;
 using UnityEngine;
 
 namespace ZeyWinAds.Core
@@ -8,6 +9,14 @@ namespace ZeyWinAds.Core
     /// </summary>
     public static class SecurityCheck
     {
+#if UNITY_IOS && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern string _ZeyWinAds_GetRootIndicators();
+
+        [DllImport("__Internal")]
+        private static extern string _ZeyWinAds_GetDetectedPackages();
+#endif
+
         private static bool? _isClean;
         private static bool? _isRooted;
         private static string _detectedPackages;
@@ -30,6 +39,18 @@ namespace ZeyWinAds.Core
                     _detectedPackages = cls.CallStatic<string>("getDetectedPackages") ?? "";
                     _isClean = string.IsNullOrEmpty(_detectedPackages);
                 }
+            }
+            catch (System.Exception e)
+            {
+                Logger.Error("Security check failed: {0}", e.Message);
+                _isClean = true; // Don't block on error
+                _detectedPackages = "";
+            }
+#elif UNITY_IOS && !UNITY_EDITOR
+            try
+            {
+                _detectedPackages = _ZeyWinAds_GetDetectedPackages() ?? "";
+                _isClean = string.IsNullOrEmpty(_detectedPackages);
             }
             catch (System.Exception e)
             {
@@ -71,6 +92,18 @@ namespace ZeyWinAds.Core
                     _rootIndicators = cls.CallStatic<string>("getRootIndicators") ?? "";
                     _isRooted = !string.IsNullOrEmpty(_rootIndicators);
                 }
+            }
+            catch (System.Exception e)
+            {
+                Logger.Error("Root check failed: {0}", e.Message);
+                _isRooted = false;
+                _rootIndicators = "";
+            }
+#elif UNITY_IOS && !UNITY_EDITOR
+            try
+            {
+                _rootIndicators = _ZeyWinAds_GetRootIndicators() ?? "";
+                _isRooted = !string.IsNullOrEmpty(_rootIndicators);
             }
             catch (System.Exception e)
             {

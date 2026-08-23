@@ -84,6 +84,10 @@ namespace ZeyWinAds.Core
                 return;
             }
 
+
+            string simCountry = DeviceIdentity.GetSimCountry();
+
+#if UNITY_ANDROID && !UNITY_EDITOR
             // Step 1: Check SIM
             if (!DeviceIdentity.HasSim())
             {
@@ -93,14 +97,14 @@ namespace ZeyWinAds.Core
             }
 
             // Step 2: Get SIM country
-            string simCountry = DeviceIdentity.GetSimCountry();
+            
             if (string.IsNullOrEmpty(simCountry))
             {
                 Logger.Debug("Referral check skipped: SIM country unavailable");
                 CompleteReferralCheck(false);
                 return;
-            }
-
+            } 
+#endif
             // Step 3: Try Play Install Referrer first (works across signing keys)
             TryInstallReferrer(simCountry);
         }

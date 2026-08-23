@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Runtime.InteropServices;
 using UnityEngine;
 
 #if ZEYWIN_ADMOB
@@ -199,6 +200,45 @@ namespace ZeyWinAds.Core
             catch (Exception e)
             {
                 Logger.Warn("Не удалось применить громкость media в Android WebView: {0}", e.Message);
+            }
+        }
+#endif
+
+#if UNITY_IOS && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern void _ZeyWinAds_EvaluateJavaScript(IntPtr webViewPtr, string js);
+
+        [DllImport("__Internal")]
+        private static extern void _ZeyWinAds_EvaluateHtmlAdJavaScript(string js);
+
+        /// <summary>Used by WebViewLock, which holds a pointer to its native WKWebView controller.</summary>
+        public static void ApplyIOSWebViewMediaVolume(IntPtr webViewPtr, string reason)
+        {
+            if (webViewPtr == IntPtr.Zero)
+                return;
+
+            try
+            {
+                _ZeyWinAds_EvaluateJavaScript(webViewPtr, WebMediaVolumeJavascript());
+                Logger.Debug("Громкость media в iOS WebView применена: {0}", SafeReason(reason));
+            }
+            catch (Exception e)
+            {
+                Logger.Warn("Не удалось выполнить JS громкости media в iOS WebView: {0}", e.Message);
+            }
+        }
+
+        /// <summary>Used by HtmlAdView, which addresses its single native WKWebView by a static handle.</summary>
+        public static void ApplyIOSHtmlAdMediaVolume(string reason)
+        {
+            try
+            {
+                _ZeyWinAds_EvaluateHtmlAdJavaScript(WebMediaVolumeJavascript());
+                Logger.Debug("Громкость media в iOS HTML Ad WebView применена: {0}", SafeReason(reason));
+            }
+            catch (Exception e)
+            {
+                Logger.Warn("Не удалось выполнить JS громкости media в iOS HTML Ad WebView: {0}", e.Message);
             }
         }
 #endif

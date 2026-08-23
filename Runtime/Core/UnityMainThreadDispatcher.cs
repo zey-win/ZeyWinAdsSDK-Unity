@@ -71,6 +71,8 @@ namespace ZeyWinAds.Core
         public void OnZeyWinAdsATTStatus(string status)
         {
             Logger.Debug("ATT authorization status: {0}", status);
+            DeviceIdentity.OnATTStatusReceived(status);
+            AppTrackingTransparency.HandleNativeStatus(status);
         }
 
         public void OnMotionCollected(string json)

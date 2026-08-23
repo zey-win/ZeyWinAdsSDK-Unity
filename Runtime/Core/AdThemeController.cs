@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.InteropServices;
 using UnityEngine;
 
 namespace ZeyWinAds.Core
@@ -39,6 +40,11 @@ namespace ZeyWinAds.Core
 
     internal static class AdThemeController
     {
+#if UNITY_IOS && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern int _ZeyWinAds_IsDarkMode();
+#endif
+
         private const string ThemeRemoteConfigKey = "zeywin_ad_theme_mode";
         private static string _lastLogSignature;
 
@@ -62,13 +68,25 @@ namespace ZeyWinAds.Core
             if (mode == "light" || mode == "white" || mode == "day")
                 return false;
 
-            return TryReadAndroidSystemDarkTheme(out bool androidDark) && androidDark;
+            return TryReadSystemDarkTheme(out bool sysDark) && sysDark;
         }
 
+        private static bool TryReadSystemDarkTheme(out bool dark)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            return TryReadAndroidSystemDarkTheme(out dark);
+#elif UNITY_IOS && !UNITY_EDITOR
+            return TryReadIOSSystemDarkTheme(out dark);
+#else
+            dark = false;
+            return false;
+#endif
+        }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
         private static bool TryReadAndroidSystemDarkTheme(out bool dark)
         {
             dark = false;
-#if UNITY_ANDROID && !UNITY_EDITOR
             try
             {
                 using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
@@ -87,9 +105,26 @@ namespace ZeyWinAds.Core
             {
                 Logger.Debug("Ad theme Android system read failed: {0}", e.Message);
             }
-#endif
             return false;
         }
+#endif
+
+#if UNITY_IOS && !UNITY_EDITOR
+        private static bool TryReadIOSSystemDarkTheme(out bool dark)
+        {
+            dark = false;
+            try
+            {
+                dark = _ZeyWinAds_IsDarkMode() != 0;
+                return true;
+            }
+            catch (Exception e)
+            {
+                Logger.Debug("Ad theme iOS system read failed: {0}", e.Message);
+            }
+            return false;
+        }
+#endif
 
         private static AdThemePalette LightPalette()
         {

@@ -5,13 +5,98 @@
 // Forward declare UnitySendMessage
 extern "C" void UnitySendMessage(const char* obj, const char* method, const char* msg);
 
+#pragma mark - Popup handling (window.open / target="_blank")
+
+// Scheme-based routing for popup navigations, mirroring
+// ZeyWinAdsWebViewNavigation.java exactly (isWebUrl/shouldOpenExternally).
+static BOOL ZeyWinAdsHtmlIsWebUrl(NSString *url) {
+    if (!url) return NO;
+    NSString *lower = [url lowercaseString];
+    return [lower hasPrefix:@"http://"] || [lower hasPrefix:@"https://"] ||
+           [lower hasPrefix:@"about:"] || [lower hasPrefix:@"data:"] ||
+           [lower hasPrefix:@"javascript:"];
+}
+
+static BOOL ZeyWinAdsHtmlShouldOpenExternally(NSString *url) {
+    if (!url || url.length == 0 || ZeyWinAdsHtmlIsWebUrl(url)) return NO;
+    NSString *lower = [url lowercaseString];
+    static NSArray<NSString *> *externalPrefixes = nil;
+    if (!externalPrefixes) {
+        externalPrefixes = @[@"intent://", @"market://", @"tg://", @"telegram://",
+                              @"whatsapp://", @"viber://", @"mailto:", @"tel:", @"sms:"];
+    }
+    for (NSString *prefix in externalPrefixes) {
+        if ([lower hasPrefix:prefix]) return YES;
+    }
+    return NO;
+}
+
+static void ZeyWinAdsHtmlOpenExternal(NSString *url) {
+    NSURL *nsUrl = [NSURL URLWithString:url];
+    if (!nsUrl) return;
+    dispatch_async(dispatch_get_main_queue(), ^{
+        [[UIApplication sharedApplication] openURL:nsUrl options:@{} completionHandler:nil];
+    });
+}
+
+// Owns a single popup WKWebView created in response to window.open()/target="_blank".
+// Never attached to any view hierarchy — mirrors Android's hidden "child" WebView
+// in ZeyWinAdsWebChromeClient.configurePopupWebView.
+@interface ZeyWinAdsHtmlPopupWebView : NSObject <WKNavigationDelegate>
+@property (nonatomic, strong) WKWebView *webView;
+@property (nonatomic, weak) WKWebView *parentWebView;
+@property (nonatomic, copy) void (^onClose)(ZeyWinAdsHtmlPopupWebView *popup);
+@end
+
+@implementation ZeyWinAdsHtmlPopupWebView
+
+- (void)webView:(WKWebView *)webView decidePolicyForNavigationAction:(WKNavigationAction *)navigationAction decisionHandler:(void (^)(WKNavigationActionPolicy))decisionHandler {
+    NSString *url = navigationAction.request.URL.absoluteString;
+
+    if (ZeyWinAdsHtmlShouldOpenExternally(url)) {
+        ZeyWinAdsHtmlOpenExternal(url);
+        decisionHandler(WKNavigationActionPolicyCancel);
+        [self close];
+        return;
+    }
+
+    if (ZeyWinAdsHtmlIsWebUrl(url) && self.parentWebView) {
+        [self.parentWebView loadRequest:navigationAction.request];
+        decisionHandler(WKNavigationActionPolicyCancel);
+        [self close];
+        return;
+    }
+
+    decisionHandler(WKNavigationActionPolicyAllow);
+}
+
+// Fallback path mirroring Android's onPageFinished promotion, in case
+// decidePolicyForNavigationAction didn't already intercept.
+- (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
+    NSString *url = webView.URL.absoluteString;
+    if (ZeyWinAdsHtmlIsWebUrl(url) && self.parentWebView) {
+        [self.parentWebView loadRequest:[NSURLRequest requestWithURL:webView.URL]];
+        [self close];
+    }
+}
+
+- (void)close {
+    [self.webView stopLoading];
+    if (self.onClose) {
+        self.onClose(self);
+    }
+}
+
+@end
+
 #pragma mark - HTML Ad ViewController
 
-@interface ZeyWinAdsHtmlViewController : UIViewController <WKNavigationDelegate, WKScriptMessageHandler>
+@interface ZeyWinAdsHtmlViewController : UIViewController <WKNavigationDelegate, WKScriptMessageHandler, WKUIDelegate>
 @property (nonatomic, strong) WKWebView *webView;
 @property (nonatomic, strong) UIView *loadingOverlay;
 @property (nonatomic, strong) NSString *mediaUrl;
 @property (nonatomic, copy) NSString *gameObjectName;
+@property (nonatomic, strong) NSMutableSet<ZeyWinAdsHtmlPopupWebView *> *activePopups;
 @end
 
 @implementation ZeyWinAdsHtmlViewController
@@ -19,6 +104,7 @@ extern "C" void UnitySendMessage(const char* obj, const char* method, const char
 - (void)viewDidLoad {
     [super viewDidLoad];
     self.view.backgroundColor = [UIColor blackColor];
+    self.activePopups = [NSMutableSet set];
 
     // Configure WKWebView with JS bridge
     WKUserContentController *contentController = [[WKUserContentController alloc] init];
@@ -28,6 +114,7 @@ extern "C" void UnitySendMessage(const char* obj, const char* method, const char
     config.userContentController = contentController;
     config.allowsInlineMediaPlayback = YES;
     config.mediaTypesRequiringUserActionForPlayback = WKAudiovisualMediaTypeNone;
+    config.preferences.javaScriptCanOpenWindowsAutomatically = YES;
 
     // Inject JS bridge at document start
     NSString *bridgeJS = @"window.ZeyWinAds = {"
@@ -43,6 +130,7 @@ extern "C" void UnitySendMessage(const char* obj, const char* method, const char
     self.webView = [[WKWebView alloc] initWithFrame:self.view.bounds configuration:config];
     self.webView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
     self.webView.navigationDelegate = self;
+    self.webView.UIDelegate = self;
     self.webView.scrollView.bounces = NO;
     [self.view addSubview:self.webView];
     [self addLoadingOverlay];
@@ -74,6 +162,39 @@ extern "C" void UnitySendMessage(const char* obj, const char* method, const char
                                                    options:@{}
                                          completionHandler:nil];
             });
+        }
+    }
+}
+
+#pragma mark - WKUIDelegate (popup handling)
+
+- (WKWebView *)webView:(WKWebView *)webView createWebViewWithConfiguration:(WKWebViewConfiguration *)configuration forNavigationAction:(WKNavigationAction *)navigationAction windowFeatures:(WKWindowFeatures *)windowFeatures {
+    // Must be created with the given configuration (shares the requesting
+    // page's process/state) and never attached to a view hierarchy — matches
+    // Android's bare, unattached "child" WebView.
+    WKWebView *popupWebView = [[WKWebView alloc] initWithFrame:CGRectZero configuration:configuration];
+
+    ZeyWinAdsHtmlPopupWebView *popup = [[ZeyWinAdsHtmlPopupWebView alloc] init];
+    popup.webView = popupWebView;
+    popup.parentWebView = webView;
+    popupWebView.navigationDelegate = popup;
+
+    __weak ZeyWinAdsHtmlViewController *weakSelf = self;
+    popup.onClose = ^(ZeyWinAdsHtmlPopupWebView *closedPopup) {
+        [weakSelf.activePopups removeObject:closedPopup];
+    };
+
+    // Retain the popup so it isn't deallocated mid-navigation.
+    [self.activePopups addObject:popup];
+
+    return popupWebView;
+}
+
+- (void)webViewDidClose:(WKWebView *)webView {
+    for (ZeyWinAdsHtmlPopupWebView *popup in [self.activePopups copy]) {
+        if (popup.webView == webView) {
+            [popup close];
+            break;
         }
     }
 }
@@ -219,6 +340,20 @@ void _ZeyWinAds_ShowHtmlAd(const char* url, const char* gameObjectName) {
             rootVC = rootVC.presentedViewController;
         }
         [rootVC presentViewController:_htmlAdVC animated:NO completion:nil];
+    });
+}
+
+void _ZeyWinAds_EvaluateHtmlAdJavaScript(const char* js) {
+    if (js == NULL) {
+        return;
+    }
+
+    NSString *jsString = [NSString stringWithUTF8String:js];
+
+    dispatch_async(dispatch_get_main_queue(), ^{
+        if (_htmlAdVC && _htmlAdVC.webView) {
+            [_htmlAdVC.webView evaluateJavaScript:jsString completionHandler:nil];
+        }
     });
 }
 

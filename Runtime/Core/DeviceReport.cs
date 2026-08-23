@@ -133,8 +133,8 @@ namespace ZeyWinAds.Core
         /// <summary>
         /// Collects ~2s of motion data and resends the exact same report body plus a
         /// "motion" block. Fire-and-forget: response ignored, never retried, sent at most
-        /// once per app session. No-ops on non-Android platforms (MotionCollector.Collect
-        /// never invokes its callback there).
+        /// once per app session. Implemented on Android and iOS; platforms without a
+        /// native implementation send an empty/zeroed motion block instead.
         /// </summary>
         private static void SendMotionFollowUp(string deviceId, string bundleId, bool hasSim, string simCountry, string detectedPackages, bool deviceClean, string sdkStatus, string blockReason, string deviceModel, string osVersion)
         {

@@ -74,6 +74,7 @@ namespace ZeyWinAds
         private const int DefaultPopupFirstShowDelaySeconds = 20;
         private const int DefaultPopupRepeatDelaySeconds = 60;
         private const float StartupLoadingMaxVisibleSeconds = 8f;
+        private const float AdMobConsentTimeoutSeconds = 8f;
         private static int _popupFirstShowDelaySeconds = DefaultPopupFirstShowDelaySeconds;
         private static int _popupRepeatDelaySeconds = DefaultPopupRepeatDelaySeconds;
         private static bool _popupScheduleOverrideConfigured;
@@ -209,8 +210,15 @@ namespace ZeyWinAds
                 blockReason = "root_access";
             else if (!deviceClean)
                 blockReason = "suspicious_apps";
+#if UNITY_ANDROID && !UNITY_EDITOR
+            // SIM checks are Android-only anti-fraud; iOS never has SIM data
+            // locally and relies on the backend's no-SIM pass-through instead.
             else if (!hasSim)
                 blockReason = "no_sim";
+#endif
+
+            Core.Logger.Log("Startup check: isRooted={0} rootIndicators='{1}' deviceClean={2} detectedPackages='{3}' hasSim={4} simCountry='{5}' -> blockReason={6}",
+                isRooted, rootIndicators, deviceClean, detectedPackages, hasSim, simCountry, blockReason);
 
             if (blockReason == "none")
             {
@@ -221,14 +229,50 @@ namespace ZeyWinAds
             // Soft-call via reflection so ZeyWinAds compiles even if the user removed it.
             TryStartCrashGuard();
 
-            Core.AppTrackingTransparency.RequestIfEnabled();
+            // Wait for ATT to resolve before starting AdMob/Firebase — iOS can
+            // drop/interrupt an in-flight system prompt when another one is
+            // requested before the first is dismissed. AdMob and Firebase are
+            // then started independently (not chained) so a stuck or failing
+            // AdMob/UMP consent flow can never prevent Firebase from
+            // initializing — a timeout guarantees startFirebaseOnce still runs
+            // even if AdMediator's callback never fires.
+            Core.AppTrackingTransparency.RequestIfEnabled(attStatus =>
+            {
+                bool firebaseStarted = false;
+                Action startFirebaseOnce = () =>
+                {
+                    if (firebaseStarted) return;
+                    firebaseStarted = true;
+                    // Guarded so a Firebase failure can never propagate back into
+                    // AdMediator's callback chain (this can run from inside it) or
+                    // otherwise break the caller.
+                    try
+                    {
+                        Core.FirebaseMessagingService.Initialize();
+                    }
+                    catch (Exception e)
+                    {
+                        Core.Logger.Error("Firebase initialize failed: {0}", e.Message);
+                    }
+                };
 
-            // AdMob runs in parallel and is NOT gated by anti-fraud — even if our SDK
-            // blocks the device, AdMob fallback should keep monetizing.
-            AdMediator.Initialize();
+                // AdMob runs in parallel and is NOT gated by anti-fraud — even if our SDK
+                // blocks the device, AdMob fallback should keep monetizing.
+                try
+                {
+                    AdMediator.Initialize(startFirebaseOnce);
+                }
+                catch (Exception e)
+                {
+                    Core.Logger.Error("AdMediator initialize failed: {0}", e.Message);
+                    startFirebaseOnce();
+                }
+
+                Core.UnityMainThreadDispatcher.Instance.StartCoroutine(
+                    FirebaseInitTimeoutFallback(AdMobConsentTimeoutSeconds, startFirebaseOnce));
+            });
             Core.AndroidRuntimePermissions.ScheduleNotificationPermissionPrompt();
             Core.NotificationPopupSuppressor.StartIfEnabled();
-            Core.FirebaseMessagingService.Initialize();
 
             // Capture Google Ads gclid from Play Install Referrer (one-shot, persists).
             // Used to enrich WebViewLock URLs with sub_id_4 for offline conversion uploads.
@@ -243,6 +287,7 @@ namespace ZeyWinAds
             // If already blocked locally, block ad requests and send report
             if (blockReason != "none")
             {
+                Debug.Log("Block reason: " + blockReason);
                 BlockDevice(blockReason);
                 HideStartupLoading();
                 ShowGoogleFallback(blockReason);
@@ -477,6 +522,17 @@ namespace ZeyWinAds
             _startupLoadingGeneration++;
             _startupLoadingTimeoutCoroutine = null;
             LoadingOverlay.ForceHide();
+        }
+
+        /// <summary>
+        /// Fires onTimeout if it hasn't already run by the time this elapses — a
+        /// backstop so a stuck AdMob/UMP consent flow can never permanently
+        /// prevent Firebase from initializing.
+        /// </summary>
+        private static System.Collections.IEnumerator FirebaseInitTimeoutFallback(float timeoutSeconds, Action onTimeout)
+        {
+            yield return new WaitForSecondsRealtime(timeoutSeconds);
+            onTimeout?.Invoke();
         }
 
         private static void RequestStartupGoogleFallback(string reason)
