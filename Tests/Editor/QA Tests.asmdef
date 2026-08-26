@@ -1,5 +1,5 @@
 {
-  "name": "ZeyWinAds.Tests.Editor",
+  "name": "QA Tests",
   "rootNamespace": "ZeyWinAds.Tests.Editor",
   "references": [
     "ZeyWinAds.Editor",
