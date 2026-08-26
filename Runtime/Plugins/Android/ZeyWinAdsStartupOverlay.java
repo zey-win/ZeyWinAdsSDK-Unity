@@ -17,6 +17,7 @@ public final class ZeyWinAdsStartupOverlay {
     private static WeakReference<Activity> currentActivity = new WeakReference<Activity>(null);
     private static ZeyWinAdsLoadingOverlay overlay;
     private static boolean dismissed;
+    private static boolean everShown;
     private static boolean autoDismissScheduled;
     private static int showGeneration;
 
@@ -70,6 +71,15 @@ public final class ZeyWinAdsStartupOverlay {
         }
     }
 
+    // True native visibility, for QA tooling to observe the real on-screen state rather than
+    // inferring it from which C# call sites fired (which can miss native-only dismiss paths
+    // like the auto-dismiss failsafe below).
+    public static boolean isVisible() {
+        synchronized (Lock) {
+            return everShown && !dismissed;
+        }
+    }
+
     public static void dismiss() {
         dismissImmediately();
     }
@@ -112,6 +122,7 @@ public final class ZeyWinAdsStartupOverlay {
             if (dismissed) {
                 return;
             }
+            everShown = true;
         }
 
         FrameLayout content = activity.findViewById(android.R.id.content);
