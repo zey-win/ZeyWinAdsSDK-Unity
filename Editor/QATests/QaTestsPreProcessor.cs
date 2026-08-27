@@ -24,15 +24,18 @@ namespace ZeyWinAds.Editor.QATests
                 return;
             }
 
-            List<string> errors = QaChecksRunner.RunAll()
+            List<string> failures = QaChecksRunner.RunAll()
                 .Where(result => !result.Passed)
-                .Select(result => result.Error)
+                .Select(result => $"{result.Name}: {result.Error}")
                 .ToList();
 
-            if (errors.Count > 0)
+            if (failures.Count > 0)
             {
+                // Single line, check name first: GitHub Actions' Annotations panel (and some
+                // other CI log viewers) truncate multi-line exception messages to their first
+                // line, which would otherwise hide which check actually failed and why.
                 throw new BuildFailedException(
-                    "QA checks failed:\n- " + string.Join("\n- ", errors));
+                    $"QA checks failed ({failures.Count}): " + string.Join(" | ", failures));
             }
         }
     }
