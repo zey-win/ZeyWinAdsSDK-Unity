@@ -17,10 +17,9 @@ namespace ZeyWinAds.Editor.QATests
         }
     }
 
-    // Single registry of every pre-build QA check (API level today, more later). Both
-    // QaTestsPreProcessor (build-blocking) and the "Run QA Checks" button in the
-    // ZeyWinAdsSettings inspector call RunAll() so there is exactly one place that lists which
-    // checks exist.
+    // Single registry of every pre-build QA check. Both QaTestsPreProcessor (build-blocking) and
+    // the "Run QA Checks" button in the ZeyWinAdsSettings inspector call RunAll() so there is
+    // exactly one place that lists which checks exist.
     public static class QaChecksRunner
     {
         public static List<QaCheckResult> RunAll()
@@ -29,7 +28,8 @@ namespace ZeyWinAds.Editor.QATests
             {
                 new QaCheckResult("Target SDK version", ApiLevelPolicy.ValidateTargetSdk()),
                 new QaCheckResult("Min SDK version", ApiLevelPolicy.ValidateMinSdk()),
-                // Future pre-build QA checks (e.g. adaptive icon) add another entry here.
+                new QaCheckResult("Managed stripping level", StrippingLevelPolicy.ValidateStrippingLevel()),
+                // Future pre-build QA checks add another entry here.
             };
             return results;
         }
