@@ -15,6 +15,7 @@ namespace ZeyWinAds.QATests
     internal static class LoadingOverlayDiagnostic
     {
         private const float BudgetSeconds = 15f;
+        private const float StartupTimeoutSeconds = 10f;
         private const float PollIntervalSeconds = 0.1f;
         private const string LogTag = "[ZeyWinAds QA]";
 
@@ -31,7 +32,10 @@ namespace ZeyWinAds.QATests
         private static IEnumerator PollLoop()
         {
             var wasVisible = false;
+            var everShown = false;
+            var reportedNeverAppeared = false;
             var shownAt = 0f;
+            var loopStartedAt = Time.realtimeSinceStartup;
 
             while (true)
             {
@@ -39,6 +43,7 @@ namespace ZeyWinAds.QATests
 
                 if (isVisible && !wasVisible)
                 {
+                    everShown = true;
                     shownAt = Time.realtimeSinceStartup;
                     Debug.Log($"{LogTag} LoadingOverlay shown");
                 }
@@ -53,6 +58,13 @@ namespace ZeyWinAds.QATests
                     {
                         Debug.LogWarning($"{LogTag} FAIL: LoadingOverlay shown for {elapsed:F2}s, exceeds {BudgetSeconds:F0}s budget");
                     }
+                }
+
+                if (!everShown && !reportedNeverAppeared &&
+                    Time.realtimeSinceStartup - loopStartedAt >= StartupTimeoutSeconds)
+                {
+                    Debug.LogWarning($"{LogTag} FAIL: LoadingOverlay never appeared within {StartupTimeoutSeconds:F0}s of app start");
+                    reportedNeverAppeared = true;
                 }
 
                 wasVisible = isVisible;
