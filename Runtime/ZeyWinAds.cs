@@ -212,6 +212,10 @@ namespace ZeyWinAds
             else if (!hasSim)
                 blockReason = "no_sim";
 
+            Debug.Log($"[ZeyWinAds QA] Local checks: hasSim={hasSim} simCountry='{simCountry}' " +
+                $"isRooted={isRooted} deviceClean={deviceClean} detectedPackages='{detectedPackages}' " +
+                $"-> blockReason={blockReason}");
+
             if (blockReason == "none")
             {
                 WarmStartupInterstitial(preloadSettings);
@@ -243,6 +247,8 @@ namespace ZeyWinAds
             // If already blocked locally, block ad requests and send report
             if (blockReason != "none")
             {
+                Debug.Log($"[ZeyWinAds QA] LOCAL BLOCK: blockReason={blockReason} — ad preload " +
+                    "skipped locally, server was never consulted for eligibility.");
                 BlockDevice(blockReason);
                 HideStartupLoading();
                 ShowGoogleFallback(blockReason);
@@ -303,11 +309,16 @@ namespace ZeyWinAds
                     {
                         if (serverStatus == "blocked")
                         {
+                            Debug.Log($"[ZeyWinAds QA] SERVER BLOCK: serverStatus={serverStatus} " +
+                                $"serverReason={serverReason} — local checks passed, but the server " +
+                                "rejected this device/session.");
                             Core.Logger.Log($"Device blocked by server: {serverReason}");
                             TryAbortPendingStartupForGoogleFallback(serverReason);
                             return;
                         }
 
+                        Debug.Log($"[ZeyWinAds QA] SERVER ALLOWED: serverStatus={serverStatus} " +
+                            $"serverReason={serverReason} — proceeding to preload ads.");
                         HandleStartupEligibilityAllowed();
                     });
                 });
