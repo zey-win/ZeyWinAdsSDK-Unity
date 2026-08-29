@@ -37,6 +37,18 @@ namespace ZeyWinAds.Core
             public bool IgnoreListenerPause;
         }
 
+        // Unity Test Framework ships test results from an on-device player back to the Editor
+        // through RemoteTestResultSender.SendDataRoutine(), a coroutine that yields on scaled
+        // time (WaitForSeconds). While Time.timeScale is 0 those yields never resume, so the
+        // result send queue never drains: the Editor Test Runner window hangs on "Wait For
+        // Player Run" and produces no results.xml, even though the run itself completes and
+        // every result still reaches the Editor Console via the separate log channel.
+        // Suppress the offer's game-pause in that case only. UnityEngine.TestRunner.dll is
+        // linked into a build solely when Unity builds a test player, so this is always false
+        // in production players and the pause behaves exactly as before.
+        private static bool IsRunningInTestPlayer =>
+            Type.GetType("UnityEngine.TestTools.UnityTestAttribute, UnityEngine.TestRunner") != null;
+
         public static void ApplyAdMobVolume(string reason)
         {
 #if ZEYWIN_ADMOB
@@ -274,7 +286,7 @@ namespace ZeyWinAds.Core
 
             AudioListener.pause = true;
             AudioListener.volume = 0f;
-            if (RemoteConfigBridge.GetBool("zeywin_offer_webview_pause_game", true))
+            if (RemoteConfigBridge.GetBool("zeywin_offer_webview_pause_game", true) && !IsRunningInTestPlayer)
                 Time.timeScale = 0f;
 
             Logger.Log("Offer WebView открыт: игра поставлена на паузу, игровые звуки выключены. Источников: {0}, причина={1}",
@@ -327,7 +339,8 @@ namespace ZeyWinAds.Core
 
             AudioListener.pause = _savedListenerPause;
             AudioListener.volume = _savedListenerVolume;
-            Time.timeScale = _savedTimeScale;
+            if (!IsRunningInTestPlayer)
+                Time.timeScale = _savedTimeScale;
 
             Logger.Log("Offer WebView закрыт: игра и звук восстановлены. Источников: {0}, причина={1}",
                 _offerAudioSources.Count,
