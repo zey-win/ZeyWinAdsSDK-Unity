@@ -279,6 +279,60 @@ namespace ZeyWinAds.Tests.Runtime
 #endif
         }
 
+        [UnityTest]
+        [Order(6)]
+        public IEnumerator OfferWebViewClient_LoadsCleartextHttpTopLevel()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            const string probeObjectName = "ZeyWinAds_CleartextHttpProbe";
+            // Top-level navigation that STARTS on cleartext http:// (same host as the https target),
+            // then 301s back to https. Partner trackers routinely drop a plain-http hop into offer
+            // redirect chains; an app built without android:usesCleartextTraffic="true" blocks that
+            // request with ERR_CLEARTEXT_NOT_PERMITTED before it leaves the device. Must be a
+            // top-level load — subresource requests get silently upgraded/blocked, so they can't
+            // prove cleartext works.
+            const string cleartextUrl =
+                "http://httpbin.org/redirect-to?url=https%3A%2F%2Fhttpbin.org%2Fget&status_code=301";
+
+            var probeGo = new GameObject(probeObjectName);
+            var probe = probeGo.AddComponent<RedirectChainProbe>();
+
+            string createError = null;
+            yield return RunOnUiThread(
+                () => CreateProbeWebView(probeObjectName, cleartextUrl),
+                err => createError = err);
+            Assert.IsNull(createError, $"Could not create the probe WebView: {createError}");
+
+            float startedAt = QaForegroundTimeTracker.ForegroundSeconds;
+            while (probe.LastNavigationUrl == null && probe.LoadError == null)
+            {
+                if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= RedirectChainBudgetSeconds)
+                {
+                    DestroyProbeWebView();
+                    UnityEngine.Object.Destroy(probeGo);
+                    Assert.Inconclusive($"{cleartextUrl} neither resolved nor errored within " +
+                        $"{RedirectChainBudgetSeconds:F0}s (network unreachable) — nothing to check.");
+                }
+                yield return new WaitForSecondsRealtime(0.25f);
+            }
+
+            string loadError = probe.LoadError;
+            string finalUrl = probe.LastNavigationUrl;
+            DestroyProbeWebView();
+            UnityEngine.Object.Destroy(probeGo);
+
+            Assert.IsNull(loadError,
+                $"The offer WebView rejected a top-level cleartext http:// navigation: {loadError} " +
+                "(app likely built without android:usesCleartextTraffic=\"true\").");
+            Assert.IsTrue(finalUrl != null && finalUrl.Contains("httpbin.org/get"),
+                $"Expected the http:// -> 301 -> https:// hop to resolve to httpbin.org/get, ended at: '{finalUrl}'.");
+            Debug.Log($"[ZeyWinAds QA] cleartext http:// top-level navigation resolved to: {finalUrl}");
+#else
+            Debug.Log("[ZeyWinAds QA] OfferWebViewClient_LoadsCleartextHttpTopLevel: skipped (not an Android device).");
+            yield break;
+#endif
+        }
+
 #if UNITY_ANDROID && !UNITY_EDITOR
         // Receives the SDK's existing UnitySendMessage callbacks (same names ZeyWinAdsLockWebViewClient
         // sends to the real lock GameObject) so the test can observe the client without new SDK API.
