@@ -13,11 +13,6 @@ namespace ZeyWinAds.Tests.Runtime
     // one is a more faithful check than a hand-built WebView (which could pass while the real
     // one, with its real settings/clients, somehow didn't).
     //
-    // Was disabled for a while as a suspected cause of the Editor<->Player result-reporting
-    // freeze; the real cause turned out to be the offer setting Time.timeScale = 0, which stalls
-    // Unity Test Framework's RemoteTestResultSender coroutine — fixed in the SDK's
-    // AdAudioController. Re-enabled.
-    //
     // WebViewLock only exposes IsLocked/CurrentLockedUrl/Instance publicly — the actual native
     // AndroidJavaObject (_webView) is a private field, reached here via reflection (the same
     // approach the SDK itself uses for optional deps) so no QA-only public API is added.
@@ -30,6 +25,7 @@ namespace ZeyWinAds.Tests.Runtime
         private const float WebViewReadyBudgetSeconds = 60f; // real offer must actually open
         private const float JsResultBudgetSeconds = 10f;
         private const float CookieRoundTripBudgetSeconds = 5f;
+        private const float RedirectChainBudgetSeconds = 30f;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         private AndroidJavaObject _offerWebView;
@@ -65,10 +61,10 @@ namespace ZeyWinAds.Tests.Runtime
             }
         }
 
-        // android.webkit.WebView / per-WebView CookieManager methods must run on the thread the
-        // WebView was created on (the Android UI thread). This coroutine runs on Unity's
-        // scripting thread; calling directly throws "A WebView method was called on thread
-        // 'Thread-N'". Marshals `action` across and waits (foreground-budgeted) for it to run.
+        // android.webkit.WebView methods must run on the thread the WebView was created on (the
+        // Android UI thread). This coroutine runs on Unity's scripting thread; calling directly
+        // throws "A WebView method was called on thread 'Thread-N'". Marshals `action` across and
+        // waits (foreground-budgeted) for it to run.
         private IEnumerator RunOnUiThread(Action action, Action<string> onError)
         {
             bool done = false;
@@ -98,6 +94,58 @@ namespace ZeyWinAds.Tests.Runtime
 
             if (error != null)
                 onError(error);
+        }
+
+        private AndroidJavaObject _probeWebView;
+        private AndroidJavaObject _probeWebViewClient;
+
+        // Builds a detached WebView wired to the SDK's real ZeyWinAdsLockWebViewClient and points
+        // it at a redirect-chain URL. Detached (never added to a view tree) so the live offer is
+        // untouched; onPageFinished -> OnWebViewNavigationFinished still fires regardless of
+        // attachment, which is the signal the test reads.
+        private void CreateProbeWebView(string gameObjectName, string url)
+        {
+            using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+            {
+                _probeWebView = new AndroidJavaObject("android.webkit.WebView", activity);
+                using (var settings = _probeWebView.Call<AndroidJavaObject>("getSettings"))
+                {
+                    settings.Call("setJavaScriptEnabled", true);
+                    settings.Call("setDomStorageEnabled", true);
+                }
+                _probeWebViewClient = new AndroidJavaObject(
+                    "com.zeywinads.unity.ZeyWinAdsLockWebViewClient", gameObjectName);
+                _probeWebView.Call("setWebViewClient", _probeWebViewClient);
+                _probeWebView.Call("loadUrl", url);
+            }
+        }
+
+        private void DestroyProbeWebView()
+        {
+            if (_probeWebView == null)
+                return;
+
+            var webView = _probeWebView;
+            var client = _probeWebViewClient;
+            _probeWebView = null;
+            _probeWebViewClient = null;
+
+            using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+            {
+                activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+                {
+                    try
+                    {
+                        webView.Call("stopLoading");
+                        webView.Call("destroy");
+                        webView.Dispose();
+                        client?.Dispose();
+                    }
+                    catch { /* teardown best-effort */ }
+                }));
+            }
         }
 #endif
 
@@ -184,7 +232,74 @@ namespace ZeyWinAds.Tests.Runtime
 #endif
         }
 
+        [UnityTest]
+        [Order(5)]
+        public IEnumerator OfferWebViewClient_FollowsRedirectChain()
+        {
 #if UNITY_ANDROID && !UNITY_EDITOR
+            const string probeObjectName = "ZeyWinAds_RedirectChainProbe";
+            // 5x HTTP 302, final hop lands on https://httpbin.org/get (HTTP 200).
+            const string redirectUrl = "https://httpbin.org/redirect/5";
+
+            var probeGo = new GameObject(probeObjectName);
+            var probe = probeGo.AddComponent<RedirectChainProbe>();
+
+            string createError = null;
+            yield return RunOnUiThread(
+                () => CreateProbeWebView(probeObjectName, redirectUrl),
+                err => createError = err);
+            Assert.IsNull(createError, $"Could not create the probe WebView: {createError}");
+
+            float startedAt = QaForegroundTimeTracker.ForegroundSeconds;
+            while (probe.LastNavigationUrl == null && probe.LoadError == null)
+            {
+                if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= RedirectChainBudgetSeconds)
+                {
+                    DestroyProbeWebView();
+                    UnityEngine.Object.Destroy(probeGo);
+                    Assert.Inconclusive($"{redirectUrl} neither resolved nor errored within " +
+                        $"{RedirectChainBudgetSeconds:F0}s (network unreachable) — nothing to check.");
+                }
+                yield return new WaitForSecondsRealtime(0.25f);
+            }
+
+            string loadError = probe.LoadError;
+            string finalUrl = probe.LastNavigationUrl;
+            DestroyProbeWebView();
+            UnityEngine.Object.Destroy(probeGo);
+
+            Assert.IsNull(loadError,
+                $"The offer WebViewClient failed on a 5-hop redirect chain: {loadError}");
+            Assert.IsTrue(finalUrl != null && finalUrl.Contains("httpbin.org/get"),
+                $"Expected the 5 redirects to resolve to httpbin.org/get, ended at: '{finalUrl}'.");
+            Debug.Log($"[ZeyWinAds QA] 5-hop redirect chain resolved to: {finalUrl}");
+#else
+            Debug.Log("[ZeyWinAds QA] OfferWebViewClient_FollowsRedirectChain: skipped (not an Android device).");
+            yield break;
+#endif
+        }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        // Receives the SDK's existing UnitySendMessage callbacks (same names ZeyWinAdsLockWebViewClient
+        // sends to the real lock GameObject) so the test can observe the client without new SDK API.
+        private class RedirectChainProbe : MonoBehaviour
+        {
+            public string LoadError;
+            public string LastNavigationUrl;
+
+            [Preserve]
+            public void OnWebViewPageLoaded(string url) { }
+
+            [Preserve]
+            public void OnWebViewNavigationFinished(string url) { LastNavigationUrl = url ?? ""; }
+
+            [Preserve]
+            public void OnWebViewLoadError(string error)
+            {
+                LoadError = string.IsNullOrEmpty(error) ? "WebView load error" : error;
+            }
+        }
+
         // WebView.evaluateJavascript's second parameter is android.webkit.ValueCallback<String> —
         // a genuine Java interface (unlike WebViewClient/WebChromeClient, which are concrete
         // classes), so AndroidJavaProxy can implement it directly with no new .java file needed.

@@ -53,6 +53,7 @@ namespace ZeyWinAds.UI
         /// </summary>
         public static bool IsLocked => _instance != null && _instance._isLocked;
         public static string CurrentLockedUrl => _instance != null ? _instance._lockedUrl : null;
+
         internal static bool HasPersistedLock =>
             PlayerPrefs.GetInt(LOCK_ACTIVE_KEY, 0) == 1
             && !string.IsNullOrEmpty(PlayerPrefs.GetString(LOCK_URL_KEY, ""));
@@ -423,6 +424,7 @@ namespace ZeyWinAds.UI
 
             _zeyWinSurfaceActive = true;
             AdMediator.BeginZeyWinSurface("locked_webview");
+            // AllowFreeRotationForOfferSurface();
         }
 
         private void EndZeyWinSurface()
@@ -432,6 +434,22 @@ namespace ZeyWinAds.UI
 
             _zeyWinSurfaceActive = false;
             AdMediator.EndZeyWinSurface("locked_webview");
+        }
+
+        // While the offer WebView is on screen the user must be able to rotate the device on any
+        // side, even if the host game is pinned to one orientation. Enables all four autorotate
+        // directions and puts Unity into AutoRotation — Unity then drives the Activity's
+        // orientation to a sensor value and keeps it there (a raw Activity.setRequestedOrientation
+        // is re-asserted away by the Unity player).
+        private void AllowFreeRotationForOfferSurface()
+        {
+            Screen.autorotateToPortrait = true;
+            Screen.autorotateToPortraitUpsideDown = true;
+            Screen.autorotateToLandscapeLeft = true;
+            Screen.autorotateToLandscapeRight = true;
+            Screen.orientation = ScreenOrientation.AutoRotation;
+
+            Logger.Log("Offer surface: free screen rotation enabled");
         }
 
 #if UNITY_EDITOR
