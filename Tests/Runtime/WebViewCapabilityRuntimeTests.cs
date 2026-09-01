@@ -26,6 +26,8 @@ namespace ZeyWinAds.Tests.Runtime
         private const float JsResultBudgetSeconds = 10f;
         private const float CookieRoundTripBudgetSeconds = 5f;
         private const float RedirectChainBudgetSeconds = 30f;
+        private const float ChecklistReadyBudgetSeconds = 90f;  // SPA + 2MB bundle over the device network
+        private const float ChecklistRunBudgetSeconds = 180f;   // runAuto() over ~22 checks, several hitting the network
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         private AndroidJavaObject _offerWebView;
@@ -145,6 +147,156 @@ namespace ZeyWinAds.Tests.Runtime
                     }
                     catch { /* teardown best-effort */ }
                 }));
+            }
+        }
+
+        // ---- Capability-checklist probe (drives ads.zeywin.com/checklist/webview-test?runner=1) ----
+
+        private AndroidJavaObject _checklistWebView;
+        private AndroidJavaObject _checklistWebViewClient;
+        private AndroidJavaObject _checklistChromeClient;
+
+        // A WebView configured like the real offer WebView (ShowAndroidWebView in WebViewLock),
+        // attached to the activity content view as a 1x1 px view — in the hierarchy so the renderer
+        // and JS timers stay alive, but NOT covering the Unity surface (a full-screen cover makes
+        // Unity lose focus / pause, which wedges every coroutine incl. the test runner itself).
+        private void CreateChecklistProbeWebView(string gameObjectName, string url)
+        {
+            using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+            {
+                _checklistWebView = new AndroidJavaObject("android.webkit.WebView", activity);
+                _checklistWebView.Call("setLayerType", 2, (AndroidJavaObject)null); // LAYER_TYPE_HARDWARE
+
+                using (var settings = _checklistWebView.Call<AndroidJavaObject>("getSettings"))
+                {
+                    settings.Call("setJavaScriptEnabled", true);
+                    settings.Call("setDomStorageEnabled", true);
+                    settings.Call("setLoadWithOverviewMode", true);
+                    settings.Call("setUseWideViewPort", true);
+                    settings.Call("setMediaPlaybackRequiresUserGesture", false);
+                    settings.Call("setAllowFileAccess", true);
+                    settings.Call("setJavaScriptCanOpenWindowsAutomatically", true);
+                    settings.Call("setSupportMultipleWindows", true);
+                    settings.Call("setMixedContentMode", 0); // MIXED_CONTENT_ALWAYS_ALLOW
+                }
+
+                using (var cookieManager = new AndroidJavaClass("android.webkit.CookieManager")
+                    .CallStatic<AndroidJavaObject>("getInstance"))
+                {
+                    cookieManager.Call("setAcceptCookie", true);
+                    cookieManager.Call("setAcceptThirdPartyCookies", _checklistWebView, true);
+                }
+
+                _checklistChromeClient = new AndroidJavaObject("com.zeywinads.unity.ZeyWinAdsWebChromeClient");
+                _checklistWebView.Call("setWebChromeClient", _checklistChromeClient);
+                _checklistWebViewClient = new AndroidJavaObject(
+                    "com.zeywinads.unity.ZeyWinAdsLockWebViewClient", gameObjectName);
+                _checklistWebView.Call("setWebViewClient", _checklistWebViewClient);
+
+                var layoutParams = new AndroidJavaObject("android.widget.FrameLayout$LayoutParams", 1, 1);
+                using (var decorView = activity.Call<AndroidJavaObject>("getWindow")
+                    .Call<AndroidJavaObject>("getDecorView"))
+                using (var androidRId = new AndroidJavaClass("android.R$id"))
+                {
+                    var contentView = decorView.Call<AndroidJavaObject>(
+                        "findViewById", androidRId.GetStatic<int>("content"));
+                    contentView.Call("addView", _checklistWebView, layoutParams);
+                }
+
+                _checklistWebView.Call("resumeTimers");
+                _checklistWebView.Call("loadUrl", url);
+            }
+        }
+
+        private void DestroyChecklistProbeWebView()
+        {
+            if (_checklistWebView == null)
+                return;
+
+            var webView = _checklistWebView;
+            var webViewClient = _checklistWebViewClient;
+            var chromeClient = _checklistChromeClient;
+            _checklistWebView = null;
+            _checklistWebViewClient = null;
+            _checklistChromeClient = null;
+
+            using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+            {
+                activity.Call("runOnUiThread", new AndroidJavaRunnable(() =>
+                {
+                    try
+                    {
+                        using (var parent = webView.Call<AndroidJavaObject>("getParent"))
+                        {
+                            if (parent != null)
+                                parent.Call("removeView", webView);
+                        }
+                        webView.Call("stopLoading");
+                        webView.Call("destroy");
+                        webView.Dispose();
+                        webViewClient?.Dispose();
+                        chromeClient?.Dispose();
+                    }
+                    catch { /* teardown best-effort */ }
+                }));
+            }
+        }
+
+        // Runs `script` in `webView` on the UI thread and returns the result with the WebView's
+        // JSON-encoding removed. Returns null on timeout or a UI-thread error. The payloads this
+        // test reads back are plain ASCII, so unwrapping the outer quotes + a couple of escapes
+        // is enough (no full JSON parse).
+        private IEnumerator EvalJs(AndroidJavaObject webView, string script, float budgetSeconds,
+            Action<string> onResult)
+        {
+            string value = null;
+            bool got = false;
+            var callback = new JsValueCallback(v => { value = v; got = true; });
+
+            string uiError = null;
+            yield return RunOnUiThread(
+                () => webView.Call("evaluateJavascript", script, callback),
+                err => { uiError = err; got = true; });
+
+            // realtime clock, not QaForegroundTimeTracker — a focus/foreground stall must not
+            // wedge this loop forever.
+            float startedAt = Time.realtimeSinceStartup;
+            while (!got)
+            {
+                if (Time.realtimeSinceStartup - startedAt >= budgetSeconds)
+                {
+                    onResult(null);
+                    yield break;
+                }
+                yield return null;
+            }
+
+            onResult(uiError != null ? null : DecodeJsString(value));
+        }
+
+        private static string DecodeJsString(string raw)
+        {
+            if (string.IsNullOrEmpty(raw) || raw == "null")
+                return null;
+            if (raw.Length >= 2 && raw[0] == '"' && raw[raw.Length - 1] == '"')
+                raw = raw.Substring(1, raw.Length - 2);
+            return raw.Replace("\\\"", "\"").Replace("\\/", "/").Replace("\\n", "\n").Replace("\\\\", "\\");
+        }
+
+        // Activity.checkSelfPermission(...) == PackageManager.PERMISSION_GRANTED (0). API 23+.
+        private static bool AndroidPermissionGranted(string permission)
+        {
+            try
+            {
+                using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+                    return activity.Call<int>("checkSelfPermission", permission) == 0;
+            }
+            catch
+            {
+                return false;
             }
         }
 #endif
@@ -329,6 +481,137 @@ namespace ZeyWinAds.Tests.Runtime
             Debug.Log($"[ZeyWinAds QA] cleartext http:// top-level navigation resolved to: {finalUrl}");
 #else
             Debug.Log("[ZeyWinAds QA] OfferWebViewClient_LoadsCleartextHttpTopLevel: skipped (not an Android device).");
+            yield break;
+#endif
+        }
+
+        [UnityTest]
+        [Order(7)]
+        public IEnumerator OfferWebView_PassesCapabilityChecklist()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            const string probeObjectName = "ZeyWinAds_CapabilityChecklistProbe";
+            // ?autorun=0 so the page sets up ZW_CHECKLIST but waits for us to call runAuto().
+            const string url = "https://ads.zeywin.com/checklist/webview-test?runner=1&autorun=0";
+
+            var probeGo = new GameObject(probeObjectName);
+
+            string createError = null;
+            yield return RunOnUiThread(
+                () => CreateChecklistProbeWebView(probeObjectName, url),
+                err => createError = err);
+            Assert.IsNull(createError, $"Could not create the checklist probe WebView: {createError}");
+
+            // 1. Wait for the SPA to boot and expose the ZW_CHECKLIST contract. Also surfaces the
+            //    raw probe value + document.readyState/URL each poll so a stall is diagnosable.
+            const string readyScript =
+                "(function(){try{return (typeof window.ZW_CHECKLIST==='object'&&window.ZW_CHECKLIST)" +
+                "?'READY':('WAIT rs='+document.readyState+' url='+location.href.slice(0,60));}" +
+                "catch(e){return 'WAIT err='+String(e);}})()";
+            bool ready = false;
+            float readyStartedAt = Time.realtimeSinceStartup;
+            while (!ready)
+            {
+                string probe = null;
+                yield return EvalJs(_checklistWebView, readyScript, JsResultBudgetSeconds, r => probe = r);
+                Debug.Log($"[ZeyWinAds QA] checklist ready-probe (+{Time.realtimeSinceStartup - readyStartedAt:F0}s): {probe ?? "<null>"}");
+                if (probe == "READY")
+                {
+                    ready = true;
+                    break;
+                }
+                if (Time.realtimeSinceStartup - readyStartedAt >= ChecklistReadyBudgetSeconds)
+                {
+                    DestroyChecklistProbeWebView();
+                    UnityEngine.Object.Destroy(probeGo);
+                    Assert.Inconclusive($"window.ZW_CHECKLIST never appeared within {ChecklistReadyBudgetSeconds:F0}s " +
+                        $"(page or network unreachable). Last probe: {probe ?? "<null>"}");
+                }
+                yield return new WaitForSecondsRealtime(2f);
+            }
+
+            // 2. Kick runAuto() (the `auto` bucket). camera + microphone are also run and graded,
+            //    but ONLY when CAMERA + RECORD_AUDIO are actually held by this install — the plain
+            //    Editor->device flow reinstalls the player every run and wipes runtime grants, so
+            //    there they are reported as "skipped (OS permission not granted)" and NOT run (no
+            //    prompt). The CI runner grants them post-install, so there they run and are graded.
+            //    navigates/external/manual buckets are always reported-only (marked "n/a").
+            bool micCamGranted =
+                AndroidPermissionGranted("android.permission.CAMERA") &&
+                AndroidPermissionGranted("android.permission.RECORD_AUDIO");
+            Debug.Log($"[ZeyWinAds QA] checklist: CAMERA+RECORD_AUDIO held by this install = {micCamGranted}");
+
+            string kickScript =
+                "(function(){window.__zw={done:false};var gradePerm=" + (micCamGranted ? "true" : "false") + ";" +
+                "if(!window.ZW_CHECKLIST){window.__zw={done:true,verdict:'NO_CONTRACT',report:''};return;}" +
+                "if((ZW_CHECKLIST.version||0)<3){window.__zw={done:true,verdict:'BAD_VERSION',report:'version='+ZW_CHECKLIST.version};return;}" +
+                "var meta=ZW_CHECKLIST.meta||{};var permIds={camera:1,microphone:1};" +
+                "Promise.resolve(ZW_CHECKLIST.runAuto()).then(function(){" +
+                "if(!gradePerm)return;" +
+                "return Promise.all(['camera','microphone'].map(function(id){" +
+                "return Promise.resolve(ZW_CHECKLIST.run(id)).catch(function(){});}));}).then(function(){" +
+                "var r=ZW_CHECKLIST.results();" +
+                "var ids=Object.keys(r).sort(function(a,b){" +
+                "var ba=(meta[a]&&meta[a].bucket)||'zz',bb=(meta[b]&&meta[b].bucket)||'zz';" +
+                "return ba<bb?-1:ba>bb?1:(a<b?-1:1);});" +
+                "var lines=[],fails=[],gp=0,gf=0,gs=0,nr=0;" +
+                "ids.forEach(function(k){var e=r[k]||{},b=(meta[k]&&meta[k].bucket)||'?',s=e.status||'?';" +
+                "var graded=(b==='auto')||(gradePerm&&permIds[k]);" +
+                "if(permIds[k]&&!gradePerm){lines.push('⏭️ SKIP  ['+b+']  '+k+'  - skipped: OS permission not granted to this install (CI grants post-install)');gs++;return;}" +
+                "if(!graded){lines.push('⬜ n/a   ['+b+']  '+k);nr++;return;}" +
+                "var d=(e.detail||'').replace(/\\s+/g,' ').slice(0,140);" +
+                "var m=s==='pass'?'✅ PASS':s==='skip'?'⏭️ SKIP':s==='pending'?'⬜ n/a  ':'❌ FAIL';" +
+                "lines.push(m+'  ['+b+']  '+k+(d?('  - '+d):''));" +
+                "if(s==='pass')gp++;else if(s==='skip')gs++;else{gf++;fails.push(k+'='+s);}});" +
+                "var head='graded: '+gp+' pass · '+gf+' fail · '+gs+' skip   |   not run here (other buckets): '+nr;" +
+                "window.__zw={done:true,verdict:(fails.length?'FAIL ':'OK ')+'fails=['+fails.join(',')+']'," +
+                "report:head+'\\n'+lines.join('\\n')};" +
+                "}).catch(function(e){window.__zw={done:true,verdict:'THREW',report:String(e)};});})();";
+            yield return EvalJs(_checklistWebView, kickScript, JsResultBudgetSeconds, _ => { });
+
+            // 3. Poll until done. While pending, report terminal-count so a stuck check is visible.
+            const string pollScript =
+                "(function(){if(window.__zw&&window.__zw.done)" +
+                "return 'DONE\\n'+window.__zw.verdict+'\\n===\\n'+(window.__zw.report||'');" +
+                "try{var r=ZW_CHECKLIST.results();var ks=Object.keys(r);" +
+                "var d=ks.filter(function(k){var s=r[k].status;return s==='pass'||s==='fail'||s==='skip';});" +
+                "return 'PENDING '+d.length+'/'+ks.length;}catch(e){return 'PENDING';}})()";
+            string payload = null;
+            float runStartedAt = Time.realtimeSinceStartup;
+            while (true)
+            {
+                string probe = null;
+                yield return EvalJs(_checklistWebView, pollScript, JsResultBudgetSeconds, r => probe = r);
+                if (!string.IsNullOrEmpty(probe) && probe.StartsWith("DONE\n"))
+                {
+                    payload = probe;
+                    break;
+                }
+                Debug.Log($"[ZeyWinAds QA] checklist run-probe (+{Time.realtimeSinceStartup - runStartedAt:F0}s): {probe ?? "<null>"}");
+                if (Time.realtimeSinceStartup - runStartedAt >= ChecklistRunBudgetSeconds)
+                    break;
+                yield return new WaitForSecondsRealtime(3f);
+            }
+
+            DestroyChecklistProbeWebView();
+            UnityEngine.Object.Destroy(probeGo);
+
+            if (string.IsNullOrEmpty(payload))
+                Assert.Inconclusive($"ZW_CHECKLIST.runAuto() did not finish within {ChecklistRunBudgetSeconds:F0}s.");
+
+            string body = payload.Substring("DONE\n".Length);
+            int sep = body.IndexOf("\n===\n", StringComparison.Ordinal);
+            string verdict = sep >= 0 ? body.Substring(0, sep) : body;
+            string report = sep >= 0 ? body.Substring(sep + "\n===\n".Length) : "";
+
+            Debug.Log($"[ZeyWinAds QA] capability checklist\n{report}\n-> {verdict}");
+
+            Assert.IsFalse(verdict.StartsWith("NO_CONTRACT") || verdict.StartsWith("BAD_VERSION") || verdict.StartsWith("THREW"),
+                $"Checklist harness problem: {verdict}\n{report}");
+            Assert.IsTrue(verdict.StartsWith("OK "),
+                $"One or more auto-bucket WebView capability checks did not pass: {verdict}\n(full per-check report in the log above)");
+#else
+            Debug.Log("[ZeyWinAds QA] OfferWebView_PassesCapabilityChecklist: skipped (not an Android device).");
             yield break;
 #endif
         }
