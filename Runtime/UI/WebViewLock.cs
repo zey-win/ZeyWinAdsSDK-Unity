@@ -23,6 +23,11 @@ namespace ZeyWinAds.UI
 #endif
 
         private static WebViewLock _instance;
+        // Set in OnApplicationQuit. Once true, teardown must NOT bounce a managed-callback
+        // AndroidJavaRunnable through runOnUiThread — it can fire after the scripting runtime is
+        // gone and crash the process (SIGSEGV in UnityJavaProxy_invoke). The OS reclaims native
+        // views with the process anyway.
+        private static bool _isQuitting;
         public static WebViewLock Instance => _instance;
         public static event Action<string> OnLocked;
         public static event Action OnUnlocked;
@@ -81,6 +86,11 @@ namespace ZeyWinAds.UI
                 return;
             }
             _instance = this;
+        }
+
+        private void OnApplicationQuit()
+        {
+            _isQuitting = true;
         }
 
         private void OnDestroy()
@@ -619,6 +629,19 @@ namespace ZeyWinAds.UI
             if (_webView == null && _nativeWebViewContainer == null)
                 return;
 
+            // App is shutting down: don't post a managed-callback runnable to the UI thread — it
+            // could run after the scripting runtime is torn down and crash the process. Drop the
+            // references and let the OS reclaim the native views with the process.
+            if (_isQuitting)
+            {
+                _nativeWebViewContainer = null;
+                _nativeSafeAreaContainer = null;
+                _webView = null;
+                _webViewClient = null;
+                _permissionBridge = null;
+                return;
+            }
+
             try
             {
                 AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
@@ -674,7 +697,7 @@ namespace ZeyWinAds.UI
 
         private void PromoteAndroidOfferSurface()
         {
-            if (_nativeWebViewContainer == null)
+            if (_isQuitting || _nativeWebViewContainer == null)
                 return;
 
             AdMediator.SuppressAdMobForZeyWinSurface("locked_webview_promote");
@@ -797,7 +820,7 @@ namespace ZeyWinAds.UI
 
         private void Update()
         {
-            if (!_isLocked)
+            if (!_isLocked || _isQuitting)
                 return;
 
 #if !UNITY_EDITOR

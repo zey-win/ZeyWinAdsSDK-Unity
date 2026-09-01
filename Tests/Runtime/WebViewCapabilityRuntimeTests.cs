@@ -19,6 +19,23 @@ namespace ZeyWinAds.Tests.Runtime
     //
     // Note: WebViewLock._isLocked flips true before the native WebView object is created (inside
     // an async runOnUiThread callback), so these poll the reflected field itself, not IsLocked.
+    //
+    // ---- Which test covers which row of the ads.zeywin.com/checklist/webview-test page ----
+    //
+    //   RealOfferWebView_ExecutesJavaScript          JS execution in the LIVE offer WebView
+    //                                                (no dedicated web-checklist row; sanity check)
+    //   RealOfferWebView_SupportsCookies             "Cookies (same-site)"  (cookies-same-site) —
+    //                                                against the LIVE offer WebView + CookieManager
+    //   OfferWebViewClient_FollowsRedirectChain      "Redirect chain — navigation (5 hops)"  (redirect-navigation)
+    //   OfferWebViewClient_LoadsCleartextHttpTopLevel"Cleartext HTTP (top-level)"  (cleartext-http)
+    //   OfferWebView_PassesCapabilityChecklist       every `auto`-bucket row (runAuto), + camera/microphone
+    //                                                when CAMERA/RECORD_AUDIO are granted to the install
+    //   OfferWebView_RoutesExternalScheme(case)      one row each:
+    //                                                  deeplink-tg   -> "Deep link (tg://)"
+    //                                                  intent-scheme -> "intent:// (Android)"
+    //                                                  mailto        -> "mailto:"
+    //                                                  tel           -> "tel:"
+    //                                                  sms           -> "sms:"
     [TestFixture]
     public class WebViewCapabilityRuntimeTests
     {
@@ -123,16 +140,21 @@ namespace ZeyWinAds.Tests.Runtime
             }
         }
 
-        private void DestroyProbeWebView()
+        // Coroutine, not fire-and-forget: it posts the WebView teardown to the UI thread and then
+        // WAITS for it to run. A runOnUiThread(AndroidJavaRunnable) still pending when the app
+        // starts quitting invokes a managed delegate on a torn-down scripting runtime -> native
+        // SIGSEGV in UnityJavaProxy_invoke. Joining here keeps nothing pending at shutdown.
+        private IEnumerator DestroyProbeWebView()
         {
             if (_probeWebView == null)
-                return;
+                yield break;
 
             var webView = _probeWebView;
             var client = _probeWebViewClient;
             _probeWebView = null;
             _probeWebViewClient = null;
 
+            bool done = false;
             using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
             using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
             {
@@ -146,8 +168,13 @@ namespace ZeyWinAds.Tests.Runtime
                         client?.Dispose();
                     }
                     catch { /* teardown best-effort */ }
+                    finally { done = true; }
                 }));
             }
+
+            float startedAt = Time.realtimeSinceStartup;
+            while (!done && Time.realtimeSinceStartup - startedAt < 5f)
+                yield return null;
         }
 
         // ---- Capability-checklist probe (drives ads.zeywin.com/checklist/webview-test?runner=1) ----
@@ -209,10 +236,12 @@ namespace ZeyWinAds.Tests.Runtime
             }
         }
 
-        private void DestroyChecklistProbeWebView()
+        // Coroutine that WAITS for the UI-thread teardown to finish — see DestroyProbeWebView for
+        // why a still-pending runOnUiThread runnable crashes the process at shutdown.
+        private IEnumerator DestroyChecklistProbeWebView()
         {
             if (_checklistWebView == null)
-                return;
+                yield break;
 
             var webView = _checklistWebView;
             var webViewClient = _checklistWebViewClient;
@@ -221,6 +250,7 @@ namespace ZeyWinAds.Tests.Runtime
             _checklistWebViewClient = null;
             _checklistChromeClient = null;
 
+            bool done = false;
             using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
             using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
             {
@@ -240,8 +270,13 @@ namespace ZeyWinAds.Tests.Runtime
                         chromeClient?.Dispose();
                     }
                     catch { /* teardown best-effort */ }
+                    finally { done = true; }
                 }));
             }
+
+            float startedAt = Time.realtimeSinceStartup;
+            while (!done && Time.realtimeSinceStartup - startedAt < 5f)
+                yield return null;
         }
 
         // Runs `script` in `webView` on the UI thread and returns the result with the WebView's
@@ -407,7 +442,7 @@ namespace ZeyWinAds.Tests.Runtime
             {
                 if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= RedirectChainBudgetSeconds)
                 {
-                    DestroyProbeWebView();
+                    yield return DestroyProbeWebView();
                     UnityEngine.Object.Destroy(probeGo);
                     Assert.Inconclusive($"{redirectUrl} neither resolved nor errored within " +
                         $"{RedirectChainBudgetSeconds:F0}s (network unreachable) — nothing to check.");
@@ -417,7 +452,7 @@ namespace ZeyWinAds.Tests.Runtime
 
             string loadError = probe.LoadError;
             string finalUrl = probe.LastNavigationUrl;
-            DestroyProbeWebView();
+            yield return DestroyProbeWebView();
             UnityEngine.Object.Destroy(probeGo);
 
             Assert.IsNull(loadError,
@@ -460,7 +495,7 @@ namespace ZeyWinAds.Tests.Runtime
             {
                 if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= RedirectChainBudgetSeconds)
                 {
-                    DestroyProbeWebView();
+                    yield return DestroyProbeWebView();
                     UnityEngine.Object.Destroy(probeGo);
                     Assert.Inconclusive($"{cleartextUrl} neither resolved nor errored within " +
                         $"{RedirectChainBudgetSeconds:F0}s (network unreachable) — nothing to check.");
@@ -470,7 +505,7 @@ namespace ZeyWinAds.Tests.Runtime
 
             string loadError = probe.LoadError;
             string finalUrl = probe.LastNavigationUrl;
-            DestroyProbeWebView();
+            yield return DestroyProbeWebView();
             UnityEngine.Object.Destroy(probeGo);
 
             Assert.IsNull(loadError,
@@ -522,7 +557,7 @@ namespace ZeyWinAds.Tests.Runtime
                 }
                 if (Time.realtimeSinceStartup - readyStartedAt >= ChecklistReadyBudgetSeconds)
                 {
-                    DestroyChecklistProbeWebView();
+                    yield return DestroyChecklistProbeWebView();
                     UnityEngine.Object.Destroy(probeGo);
                     Assert.Inconclusive($"window.ZW_CHECKLIST never appeared within {ChecklistReadyBudgetSeconds:F0}s " +
                         $"(page or network unreachable). Last probe: {probe ?? "<null>"}");
@@ -559,6 +594,13 @@ namespace ZeyWinAds.Tests.Runtime
                 "var graded=(b==='auto')||(gradePerm&&permIds[k]);" +
                 "if(permIds[k]&&!gradePerm){lines.push('⏭️ SKIP  ['+b+']  '+k+'  - skipped: OS permission not granted to this install (CI grants post-install)');gs++;return;}" +
                 "if(!graded){lines.push('⬜ n/a   ['+b+']  '+k);nr++;return;}" +
+                // camera/microphone fails stay fails. Just annotate which layer broke: NotAllowedError
+                // = the SDK's permission wiring; NotReadableError/NotFoundError = permission was fine,
+                // the device sensor couldn't open (busy / absent — check the device, not the SDK).
+                "if(permIds[k]&&s!=='pass'){var er=String(e.detail||'');" +
+                "var layer=/NotAllowedError/.test(er)?' [SDK permission wiring]':" +
+                "/Not(Readable|Found)Error|OverconstrainedError|AbortError/.test(er)?' [device sensor could not open — permission grant worked]':'';" +
+                "lines.push('❌ FAIL  ['+b+']  '+k+'  - '+er.slice(0,120)+layer);gf++;fails.push(k+'='+s);return;}" +
                 "var d=(e.detail||'').replace(/\\s+/g,' ').slice(0,140);" +
                 "var m=s==='pass'?'✅ PASS':s==='skip'?'⏭️ SKIP':s==='pending'?'⬜ n/a  ':'❌ FAIL';" +
                 "lines.push(m+'  ['+b+']  '+k+(d?('  - '+d):''));" +
@@ -593,7 +635,7 @@ namespace ZeyWinAds.Tests.Runtime
                 yield return new WaitForSecondsRealtime(3f);
             }
 
-            DestroyChecklistProbeWebView();
+            yield return DestroyChecklistProbeWebView();
             UnityEngine.Object.Destroy(probeGo);
 
             if (string.IsNullOrEmpty(payload))
@@ -615,6 +657,89 @@ namespace ZeyWinAds.Tests.Runtime
             yield break;
 #endif
         }
+
+        // One case per external-scheme row of the checklist. Each verifies the level a headless
+        // test actually can: the SDK's *routing decision* — ZeyWinAdsWebViewNavigation
+        // .shouldOpenExternally() must return true, so the offer WebView hands the URL to the OS
+        // instead of trying to load it as a page (hard assert). Whether an Activity resolves it is
+        // logged; if a scheme that every phone handles (mailto/tel/sms) doesn't resolve, the test
+        // is Inconclusive with the reason (an AndroidManifest <queries> gap). Actually launching
+        // the target app is a UiAutomator job, not this. No dialogs, no navigation, no startActivity.
+        [Order(8)]
+        [TestCase("deeplink-tg",   "tg://resolve?domain=telegram",                  false, TestName = "RoutesExternalScheme_deeplink_tg (tg://)")]
+        [TestCase("intent-scheme", "intent://example.com#Intent;scheme=https;end",  false, TestName = "RoutesExternalScheme_intent_scheme (intent://)")]
+        [TestCase("mailto",        "mailto:qa@zeywin.com?subject=probe",            true,  TestName = "RoutesExternalScheme_mailto (mailto:)")]
+        [TestCase("tel",           "tel:+10000000000",                             true,  TestName = "RoutesExternalScheme_tel (tel:)")]
+        [TestCase("sms",           "sms:+10000000000?body=probe",                  true,  TestName = "RoutesExternalScheme_sms (sms:)")]
+        public void OfferWebView_RoutesExternalScheme(string checklistId, string url, bool everyPhoneHandlesIt)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            using (var navClass = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsWebViewNavigation"))
+            using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+            using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+            using (var pm = activity.Call<AndroidJavaObject>("getPackageManager"))
+            {
+                Assert.IsTrue(navClass.CallStatic<bool>("shouldOpenExternally", url),
+                    $"[{checklistId}] ZeyWinAdsWebViewNavigation.shouldOpenExternally returned false for {url} — " +
+                    "the offer WebView would try to load this scheme as a page instead of handing it to the OS.");
+
+                string resolved = ResolveViewIntentPackage(url, pm);
+                Debug.Log($"[ZeyWinAds QA] {checklistId}: shouldOpenExternally=true, resolves to {resolved ?? "<no visible handler>"}");
+
+                if (resolved == null)
+                {
+                    if (everyPhoneHandlesIt)
+                        Assert.Inconclusive($"[{checklistId}] routing verified (shouldOpenExternally=true), but no Activity " +
+                            $"resolves {url} — every phone has a handler for this, so the base app's AndroidManifest <queries> " +
+                            "is missing the scheme. Android 11+ visibility then hides the handler and " +
+                            "ZeyWinAdsWebViewNavigation.openExternal's startActivity would throw (silently caught -> link does " +
+                            "nothing). Add <data android:scheme=\"tel\"/> / \"sms\" / \"mailto\" (and \"tg\") to <queries>, or have the SDK ship them.");
+                    else
+                        Assert.Inconclusive($"[{checklistId}] routing verified (shouldOpenExternally=true), but no Activity " +
+                            $"resolves {url} — the target app isn't installed, or the scheme isn't in the AndroidManifest " +
+                            "<queries>. Real OS hand-off is a UiAutomator check.");
+                }
+            }
+#else
+            Assert.Ignore($"OfferWebView_RoutesExternalScheme[{checklistId}]: Android device only.");
+#endif
+        }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        // Builds the same ACTION_VIEW intent ZeyWinAdsWebViewNavigation.openExternal would, and
+        // returns the resolving package name (or null). Does NOT startActivity.
+        private static string ResolveViewIntentPackage(string url, AndroidJavaObject packageManager)
+        {
+            AndroidJavaObject intent = null;
+            AndroidJavaObject component = null;
+            try
+            {
+                if (url.StartsWith("intent://", StringComparison.OrdinalIgnoreCase))
+                {
+                    using (var intentClass = new AndroidJavaClass("android.content.Intent"))
+                        intent = intentClass.CallStatic<AndroidJavaObject>("parseUri", url, 1); // URI_INTENT_SCHEME
+                }
+                else
+                {
+                    using (var uriClass = new AndroidJavaClass("android.net.Uri"))
+                    using (var uri = uriClass.CallStatic<AndroidJavaObject>("parse", url))
+                        intent = new AndroidJavaObject("android.content.Intent", "android.intent.action.VIEW", uri);
+                }
+
+                component = intent.Call<AndroidJavaObject>("resolveActivity", packageManager);
+                return component != null ? component.Call<string>("getPackageName") : null;
+            }
+            catch
+            {
+                return null;
+            }
+            finally
+            {
+                component?.Dispose();
+                intent?.Dispose();
+            }
+        }
+#endif
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         // Receives the SDK's existing UnitySendMessage callbacks (same names ZeyWinAdsLockWebViewClient

@@ -19,9 +19,11 @@ namespace ZeyWinAds.Tests.Runtime
     //      real integrating app would use, and doesn't need its own reference to
     //      Firebase.Messaging.dll.
     //
-    // The permission check needs a human to actually tap Allow when the system dialog appears —
-    // this is a manual on-device check, not something CI/an emulator can satisfy unattended,
-    // hence the generous budget.
+    // The permission check only verifies that the SDK *requested* POST_NOTIFICATIONS during
+    // startup (or that it's already granted / not applicable) — NOT that a human tapped Allow.
+    // Whether the user grants it is the user's choice, not the SDK's job; forcing a manual tap
+    // is what made this test un-runnable unattended. "Requested" is read from the durable
+    // PlayerPrefs marker AndroidRuntimePermissions sets right before it fires the request.
     //
     // Runs after AdPreloadRuntimeTests (Order(1)) — see that file's comment for why fixtures in
     // this suite chain their Order values instead of running unordered.
@@ -32,31 +34,47 @@ namespace ZeyWinAds.Tests.Runtime
     [TestFixture]
     public class PushNotificationRuntimeTests
     {
-        private const float PermissionBudgetSeconds = 60f;
+        private const float PermissionBudgetSeconds = 30f;
         private const float TokenBudgetSeconds = 30f;
         private static readonly WaitForSecondsRealtime PollInterval = new WaitForSecondsRealtime(0.5f);
 
         [UnityTest]
         [Order(2)]
-        public IEnumerator NotificationPermission_IsGrantedWithinBudget()
+        public IEnumerator NotificationPermission_WasRequestedByStartup()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             const string postNotifications = "android.permission.POST_NOTIFICATIONS";
+            // AndroidRuntimePermissions.RequestNotificationPermissionAfterDelay() sets this the
+            // moment before it calls Permission.RequestUserPermission — a durable "the SDK asked"
+            // marker that survives the "prompt once" short-circuit on later launches.
+            const string promptedKey = "ZeyWinAds_PostNotificationsPrompted_v1";
             var startedAt = QaForegroundTimeTracker.ForegroundSeconds;
 
-            while (!UnityEngine.Android.Permission.HasUserAuthorizedPermission(postNotifications))
+            while (true)
             {
+                bool requested = PlayerPrefs.GetInt(promptedKey, 0) == 1;
+                // On Android < 13 POST_NOTIFICATIONS isn't a runtime permission and this returns
+                // true (auto-granted) — nothing for the SDK to request, so that's a pass too.
+                bool grantedOrNotApplicable =
+                    UnityEngine.Android.Permission.HasUserAuthorizedPermission(postNotifications);
+
+                if (requested || grantedOrNotApplicable)
+                {
+                    Debug.Log($"[ZeyWinAds QA] POST_NOTIFICATIONS: SDK requested={requested}, granted/n-a={grantedOrNotApplicable}.");
+                    yield break;
+                }
+
                 if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= PermissionBudgetSeconds)
                 {
-                    Assert.Fail($"POST_NOTIFICATIONS was not granted within {PermissionBudgetSeconds:F0}s — " +
-                        "make sure the system prompt appeared and Allow was tapped.");
+                    Assert.Fail($"The SDK's startup path did not request POST_NOTIFICATIONS within {PermissionBudgetSeconds:F0}s " +
+                        $"(PlayerPrefs '{promptedKey}' never set and the permission isn't already granted). " +
+                        "Check AndroidRuntimePermissions.ScheduleNotificationPermissionPrompt() and the " +
+                        "zeywin_push_permission_enabled remote-config flag.");
                 }
                 yield return PollInterval;
             }
-
-            Debug.Log("[ZeyWinAds QA] POST_NOTIFICATIONS permission confirmed granted.");
 #else
-            Debug.Log("[ZeyWinAds QA] NotificationPermission_IsGrantedWithinBudget: skipped (not an Android device).");
+            Debug.Log("[ZeyWinAds QA] NotificationPermission_WasRequestedByStartup: skipped (not an Android device).");
             yield break;
 #endif
         }
