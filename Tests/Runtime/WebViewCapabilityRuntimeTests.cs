@@ -36,6 +36,9 @@ namespace ZeyWinAds.Tests.Runtime
     //                                                  mailto        -> "mailto:"
     //                                                  tel           -> "tel:"
     //                                                  sms           -> "sms:"
+    //   BackNavigationTests(case)                    QA row "Возврат назад" — the OS back control:
+    //                                                  returns-to-previous-page -> back goes to the previous page
+    //                                                  first-page-no-close      -> back on the first page keeps the surface
     [TestFixture]
     public class WebViewCapabilityRuntimeTests
     {
@@ -45,9 +48,17 @@ namespace ZeyWinAds.Tests.Runtime
         private const float RedirectChainBudgetSeconds = 30f;
         private const float ChecklistReadyBudgetSeconds = 90f;  // SPA + 2MB bundle over the device network
         private const float ChecklistRunBudgetSeconds = 180f;   // runAuto() over ~22 checks, several hitting the network
+        private const float BackNavNavigateBudgetSeconds = 15f; // loadUrl() -> URL observed
+        private const float BackNavSettleBudgetSeconds = 10f;   // system BACK -> goBack() -> URL observed
+        // "page 1" / "page 2" for the back-navigation group — the same fixture page, told apart by
+        // &zwnav. A query-string change through loadUrl() is a full document load in Android WebView,
+        // hence a real back/forward history entry (a #hash change is not). ?autorun=0 keeps it inert.
+        private const string BackNavPage1 = "https://ads.zeywin.com/checklist/webview-test?runner=1&autorun=0&zwnav=1";
+        private const string BackNavPage2 = "https://ads.zeywin.com/checklist/webview-test?runner=1&autorun=0&zwnav=2";
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         private AndroidJavaObject _offerWebView;
+        private string _backNavStartUrl; // offer's own URL, captured so the UnityTearDown can restore it
 
         // Polls WebViewLock._webView (reflected) until the real offer WebView's native object
         // exists, leaving it in _offerWebView. Marks the test Inconclusive (not Failed) if the
@@ -335,6 +346,36 @@ namespace ZeyWinAds.Tests.Runtime
             }
         }
 #endif
+
+        // Only acts after BackNavigationTests' returns-to-previous-page case (which leaves the offer
+        // WebView on the fixture page) — restores the real offer URL for the orientation / safe-area
+        // fixtures that run next. A no-op for every other test in this fixture.
+        [UnityTearDown]
+        public IEnumerator RestoreOfferPageAfterBackNav()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            if (string.IsNullOrEmpty(_backNavStartUrl))
+                yield break;
+            string target = _backNavStartUrl;
+            _backNavStartUrl = null;
+
+            var webView = ReadOfferWebViewField();
+            if (webView == null)
+                yield break;
+
+            string current = null;
+            yield return RunOnUiThread(() => current = webView.Call<string>("getUrl"), _ => { });
+            if (current == target)
+                yield break;
+
+            Debug.Log("[ZeyWinAds QA] back-nav: teardown restoring offer page -> " + target);
+            yield return RunOnUiThread(() => webView.Call("loadUrl", target),
+                err => Debug.LogWarning("[ZeyWinAds QA] back-nav: teardown loadUrl failed: " + err));
+            yield return new WaitForSecondsRealtime(1f);
+#else
+            yield break;
+#endif
+        }
 
         [UnityTest]
         [Order(3)] // After PushNotificationRuntimeTests' Order(2).
@@ -704,6 +745,305 @@ namespace ZeyWinAds.Tests.Runtime
             Assert.Ignore($"OfferWebView_RoutesExternalScheme[{checklistId}]: Android device only.");
 #endif
         }
+
+        // QA checklist row "Возврат назад" — while an offer WebView is on screen the OS's standard back
+        // control (on-screen Back button OR edge-swipe gesture — both normalise to KEYCODE_BACK) must
+        // (returns-to-previous-page) take the user back to the previous page, and (first-page-no-close)
+        // NOT close the WebView when used on the first page of the site.
+        //
+        // SUT: WebViewLock.Update() (Android device only) polls Input.GetKeyDown(KeyCode.Escape) —
+        // Unity's mapping of the Android BACK key delivered to its Activity — and runs
+        //   if (_webView.canGoBack()) _webView.goBack();  else NOTHING.
+        // No native back handling exists in the SDK and the WebView never holds key focus, so
+        // requirement #2 holds purely by the absence of any Unlock/finish/destroy on back-at-root.
+        //
+        // "page 1" / "page 2" are staged on the checklist fixture URL (told apart by &zwnav). The back
+        // press is injected as KEYCODE_BACK via Activity.dispatchKeyEvent (the Unity player's input
+        // entry point) — the realistic ceiling for a PlayMode test; a true edge-swipe gesture needs a
+        // manual companion check. No live offer => Inconclusive (via WaitForOfferWebView).
+        // [UnityTest] can't be combined with [TestCase]; the supported way to give a coroutine test
+        // parameterized rows is [TestCaseSource] with TestCaseData(...).Returns(null) — the
+        // .Returns(null) satisfies NUnit's "expected result" check so it doesn't reject the
+        // IEnumerator return, then the [UnityTest] runner drives the coroutine.
+        private static IEnumerable BackNavigationCases()
+        {
+            yield return new TestCaseData("returns-to-previous-page")
+                .Returns(null)
+                .SetName("BackNavigation_SystemBack_ReturnsToPreviousPage");
+            yield return new TestCaseData("first-page-no-close")
+                .Returns(null)
+                .SetName("BackNavigation_SystemBack_OnFirstPage_DoesNotCloseSurface");
+        }
+
+        [UnityTest]
+        [Order(9)] // After OfferWebView_RoutesExternalScheme (Order 8); reuses the already-open offer surface.
+        [Timeout(120000)]
+        [TestCaseSource(nameof(BackNavigationCases))]
+        public IEnumerator BackNavigationTests(string scenario)
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            yield return WaitForOfferWebView(); // leaves _offerWebView; Inconclusive if no live offer
+
+            var legacyBackField = typeof(global::ZeyWinAds.UI.WebViewLock).GetField(
+                "_legacyBackInputUnavailable", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(legacyBackField,
+                "WebViewLock._legacyBackInputUnavailable not found — did the SDK rename it?");
+            Assert.IsFalse((bool)legacyBackField.GetValue(global::ZeyWinAds.UI.WebViewLock.Instance),
+                "WebViewLock._legacyBackInputUnavailable is true — the project's Active Input Handling must " +
+                "include the old Input Manager ('Both' or 'Input Manager'), or the SDK's system-back handler " +
+                "is permanently disabled for the session and the offer WebView cannot honour back.");
+            Assert.IsTrue(global::ZeyWinAds.UI.WebViewLock.IsLocked,
+                "Offer surface is not locked though its WebView is up.");
+
+            switch (scenario)
+            {
+                case "returns-to-previous-page": yield return BackReturnsToPreviousPage(); break;
+                case "first-page-no-close":      yield return BackOnFirstPageDoesNotClose(); break;
+                default: Assert.Fail($"Unknown BackNavigationTests scenario '{scenario}'."); break;
+            }
+#else
+            Debug.Log($"[ZeyWinAds QA] BackNavigationTests[{scenario}]: skipped (not an Android device).");
+            yield break;
+#endif
+        }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private IEnumerator BackReturnsToPreviousPage()
+        {
+            var webView = _offerWebView;
+
+            // The offer's own URL, for the teardown restore (first value getUrl() returns twice running).
+            string prev = null;
+            float capStart = Time.realtimeSinceStartup;
+            while (true)
+            {
+                string cur = null;
+                yield return ReadWebViewUrl(webView, v => cur = v);
+                if (!string.IsNullOrEmpty(cur) && cur == prev) { _backNavStartUrl = cur; break; }
+                prev = cur;
+                if (Time.realtimeSinceStartup - capStart >= BackNavNavigateBudgetSeconds)
+                {
+                    _backNavStartUrl = cur ?? prev;
+                    break;
+                }
+                yield return new WaitForSecondsRealtime(0.5f);
+            }
+            Debug.Log("[ZeyWinAds QA] back-nav: offer start URL = " + _backNavStartUrl);
+
+            // Gate each navigation on the back/forward CURRENT-INDEX actually advancing — i.e.
+            // loadUrl() committed a real history entry. getUrl() reflects the in-flight URL the
+            // instant loadUrl() is called, so polling it would let a fast second loadUrl() pre-empt
+            // the first before it ever became an entry (that is exactly what failed here).
+            int baseIdx = int.MinValue;
+            yield return ReadHistoryIndex(webView, v => baseIdx = v);
+            Debug.Log("[ZeyWinAds QA] back-nav: baseline history index = " + baseIdx);
+
+            yield return LoadWebViewUrl(webView, BackNavPage1);
+            yield return WaitForHistoryCommitPast(webView, baseIdx, BackNavNavigateBudgetSeconds,
+                "offer WebView did not commit a history entry for fixture page 1 — device offline or " +
+                "ads.zeywin.com unreachable.");
+            int page1Idx = int.MinValue;
+            yield return ReadHistoryIndex(webView, v => page1Idx = v);
+            string page1Url = null;
+            yield return ReadWebViewUrl(webView, v => page1Url = v);
+            Assert.IsTrue((page1Url ?? "").Contains("zwnav=1"),
+                $"fixture page 1 committed a history entry but its URL is not zwnav=1 (got '{page1Url}') — " +
+                "the page rewrote the query string.");
+
+            yield return LoadWebViewUrl(webView, BackNavPage2);
+            yield return WaitForHistoryCommitPast(webView, page1Idx, BackNavNavigateBudgetSeconds,
+                "offer WebView did not commit a history entry for fixture page 2.");
+            int page2Idx = int.MinValue;
+            yield return ReadHistoryIndex(webView, v => page2Idx = v);
+
+            bool canGoBack = false;
+            yield return ReadWebViewCanGoBack(webView, v => canGoBack = v);
+            Assert.IsTrue(canGoBack,
+                "WebView.canGoBack() is false at fixture page 2 — no history recorded.");
+
+            Debug.Log($"[ZeyWinAds QA] back-nav: history base={baseIdx} page1={page1Idx} page2={page2Idx}; " +
+                "pressing system BACK");
+            yield return PressSystemBack();
+
+            // goBack() must move exactly one entry: page2Idx -> page1Idx, back onto fixture page 1.
+            yield return WaitForHistoryIndexEquals(webView, page1Idx, BackNavSettleBudgetSeconds,
+                "system BACK did not move the offer WebView back exactly one history entry. Either the SDK " +
+                "back handler did not run (WebViewLock.Update -> Input.GetKeyDown(KeyCode.Escape) -> " +
+                "canGoBack/goBack), the KEYCODE_BACK event did not reach Unity's input, or it moved more " +
+                "than one entry.");
+
+            string afterBack = null;
+            yield return ReadWebViewUrl(webView, v => afterBack = v);
+            Assert.IsTrue((afterBack ?? "").Contains("zwnav=1"),
+                $"after system BACK the current history entry is not fixture page 1 (got '{afterBack}').");
+            Assert.IsFalse((afterBack ?? "").Contains("zwnav=2"),
+                "after system BACK the WebView is still on fixture page 2 — goBack() did not move history.");
+            Assert.IsTrue(global::ZeyWinAds.UI.WebViewLock.IsLocked,
+                "Offer surface unlocked itself after an in-history BACK.");
+            Assert.IsNotNull(ReadOfferWebViewField(),
+                "Offer WebView was destroyed after an in-history BACK.");
+
+            Debug.Log("[ZeyWinAds QA] BackNavigation returns-to-previous-page: PASS");
+        }
+
+        private IEnumerator BackOnFirstPageDoesNotClose()
+        {
+            var webView = _offerWebView;
+
+            // Drain any in-page history so we are genuinely on the first page (canGoBack() == false).
+            for (int i = 0; i < 6; i++)
+            {
+                bool canGoBack = false;
+                yield return ReadWebViewCanGoBack(webView, v => canGoBack = v);
+                if (!canGoBack)
+                    break;
+                Debug.Log($"[ZeyWinAds QA] back-nav: draining in-page history, press {i + 1}");
+                yield return PressSystemBack();
+                yield return new WaitForSecondsRealtime(1f);
+            }
+
+            bool stillCanGoBack = false;
+            yield return ReadWebViewCanGoBack(webView, v => stillCanGoBack = v);
+            if (stillCanGoBack)
+                Debug.LogWarning("[ZeyWinAds QA] back-nav: WebView still reports canGoBack() after draining — " +
+                    "asserting the surface survives BACK anyway (that holds at any history depth).");
+
+            string rootUrl = null;
+            yield return ReadWebViewUrl(webView, v => rootUrl = v);
+            Debug.Log("[ZeyWinAds QA] back-nav: at history root, URL = " + rootUrl);
+
+            Debug.Log("[ZeyWinAds QA] back-nav: pressing system BACK at history root");
+            yield return PressSystemBack();
+            yield return new WaitForSecondsRealtime(1.5f);
+
+            Assert.IsNotNull(ReadOfferWebViewField(),
+                "System BACK at the WebView history root destroyed the offer WebView — WebViewLock must ignore " +
+                "back with no history (no Unlock / finish / destroy).");
+            Assert.IsTrue(global::ZeyWinAds.UI.WebViewLock.IsLocked,
+                "System BACK at the WebView history root unlocked the offer surface — WebViewLock must ignore " +
+                "back with no history.");
+            Assert.IsTrue(Application.isPlaying,
+                "System BACK at the WebView history root ended the app / dropped it to background instead of " +
+                "being swallowed by the offer surface.");
+
+            string afterBack = null;
+            yield return ReadWebViewUrl(webView, v => afterBack = v);
+            if (!string.IsNullOrEmpty(rootUrl) && !string.IsNullOrEmpty(afterBack))
+                Assert.AreEqual(rootUrl, afterBack,
+                    "System BACK at the WebView history root navigated the WebView (it should have done nothing).");
+
+            Debug.Log("[ZeyWinAds QA] BackNavigation first-page-no-close: PASS");
+        }
+
+        private static AndroidJavaObject ReadOfferWebViewField()
+        {
+            var f = typeof(global::ZeyWinAds.UI.WebViewLock).GetField(
+                "_webView", BindingFlags.NonPublic | BindingFlags.Instance);
+            return f?.GetValue(global::ZeyWinAds.UI.WebViewLock.Instance) as AndroidJavaObject;
+        }
+
+        private IEnumerator ReadWebViewUrl(AndroidJavaObject webView, Action<string> result)
+        {
+            string url = null;
+            yield return RunOnUiThread(() => url = webView.Call<string>("getUrl"),
+                err => Assert.Fail("WebView.getUrl() failed on the UI thread: " + err));
+            result(url);
+        }
+
+        private IEnumerator ReadWebViewCanGoBack(AndroidJavaObject webView, Action<bool> result)
+        {
+            bool can = false;
+            yield return RunOnUiThread(() => can = webView.Call<bool>("canGoBack"),
+                err => Assert.Fail("WebView.canGoBack() failed on the UI thread: " + err));
+            result(can);
+        }
+
+        private IEnumerator LoadWebViewUrl(AndroidJavaObject webView, string url)
+        {
+            yield return RunOnUiThread(() => webView.Call("loadUrl", url),
+                err => Assert.Fail("WebView.loadUrl(" + url + ") failed on the UI thread: " + err));
+        }
+
+        // WebView.copyBackForwardList().getCurrentIndex() — the 0-based position in the back/forward
+        // list. Only advances when a navigation actually COMMITS, so it's the reliable "the entry
+        // exists now" signal (unlike getUrl(), which returns the in-flight URL immediately).
+        private IEnumerator ReadHistoryIndex(AndroidJavaObject webView, Action<int> result)
+        {
+            int idx = int.MinValue;
+            yield return RunOnUiThread(() =>
+            {
+                using (var list = webView.Call<AndroidJavaObject>("copyBackForwardList"))
+                    idx = list.Call<int>("getCurrentIndex");
+            }, err => Assert.Fail("WebView.copyBackForwardList().getCurrentIndex() failed on the UI thread: " + err));
+            result(idx);
+        }
+
+        private IEnumerator WaitForHistoryCommitPast(AndroidJavaObject webView, int fromIndex,
+            float budgetSeconds, string failMessage)
+        {
+            float startedAt = Time.realtimeSinceStartup;
+            while (true)
+            {
+                int idx = int.MinValue;
+                yield return ReadHistoryIndex(webView, v => idx = v);
+                if (idx > fromIndex)
+                {
+                    Debug.Log($"[ZeyWinAds QA] back-nav: history advanced {fromIndex} -> {idx}");
+                    yield break;
+                }
+                if (Time.realtimeSinceStartup - startedAt >= budgetSeconds)
+                    Assert.Fail(failMessage + $" (history index still {idx} after {budgetSeconds:F0}s)");
+                yield return new WaitForSecondsRealtime(0.25f);
+            }
+        }
+
+        private IEnumerator WaitForHistoryIndexEquals(AndroidJavaObject webView, int target,
+            float budgetSeconds, string failMessage)
+        {
+            float startedAt = Time.realtimeSinceStartup;
+            while (true)
+            {
+                int idx = int.MinValue;
+                yield return ReadHistoryIndex(webView, v => idx = v);
+                if (idx == target)
+                {
+                    Debug.Log($"[ZeyWinAds QA] back-nav: history index is {idx}");
+                    yield break;
+                }
+                if (Time.realtimeSinceStartup - startedAt >= budgetSeconds)
+                    Assert.Fail(failMessage + $" (history index {idx}, wanted {target}, after {budgetSeconds:F0}s)");
+                yield return new WaitForSecondsRealtime(0.25f);
+            }
+        }
+
+        // A real KEYCODE_BACK (DOWN then UP) to the Unity Activity — the exact event the on-screen
+        // Back button and the gesture-nav swipe both produce, and what Unity turns into KeyCode.Escape
+        // for WebViewLock.Update() to poll. A few frames then pass for the SDK to post its goBack().
+        private IEnumerator PressSystemBack()
+        {
+            yield return DispatchBackKey(0); // KeyEvent.ACTION_DOWN
+            yield return null;
+            yield return DispatchBackKey(1); // KeyEvent.ACTION_UP
+            yield return null;
+            yield return null;
+            yield return null;
+        }
+
+        private IEnumerator DispatchBackKey(int action)
+        {
+            yield return RunOnUiThread(() =>
+            {
+                using (var keyEventClass = new AndroidJavaClass("android.view.KeyEvent"))
+                using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+                {
+                    int keycodeBack = keyEventClass.GetStatic<int>("KEYCODE_BACK");
+                    using (var evt = new AndroidJavaObject("android.view.KeyEvent", action, keycodeBack))
+                        activity.Call<bool>("dispatchKeyEvent", evt);
+                }
+            }, err => Assert.Fail("dispatchKeyEvent(KEYCODE_BACK) failed: " + err));
+        }
+#endif
 
 #if UNITY_ANDROID && !UNITY_EDITOR
         // Builds the same ACTION_VIEW intent ZeyWinAdsWebViewNavigation.openExternal would, and
