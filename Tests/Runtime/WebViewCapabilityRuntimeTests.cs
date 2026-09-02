@@ -39,6 +39,9 @@ namespace ZeyWinAds.Tests.Runtime
     //   BackNavigationTests(case)                    QA row "Возврат назад" — the OS back control:
     //                                                  returns-to-previous-page -> back goes to the previous page
     //                                                  first-page-no-close      -> back on the first page keeps the surface
+    //   DeepLinkHandlingTests(case)                  QA row "Переход по диплинку" — deep links inside the
+    //                                                WebView are intercepted and handed to the OS
+    //                                                (shouldOpenExternally / new Intent / popup routing)
     [TestFixture]
     public class WebViewCapabilityRuntimeTests
     {
@@ -807,7 +810,212 @@ namespace ZeyWinAds.Tests.Runtime
 #endif
         }
 
+        // QA checklist row "Переход по диплинку" — a deep link encountered inside the offer WebView must
+        // be caught and handed to the OS (new Intent), not loaded as a page. SUT:
+        // ZeyWinAdsWebViewNavigation.shouldOpenExternally (9-scheme allow-list) + openExternal(Activity,
+        // url) (builds ACTION_VIEW / Intent.parseUri + startActivity), reached from
+        // ZeyWinAdsLockWebViewClient.shouldOverrideUrlLoading and, for window.open/_blank, from
+        // ZeyWinAdsWebChromeClient.onCreateWindow -> routePopupUrl. Rows 1-4 are pure JNI (no WebView,
+        // no startActivity); row 5 drives the real ZeyWinAdsWebChromeClient on the live offer WebView
+        // with an intent:// naming an absent package, so nothing actually launches.
+        private static IEnumerable DeepLinkCases()
+        {
+            yield return new TestCaseData("all-schemes-route-external")
+                .Returns(null).SetName("DeepLink_AllSchemes_RouteExternal");
+            yield return new TestCaseData("non-deeplink-fall-through")
+                .Returns(null).SetName("DeepLink_NonDeepLinkSchemes_FallThrough");
+            yield return new TestCaseData("builds-view-intent")
+                .Returns(null).SetName("DeepLink_BuildsViewIntent");
+            yield return new TestCaseData("intent-uri-parses-fallback")
+                .Returns(null).SetName("DeepLink_IntentUri_ParsesFallback");
+            yield return new TestCaseData("popup-routed-out")
+                .Returns(null).SetName("DeepLink_PopupDeepLink_IsRoutedOut_NotLoaded");
+        }
+
+        [UnityTest]
+        [Order(9)] // After OfferWebView_RoutesExternalScheme (Order 8); shares 9 with BackNavigationTests (order between them irrelevant).
+        [Timeout(120000)]
+        [TestCaseSource(nameof(DeepLinkCases))]
+        public IEnumerator DeepLinkHandlingTests(string scenario)
+        {
 #if UNITY_ANDROID && !UNITY_EDITOR
+            switch (scenario)
+            {
+                case "all-schemes-route-external": DeepLink_AllSchemes_RouteExternal(); break;
+                case "non-deeplink-fall-through":  DeepLink_NonDeepLinkSchemes_FallThrough(); break;
+                case "builds-view-intent":         DeepLink_BuildsViewIntent(); break;
+                case "intent-uri-parses-fallback": DeepLink_IntentUri_ParsesFallback(); break;
+                case "popup-routed-out":           yield return DeepLink_PopupDeepLink_IsRoutedOut_NotLoaded(); break;
+                default: Assert.Fail($"Unknown DeepLinkHandlingTests scenario '{scenario}'."); break;
+            }
+            yield break;
+#else
+            Debug.Log($"[ZeyWinAds QA] DeepLinkHandlingTests[{scenario}]: skipped (not an Android device).");
+            yield break;
+#endif
+        }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private static void DeepLink_AllSchemes_RouteExternal()
+        {
+            string[] urls =
+            {
+                "intent://scan/#Intent;scheme=zxing;end",
+                "market://details?id=com.example.app",
+                "tg://resolve?domain=telegram",
+                "telegram://resolve?domain=telegram",
+                "whatsapp://send?text=hi",
+                "viber://forward?text=hi",
+                "mailto:qa@zeywin.com?subject=probe",
+                "tel:+10000000000",
+                "sms:+10000000000?body=probe",
+            };
+            using (var nav = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsWebViewNavigation"))
+            {
+                foreach (var url in urls)
+                    Assert.IsTrue(nav.CallStatic<bool>("shouldOpenExternally", url),
+                        $"ZeyWinAdsWebViewNavigation.shouldOpenExternally returned false for '{url}' — the offer " +
+                        "WebView would load this deep-link scheme as a page instead of handing it to the OS.");
+            }
+        }
+
+        private static void DeepLink_NonDeepLinkSchemes_FallThrough()
+        {
+            // Schemes NOT on the allow-list are handed back to the WebView (-> ERR_UNKNOWN_URL_SCHEME).
+            // Pins the boundary so a future allow-list change is noticed. http/https/about are isWebUrl
+            // -> also never routed out.
+            string[] notRouted =
+            {
+                "myapp://open?x=1",
+                "bitcoin:1A2b3C",
+                "fb://profile/1",
+                "spotify:track:xyz",
+                "https://example.com/",
+                "about:blank",
+            };
+            using (var nav = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsWebViewNavigation"))
+            {
+                foreach (var url in notRouted)
+                    Assert.IsFalse(nav.CallStatic<bool>("shouldOpenExternally", url),
+                        $"ZeyWinAdsWebViewNavigation.shouldOpenExternally returned true for '{url}' — only the 9 " +
+                        "whitelisted deep-link schemes should route out.");
+            }
+        }
+
+        private static void DeepLink_BuildsViewIntent()
+        {
+            // Mirror openExternal's non-intent:// branch: new Intent(ACTION_VIEW, Uri.parse(url)).
+            (string url, string scheme)[] cases =
+            {
+                ("tg://resolve?domain=telegram", "tg"),
+                ("market://details?id=com.zeywin.example", "market"),
+            };
+            foreach (var (url, scheme) in cases)
+            {
+                AndroidJavaObject uri = null, intent = null, data = null;
+                try
+                {
+                    using (var uriClass = new AndroidJavaClass("android.net.Uri"))
+                        uri = uriClass.CallStatic<AndroidJavaObject>("parse", url);
+                    intent = new AndroidJavaObject("android.content.Intent", "android.intent.action.VIEW", uri);
+
+                    Assert.AreEqual("android.intent.action.VIEW", intent.Call<string>("getAction"),
+                        $"[{scheme}] openExternal would not build an ACTION_VIEW intent for the deep link.");
+                    data = intent.Call<AndroidJavaObject>("getData");
+                    Assert.AreEqual(scheme, data.Call<string>("getScheme"),
+                        $"[{scheme}] the ACTION_VIEW intent's data scheme is wrong.");
+                    string dataString = intent.Call<string>("getDataString");
+                    Assert.IsTrue((dataString ?? "").StartsWith(scheme + "://"),
+                        $"[{scheme}] the ACTION_VIEW intent's data URI '{dataString}' is not a {scheme}:// URI.");
+                }
+                finally
+                {
+                    data?.Dispose();
+                    intent?.Dispose();
+                    uri?.Dispose();
+                }
+            }
+        }
+
+        private static void DeepLink_IntentUri_ParsesFallback()
+        {
+            const string url =
+                "intent://x/#Intent;scheme=https;package=com.zeywinads.qa.nolauncher;" +
+                "S.browser_fallback_url=https%3A%2F%2Fexample.com%2Ffb;end";
+
+            AndroidJavaObject intent = null, resolved = null;
+            try
+            {
+                using (var intentClass = new AndroidJavaClass("android.content.Intent"))
+                    intent = intentClass.CallStatic<AndroidJavaObject>("parseUri", url, 1); // URI_INTENT_SCHEME
+
+                Assert.AreEqual("https://example.com/fb",
+                    intent.Call<string>("getStringExtra", "browser_fallback_url"),
+                    "Intent.parseUri did not surface the browser_fallback_url extra that openExternal reads.");
+
+                using (var player = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var activity = player.GetStatic<AndroidJavaObject>("currentActivity"))
+                using (var pm = activity.Call<AndroidJavaObject>("getPackageManager"))
+                {
+                    resolved = intent.Call<AndroidJavaObject>("resolveActivity", pm);
+                    Assert.IsNull(resolved,
+                        "The intent:// names a package that isn't installed, so resolveActivity() must be null — " +
+                        "the condition under which openExternal falls back to browser_fallback_url.");
+                }
+            }
+            finally
+            {
+                resolved?.Dispose();
+                intent?.Dispose();
+            }
+        }
+
+        private IEnumerator DeepLink_PopupDeepLink_IsRoutedOut_NotLoaded()
+        {
+            yield return WaitForOfferWebView(); // Inconclusive if no live offer
+            Assert.IsTrue(global::ZeyWinAds.UI.WebViewLock.IsLocked,
+                "Offer surface is not locked though its WebView is up.");
+
+            var webView = _offerWebView;
+
+            int baseIdx = int.MinValue;
+            yield return ReadHistoryIndex(webView, v => baseIdx = v);
+            string baseUrl = null;
+            yield return ReadWebViewUrl(webView, v => baseUrl = v);
+            Debug.Log($"[ZeyWinAds QA] deeplink: offer at index {baseIdx}, url {baseUrl}");
+
+            // window.open(...) on the real offer WebView -> ZeyWinAdsWebChromeClient.onCreateWindow ->
+            // routePopupUrl: shouldOpenExternally true -> openExternal(activity, url) -> destroyChild ->
+            // return true. The absent package guarantees nothing launches (openExternal's startActivity
+            // throws ActivityNotFoundException, swallowed); the parent WebView must stay put.
+            yield return EvalJs(webView,
+                "window.open('intent://x/#Intent;scheme=https;package=com.zeywinads.qa.nolauncher;end','_blank');'ok'",
+                JsResultBudgetSeconds, _ => { });
+
+            yield return new WaitForSecondsRealtime(2f);
+
+            string afterUrl = null;
+            yield return ReadWebViewUrl(webView, v => afterUrl = v);
+            int afterIdx = int.MinValue;
+            yield return ReadHistoryIndex(webView, v => afterIdx = v);
+            Debug.Log($"[ZeyWinAds QA] deeplink: after popup — index {afterIdx}, url {afterUrl}");
+
+            Assert.IsFalse((afterUrl ?? "").StartsWith("intent://"),
+                $"the offer WebView navigated to the deep link itself (url now '{afterUrl}') — " +
+                "window.open('intent://…') was loaded as content instead of being routed to the OS.");
+            Assert.IsTrue((afterUrl ?? "").StartsWith("http"),
+                $"the offer WebView is no longer on an http(s) page after a popup deep link (url now '{afterUrl}').");
+            if (baseIdx != afterIdx)
+                Debug.LogWarning($"[ZeyWinAds QA] deeplink: offer history index changed {baseIdx} -> {afterIdx} " +
+                    "during the settle window (offer page self-navigated?); relying on the URL assertions.");
+            Assert.IsTrue(global::ZeyWinAds.UI.WebViewLock.IsLocked,
+                "the offer surface unlocked itself after a popup deep link.");
+            Assert.IsNotNull(ReadOfferWebViewField(),
+                "the offer WebView was destroyed after a popup deep link.");
+
+            Debug.Log("[ZeyWinAds QA] DeepLink_PopupDeepLink_IsRoutedOut_NotLoaded: PASS");
+        }
+
         private IEnumerator BackReturnsToPreviousPage()
         {
             var webView = _offerWebView;
