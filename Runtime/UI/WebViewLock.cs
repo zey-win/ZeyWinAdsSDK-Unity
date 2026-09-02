@@ -41,6 +41,15 @@ namespace ZeyWinAds.UI
         private float _lockStartedAt;
         private bool _legacyBackInputUnavailable;
 
+        // Orientation state captured when the offer surface forces free rotation, so
+        // EndZeyWinSurface can put the host game's orientation back exactly as it was.
+        private bool _orientationOverrideActive;
+        private ScreenOrientation _preOfferOrientation;
+        private bool _preOfferAutoPortrait;
+        private bool _preOfferAutoPortraitUpsideDown;
+        private bool _preOfferAutoLandscapeLeft;
+        private bool _preOfferAutoLandscapeRight;
+
 #if UNITY_ANDROID
         private AndroidJavaObject _webView;
         private AndroidJavaObject _webViewClient;
@@ -434,7 +443,7 @@ namespace ZeyWinAds.UI
 
             _zeyWinSurfaceActive = true;
             AdMediator.BeginZeyWinSurface("locked_webview");
-            // AllowFreeRotationForOfferSurface();
+            AllowFreeRotationForOfferSurface();
         }
 
         private void EndZeyWinSurface()
@@ -444,15 +453,26 @@ namespace ZeyWinAds.UI
 
             _zeyWinSurfaceActive = false;
             AdMediator.EndZeyWinSurface("locked_webview");
+            RestoreOrientationAfterOfferSurface();
         }
 
         // While the offer WebView is on screen the user must be able to rotate the device on any
-        // side, even if the host game is pinned to one orientation. Enables all four autorotate
-        // directions and puts Unity into AutoRotation — Unity then drives the Activity's
-        // orientation to a sensor value and keeps it there (a raw Activity.setRequestedOrientation
-        // is re-asserted away by the Unity player).
+        // side, even if the host game is pinned to one orientation. Snapshots the host's orientation
+        // state, then enables all four autorotate directions and puts Unity into AutoRotation — Unity
+        // then drives the Activity's orientation to a sensor value and keeps it there (a raw
+        // Activity.setRequestedOrientation is re-asserted away by the Unity player).
         private void AllowFreeRotationForOfferSurface()
         {
+            if (_orientationOverrideActive)
+                return;
+
+            _preOfferOrientation = Screen.orientation;
+            _preOfferAutoPortrait = Screen.autorotateToPortrait;
+            _preOfferAutoPortraitUpsideDown = Screen.autorotateToPortraitUpsideDown;
+            _preOfferAutoLandscapeLeft = Screen.autorotateToLandscapeLeft;
+            _preOfferAutoLandscapeRight = Screen.autorotateToLandscapeRight;
+            _orientationOverrideActive = true;
+
             Screen.autorotateToPortrait = true;
             Screen.autorotateToPortraitUpsideDown = true;
             Screen.autorotateToLandscapeLeft = true;
@@ -460,6 +480,32 @@ namespace ZeyWinAds.UI
             Screen.orientation = ScreenOrientation.AutoRotation;
 
             Logger.Log("Offer surface: free screen rotation enabled");
+        }
+
+        // Puts the host game's orientation back the way it was before the offer surface forced free
+        // rotation. The Screen.orientation getter never returns AutoRotation, so if the host had all
+        // rotate axes open before, treat that as AutoRotation intent rather than locking to whatever
+        // physical orientation happened to be current at snapshot time.
+        private void RestoreOrientationAfterOfferSurface()
+        {
+            if (!_orientationOverrideActive)
+                return;
+
+            Screen.autorotateToPortrait = _preOfferAutoPortrait;
+            Screen.autorotateToPortraitUpsideDown = _preOfferAutoPortraitUpsideDown;
+            Screen.autorotateToLandscapeLeft = _preOfferAutoLandscapeLeft;
+            Screen.autorotateToLandscapeRight = _preOfferAutoLandscapeRight;
+
+            bool hostWasFreelyRotating = _preOfferAutoPortrait
+                && _preOfferAutoLandscapeLeft
+                && _preOfferAutoLandscapeRight;
+            Screen.orientation = hostWasFreelyRotating
+                ? ScreenOrientation.AutoRotation
+                : _preOfferOrientation;
+
+            _orientationOverrideActive = false;
+
+            Logger.Log("Offer surface: screen rotation restored to host baseline");
         }
 
 #if UNITY_EDITOR
