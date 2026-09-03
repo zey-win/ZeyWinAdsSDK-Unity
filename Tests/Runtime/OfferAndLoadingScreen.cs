@@ -36,6 +36,18 @@ namespace ZeyWinAds.Tests.Runtime
         private const float OfferOpenBudgetSeconds = 20f;
         private static readonly WaitForSecondsRealtime PollInterval = new WaitForSecondsRealtime(0.1f);
 
+        // Promotes each pending QA screenshot to a kept artifact iff the test that owns it passed,
+        // and deletes it otherwise. Both calls are no-ops unless that capture produced a .pending
+        // file this run: "loader-overlay" is taken by QaLoadingOverlayRecorder the moment the
+        // native loader appears (owned by OverlayAppearsAndDismissesWithinBudget, [Order(0)]);
+        // "offer-surface" is taken at the end of ForceOfferOpens ([Order(1)]).
+        [TearDown]
+        public void ResolvePendingScreenshots()
+        {
+            QaScreenshot.ResolveForCurrentTest("loader-overlay");
+            QaScreenshot.ResolveForCurrentTest("offer-surface");
+        }
+
         // Two phases, matching LoadingOverlayDiagnostic's semantics:
         //   1. The overlay must appear within LoaderStartupTimeoutSeconds of app start — fail if
         //      it never shows at all.
@@ -117,6 +129,13 @@ namespace ZeyWinAds.Tests.Runtime
                 $"Offer WebView URL is not a valid http(s) link: '{url}'");
 
             QaOfferGate.MarkOfferConfirmed(); // the ZeyWinAds.Tests.Runtime.WebView group gates on this
+
+            // Visual proof the offer surface is really up (PixelCopy of the window — the native
+            // offer WebView is included, which a Unity screenshot would miss). Give the page a
+            // couple of seconds to paint its first frame first, otherwise the shot is just the
+            // surface's black backing. Kept as an artifact only if this test passes.
+            yield return new WaitForSecondsRealtime(2f);
+            yield return QaScreenshot.Capture("offer-surface");
         }
 
         // "Запуск новой ссылки" — the first offer URL is stored and never overwritten by a later

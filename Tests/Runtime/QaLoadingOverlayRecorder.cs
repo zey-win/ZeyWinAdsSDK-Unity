@@ -69,6 +69,12 @@ namespace ZeyWinAds.Tests.Runtime
                 {
                     EverShown = true;
                     _shownAtForeground = QaForegroundTimeTracker.ForegroundSeconds;
+
+                    // Grab visual proof the native loader is really on screen, right now — by the
+                    // time OverlayAppearsAndDismissesWithinBudget runs it may already be gone. The
+                    // PNG is written as ".pending" and only kept if that test passes (see
+                    // OfferAndLoadingScreen.ResolvePendingScreenshots).
+                    QaScreenshot.CaptureDetached("loader-overlay");
                 }
 
                 StillVisible = true;
