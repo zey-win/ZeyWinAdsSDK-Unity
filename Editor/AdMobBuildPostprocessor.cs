@@ -30,6 +30,9 @@ namespace ZeyWinAds.Editor
         private const string UnityPlayerGameActivityName = "com.unity3d.player.UnityPlayerGameActivity";
         private const string StartupProviderName = "com.zeywinads.unity.ZeyWinAdsStartupProvider";
         private const string StartupProviderAuthoritySuffix = ".zeywinads.startup";
+        // Transparent trampoline activity from com.google.android.play:hsdp (pulled in transitively by
+        // com.google.android.gms:play-services-ads). See HardenPlayHsdpShimActivity.
+        private const string HsdpShimActivityName = "com.google.android.play.core.hsdp.service.HsdpShimActivity";
         private const string UnityActivityConfigChanges =
             "mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|fontScale|layoutDirection|colorMode";
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
@@ -262,6 +265,7 @@ allprojects {
             EnsureUnityActivityConfigurationChanges(application, activity, AndroidNs);
             EnsureStartupProviderPriority(application, AndroidNs);
             EnsureLauncherIntentFilter(doc, activity, AndroidNs);
+            HardenPlayHsdpShimActivity(doc, manifest, application);
 
             SaveXml(doc, fullPath);
             Debug.Log("[ZeyWinAds] Final Android manifest launch metadata verified: " + fullPath);
@@ -623,6 +627,51 @@ allprojects {
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Hardens Google Play's <c>HsdpShimActivity</c> against the fatal
+        /// <c>IllegalStateException: targetPackageName is null</c> crash it throws from
+        /// <c>onAttachedToWindow</c>. That activity is a transparent trampoline (theme
+        /// <c>Theme.HsdpServiceTransparent</c>) shipped inside <c>com.google.android.play:hsdp</c>,
+        /// which <c>com.google.android.gms:play-services-ads</c> pulls in transitively. It reads
+        /// <c>targetPackageName</c> from its launch Intent's extras; when the framework recreates it
+        /// without that Intent state the value is null and the app is killed — frequently right as the
+        /// user reopens the app. Two recreation paths are covered here:
+        ///   1. In-place configuration changes. The .aar declares only
+        ///      <c>orientation|screenSize|screenLayout|keyboardHidden</c>, so a dark-mode toggle,
+        ///      font-size / display-size change, locale change or multi-window resize destroys and
+        ///      recreates it. We widen <c>configChanges</c> (via <c>tools:replace</c>, since we are
+        ///      overriding Google's value) to the full set Unity's own activity handles, so the shim
+        ///      rides out config changes instead of being recreated.
+        ///   2. Process death + task restore. If Android kills the process while the shim sits in the
+        ///      back stack (behind the Play Store UI it launched), reopening the app recreates it
+        ///      first. <c>finishOnTaskLaunch</c> finishes the stranded instance on task relaunch
+        ///      instead of recreating it.
+        /// The shim lives in a prebuilt .aar so this is done by merging attributes onto its
+        /// &lt;activity&gt; node from the app manifest. If a Play-brokered ad sub-flow ever regresses,
+        /// removing the <c>configChanges</c> override (keep <c>finishOnTaskLaunch</c>) is the safe
+        /// partial revert.
+        /// </summary>
+        private static void HardenPlayHsdpShimActivity(XmlDocument doc, XmlElement manifest, XmlElement application)
+        {
+            if (doc == null || manifest == null || application == null)
+                return;
+
+            XmlElement activity = FindActivity(application, AndroidNs, HsdpShimActivityName);
+            if (activity == null)
+            {
+                activity = doc.CreateElement("activity");
+                activity.SetAttribute("name", AndroidNs, HsdpShimActivityName);
+                application.AppendChild(activity);
+            }
+
+            activity.SetAttribute("configChanges", AndroidNs, UnityActivityConfigChanges);
+            activity.SetAttribute("finishOnTaskLaunch", AndroidNs, "true");
+            activity.SetAttribute("excludeFromRecents", AndroidNs, "true");
+
+            EnsureToolsNamespace(manifest);
+            EnsureToolsReplace(activity, "android:configChanges");
         }
 
         private static void EnsureStartupProviderPriority(XmlElement application, string ns)
