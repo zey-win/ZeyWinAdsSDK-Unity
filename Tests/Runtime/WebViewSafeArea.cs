@@ -26,13 +26,14 @@ namespace ZeyWinAds.Tests.Runtime
     // safe-area padding to settle to the live window insets, then checks natively that the WebView
     // rectangle sits inside `content` minus those insets.
     //
-    // Requires a REAL offer WebView to be up (same as OfferAndLoaderRuntimeTests.ShowsForceOffer):
-    // no live offer => FAIL, not Inconclusive.
+    // Requires a REAL offer WebView to be up (same as OfferAndLoadingScreen.ForceOfferOpens): no live offer
+    // => FAIL, not Inconclusive.
     //
-    // Class name starts "WebViewS..." so it sorts after "WebViewOrientation..." / "WebViewCapability..."
-    // — NUnit here runs fixtures in class-name order, so this runs last (the [Order] is intent only).
+    // Class name starts "WebViewSafeArea..." so it sorts after "WebViewOrientation..." /
+    // "WebViewCapabilities..." — NUnit here runs fixtures in class-name order, so this runs last
+    // (the [Order] is intent only).
     [TestFixture]
-    public class WebViewSafeAreaRuntimeTests
+    public class WebViewSafeArea
     {
         private const float OfferOpenBudgetSeconds = 60f;       // wait for the SDK's force offer to open
         private const float RotationSettleBudgetSeconds = 12f;  // Screen.orientation setter -> native re-layout
@@ -72,9 +73,9 @@ namespace ZeyWinAds.Tests.Runtime
         }
 
         [UnityTest]
-        [Order(10)] // After WebViewOrientationRuntimeTests (Order 9); both mutate + restore orientation.
+        [Order(10)] // After WebViewOrientation (Order 9); both mutate + restore orientation.
         [Timeout(120000)] // hard cap — a stalled rotation must not hang the whole run
-        public IEnumerator OfferWebView_RendersInsideSafeAreaInAllOrientations()
+        public IEnumerator StaysInsideSafeAreaInAllOrientations()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             Debug.Log("[ZeyWinAds QA] safe-area: START");
@@ -151,7 +152,7 @@ namespace ZeyWinAds.Tests.Runtime
                 AssertWebViewInsideSafeArea(webView, safeArea, step.label);
             }
 
-            Debug.Log("[ZeyWinAds QA] OfferWebView_RendersInsideSafeAreaInAllOrientations: PASS " +
+            Debug.Log("[ZeyWinAds QA] StaysInsideSafeAreaInAllOrientations: PASS " +
                 "(WebView stayed inside the safe area in portrait and both landscapes).");
 #else
             Debug.Log("[ZeyWinAds QA] safe-area test skipped (not an Android device).");

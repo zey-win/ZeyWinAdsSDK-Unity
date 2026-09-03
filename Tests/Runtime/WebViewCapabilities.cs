@@ -22,28 +22,22 @@ namespace ZeyWinAds.Tests.Runtime
     //
     // ---- Which test covers which row of the ads.zeywin.com/checklist/webview-test page ----
     //
-    //   RealOfferWebView_ExecutesJavaScript          JS execution in the LIVE offer WebView
-    //                                                (no dedicated web-checklist row; sanity check)
-    //   RealOfferWebView_SupportsCookies             "Cookies (same-site)"  (cookies-same-site) —
-    //                                                against the LIVE offer WebView + CookieManager
-    //   OfferWebViewClient_FollowsRedirectChain      "Redirect chain — navigation (5 hops)"  (redirect-navigation)
-    //   OfferWebViewClient_LoadsCleartextHttpTopLevel"Cleartext HTTP (top-level)"  (cleartext-http)
-    //   OfferWebView_PassesCapabilityChecklist       every `auto`-bucket row (runAuto), + camera/microphone
-    //                                                when CAMERA/RECORD_AUDIO are granted to the install
-    //   OfferWebView_RoutesExternalScheme(case)      one row each:
-    //                                                  deeplink-tg   -> "Deep link (tg://)"
-    //                                                  intent-scheme -> "intent:// (Android)"
-    //                                                  mailto        -> "mailto:"
-    //                                                  tel           -> "tel:"
-    //                                                  sms           -> "sms:"
-    //   BackNavigationTests(case)                    QA row "Возврат назад" — the OS back control:
-    //                                                  returns-to-previous-page -> back goes to the previous page
-    //                                                  first-page-no-close      -> back on the first page keeps the surface
-    //   DeepLinkHandlingTests(case)                  QA row "Переход по диплинку" — deep links inside the
-    //                                                WebView are intercepted and handed to the OS
-    //                                                (shouldOpenExternally / new Intent / popup routing)
+    //   ExecutesJavaScript              JS execution in the LIVE offer WebView
+    //                                   (no dedicated web-checklist row; sanity check)
+    //   PersistsCookies                 "Cookies (same-site)"  (cookies-same-site) —
+    //                                   against the LIVE offer WebView + CookieManager
+    //   FollowsRedirectChain            "Redirect chain — navigation (5 hops)"  (redirect-navigation)
+    //   LoadsCleartextHttpTopLevel      "Cleartext HTTP (top-level)"  (cleartext-http)
+    //   PassesChecklist                 every `auto`-bucket row (runAuto), + camera/microphone
+    //                                   when CAMERA/RECORD_AUDIO are granted to the install
+    //   RoutesExternalScheme › <row>   one row each: tg / intent / mailto / tel / sms
+    //   BackNavigation › <row>          QA row "Возврат назад" — the OS back control:
+    //                                   ReturnsToPreviousPage / KeepsSurfaceOpenOnFirstPage
+    //   DeepLinks › <row>               QA row "Переход по диплинку" — deep links inside the
+    //                                   WebView are intercepted and handed to the OS
+    //                                   (shouldOpenExternally / new Intent / popup routing)
     [TestFixture]
-    public class WebViewCapabilityRuntimeTests
+    public class WebViewCapabilities
     {
         private const float WebViewReadyBudgetSeconds = 60f; // real offer must actually open
         private const float JsResultBudgetSeconds = 10f;
@@ -350,7 +344,7 @@ namespace ZeyWinAds.Tests.Runtime
         }
 #endif
 
-        // Only acts after BackNavigationTests' returns-to-previous-page case (which leaves the offer
+        // Only acts after BackNavigation's returns-to-previous-page case (which leaves the offer
         // WebView on the fixture page) — restores the real offer URL for the orientation / safe-area
         // fixtures that run next. A no-op for every other test in this fixture.
         [UnityTearDown]
@@ -381,8 +375,8 @@ namespace ZeyWinAds.Tests.Runtime
         }
 
         [UnityTest]
-        [Order(3)] // After PushNotificationRuntimeTests' Order(2).
-        public IEnumerator RealOfferWebView_ExecutesJavaScript()
+        [Order(3)] // After PushNotifications Order(2).
+        public IEnumerator ExecutesJavaScript()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             yield return WaitForOfferWebView();
@@ -414,14 +408,14 @@ namespace ZeyWinAds.Tests.Runtime
             Assert.AreEqual("\"2\"", result,
                 "JavaScript did not execute correctly in the real offer WebView.");
 #else
-            Debug.Log("[ZeyWinAds QA] RealOfferWebView_ExecutesJavaScript: skipped (not an Android device).");
+            Debug.Log("[ZeyWinAds QA] ExecutesJavaScript: skipped (not an Android device).");
             yield break;
 #endif
         }
 
         [UnityTest]
         [Order(4)]
-        public IEnumerator RealOfferWebView_SupportsCookies()
+        public IEnumerator PersistsCookies()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             yield return WaitForOfferWebView();
@@ -458,14 +452,14 @@ namespace ZeyWinAds.Tests.Runtime
                 Debug.Log($"[ZeyWinAds QA] Cookie round-trip OK for {cookieUrl}: '{readBack}'");
             }
 #else
-            Debug.Log("[ZeyWinAds QA] RealOfferWebView_SupportsCookies: skipped (not an Android device).");
+            Debug.Log("[ZeyWinAds QA] PersistsCookies: skipped (not an Android device).");
             yield break;
 #endif
         }
 
         [UnityTest]
         [Order(5)]
-        public IEnumerator OfferWebViewClient_FollowsRedirectChain()
+        public IEnumerator FollowsRedirectChain()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             const string probeObjectName = "ZeyWinAds_RedirectChainProbe";
@@ -505,14 +499,14 @@ namespace ZeyWinAds.Tests.Runtime
                 $"Expected the 5 redirects to resolve to httpbin.org/get, ended at: '{finalUrl}'.");
             Debug.Log($"[ZeyWinAds QA] 5-hop redirect chain resolved to: {finalUrl}");
 #else
-            Debug.Log("[ZeyWinAds QA] OfferWebViewClient_FollowsRedirectChain: skipped (not an Android device).");
+            Debug.Log("[ZeyWinAds QA] FollowsRedirectChain: skipped (not an Android device).");
             yield break;
 #endif
         }
 
         [UnityTest]
         [Order(6)]
-        public IEnumerator OfferWebViewClient_LoadsCleartextHttpTopLevel()
+        public IEnumerator LoadsCleartextHttpTopLevel()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             const string probeObjectName = "ZeyWinAds_CleartextHttpProbe";
@@ -559,14 +553,14 @@ namespace ZeyWinAds.Tests.Runtime
                 $"Expected the http:// -> 301 -> https:// hop to resolve to httpbin.org/get, ended at: '{finalUrl}'.");
             Debug.Log($"[ZeyWinAds QA] cleartext http:// top-level navigation resolved to: {finalUrl}");
 #else
-            Debug.Log("[ZeyWinAds QA] OfferWebViewClient_LoadsCleartextHttpTopLevel: skipped (not an Android device).");
+            Debug.Log("[ZeyWinAds QA] LoadsCleartextHttpTopLevel: skipped (not an Android device).");
             yield break;
 #endif
         }
 
         [UnityTest]
         [Order(7)]
-        public IEnumerator OfferWebView_PassesCapabilityChecklist()
+        public IEnumerator PassesChecklist()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             const string probeObjectName = "ZeyWinAds_CapabilityChecklistProbe";
@@ -697,7 +691,7 @@ namespace ZeyWinAds.Tests.Runtime
             Assert.IsTrue(verdict.StartsWith("OK "),
                 $"One or more auto-bucket WebView capability checks did not pass: {verdict}\n(full per-check report in the log above)");
 #else
-            Debug.Log("[ZeyWinAds QA] OfferWebView_PassesCapabilityChecklist: skipped (not an Android device).");
+            Debug.Log("[ZeyWinAds QA] PassesChecklist: skipped (not an Android device).");
             yield break;
 #endif
         }
@@ -710,12 +704,12 @@ namespace ZeyWinAds.Tests.Runtime
         // is Inconclusive with the reason (an AndroidManifest <queries> gap). Actually launching
         // the target app is a UiAutomator job, not this. No dialogs, no navigation, no startActivity.
         [Order(8)]
-        [TestCase("deeplink-tg",   "tg://resolve?domain=telegram",                  false, TestName = "RoutesExternalScheme_deeplink_tg (tg://)")]
-        [TestCase("intent-scheme", "intent://example.com#Intent;scheme=https;end",  false, TestName = "RoutesExternalScheme_intent_scheme (intent://)")]
-        [TestCase("mailto",        "mailto:qa@zeywin.com?subject=probe",            true,  TestName = "RoutesExternalScheme_mailto (mailto:)")]
-        [TestCase("tel",           "tel:+10000000000",                             true,  TestName = "RoutesExternalScheme_tel (tel:)")]
-        [TestCase("sms",           "sms:+10000000000?body=probe",                  true,  TestName = "RoutesExternalScheme_sms (sms:)")]
-        public void OfferWebView_RoutesExternalScheme(string checklistId, string url, bool everyPhoneHandlesIt)
+        [TestCase("deeplink-tg",   "tg://resolve?domain=telegram",                  false, TestName = "tg")]
+        [TestCase("intent-scheme", "intent://example.com#Intent;scheme=https;end",  false, TestName = "intent")]
+        [TestCase("mailto",        "mailto:qa@zeywin.com?subject=probe",            true,  TestName = "mailto")]
+        [TestCase("tel",           "tel:+10000000000",                             true,  TestName = "tel")]
+        [TestCase("sms",           "sms:+10000000000?body=probe",                  true,  TestName = "sms")]
+        public void RoutesExternalScheme(string checklistId, string url, bool everyPhoneHandlesIt)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             using (var navClass = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsWebViewNavigation"))
@@ -745,7 +739,7 @@ namespace ZeyWinAds.Tests.Runtime
                 }
             }
 #else
-            Assert.Ignore($"OfferWebView_RoutesExternalScheme[{checklistId}]: Android device only.");
+            Assert.Ignore($"RoutesExternalScheme[{checklistId}]: Android device only.");
 #endif
         }
 
@@ -772,17 +766,17 @@ namespace ZeyWinAds.Tests.Runtime
         {
             yield return new TestCaseData("returns-to-previous-page")
                 .Returns(null)
-                .SetName("BackNavigation_SystemBack_ReturnsToPreviousPage");
+                .SetName("ReturnsToPreviousPage");
             yield return new TestCaseData("first-page-no-close")
                 .Returns(null)
-                .SetName("BackNavigation_SystemBack_OnFirstPage_DoesNotCloseSurface");
+                .SetName("KeepsSurfaceOpenOnFirstPage");
         }
 
         [UnityTest]
-        [Order(9)] // After OfferWebView_RoutesExternalScheme (Order 8); reuses the already-open offer surface.
+        [Order(9)] // After RoutesExternalScheme (Order 8); reuses the already-open offer surface.
         [Timeout(120000)]
         [TestCaseSource(nameof(BackNavigationCases))]
-        public IEnumerator BackNavigationTests(string scenario)
+        public IEnumerator BackNavigation(string scenario)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             yield return WaitForOfferWebView(); // leaves _offerWebView; Inconclusive if no live offer
@@ -800,12 +794,12 @@ namespace ZeyWinAds.Tests.Runtime
 
             switch (scenario)
             {
-                case "returns-to-previous-page": yield return BackReturnsToPreviousPage(); break;
-                case "first-page-no-close":      yield return BackOnFirstPageDoesNotClose(); break;
-                default: Assert.Fail($"Unknown BackNavigationTests scenario '{scenario}'."); break;
+                case "returns-to-previous-page": yield return ReturnsToPreviousPage(); break;
+                case "first-page-no-close":      yield return KeepsSurfaceOpenOnFirstPage(); break;
+                default: Assert.Fail($"Unknown BackNavigation scenario '{scenario}'."); break;
             }
 #else
-            Debug.Log($"[ZeyWinAds QA] BackNavigationTests[{scenario}]: skipped (not an Android device).");
+            Debug.Log($"[ZeyWinAds QA] BackNavigation[{scenario}]: skipped (not an Android device).");
             yield break;
 #endif
         }
@@ -821,42 +815,42 @@ namespace ZeyWinAds.Tests.Runtime
         private static IEnumerable DeepLinkCases()
         {
             yield return new TestCaseData("all-schemes-route-external")
-                .Returns(null).SetName("DeepLink_AllSchemes_RouteExternal");
+                .Returns(null).SetName("RouteWhitelistedSchemes");
             yield return new TestCaseData("non-deeplink-fall-through")
-                .Returns(null).SetName("DeepLink_NonDeepLinkSchemes_FallThrough");
+                .Returns(null).SetName("IgnoreUnknownSchemes");
             yield return new TestCaseData("builds-view-intent")
-                .Returns(null).SetName("DeepLink_BuildsViewIntent");
+                .Returns(null).SetName("BuildViewIntent");
             yield return new TestCaseData("intent-uri-parses-fallback")
-                .Returns(null).SetName("DeepLink_IntentUri_ParsesFallback");
+                .Returns(null).SetName("ParseIntentUriFallback");
             yield return new TestCaseData("popup-routed-out")
-                .Returns(null).SetName("DeepLink_PopupDeepLink_IsRoutedOut_NotLoaded");
+                .Returns(null).SetName("PopupKeepsOfferOnPage");
         }
 
         [UnityTest]
-        [Order(9)] // After OfferWebView_RoutesExternalScheme (Order 8); shares 9 with BackNavigationTests (order between them irrelevant).
+        [Order(9)] // After RoutesExternalScheme (Order 8); shares 9 with BackNavigation (order between them irrelevant).
         [Timeout(120000)]
         [TestCaseSource(nameof(DeepLinkCases))]
-        public IEnumerator DeepLinkHandlingTests(string scenario)
+        public IEnumerator DeepLinks(string scenario)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             switch (scenario)
             {
-                case "all-schemes-route-external": DeepLink_AllSchemes_RouteExternal(); break;
-                case "non-deeplink-fall-through":  DeepLink_NonDeepLinkSchemes_FallThrough(); break;
-                case "builds-view-intent":         DeepLink_BuildsViewIntent(); break;
-                case "intent-uri-parses-fallback": DeepLink_IntentUri_ParsesFallback(); break;
-                case "popup-routed-out":           yield return DeepLink_PopupDeepLink_IsRoutedOut_NotLoaded(); break;
-                default: Assert.Fail($"Unknown DeepLinkHandlingTests scenario '{scenario}'."); break;
+                case "all-schemes-route-external": RouteWhitelistedSchemes(); break;
+                case "non-deeplink-fall-through":  IgnoreUnknownSchemes(); break;
+                case "builds-view-intent":         BuildViewIntent(); break;
+                case "intent-uri-parses-fallback": ParseIntentUriFallback(); break;
+                case "popup-routed-out":           yield return PopupKeepsOfferOnPage(); break;
+                default: Assert.Fail($"Unknown DeepLinks scenario '{scenario}'."); break;
             }
             yield break;
 #else
-            Debug.Log($"[ZeyWinAds QA] DeepLinkHandlingTests[{scenario}]: skipped (not an Android device).");
+            Debug.Log($"[ZeyWinAds QA] DeepLinks[{scenario}]: skipped (not an Android device).");
             yield break;
 #endif
         }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-        private static void DeepLink_AllSchemes_RouteExternal()
+        private static void RouteWhitelistedSchemes()
         {
             string[] urls =
             {
@@ -879,7 +873,7 @@ namespace ZeyWinAds.Tests.Runtime
             }
         }
 
-        private static void DeepLink_NonDeepLinkSchemes_FallThrough()
+        private static void IgnoreUnknownSchemes()
         {
             // Schemes NOT on the allow-list are handed back to the WebView (-> ERR_UNKNOWN_URL_SCHEME).
             // Pins the boundary so a future allow-list change is noticed. http/https/about are isWebUrl
@@ -902,7 +896,7 @@ namespace ZeyWinAds.Tests.Runtime
             }
         }
 
-        private static void DeepLink_BuildsViewIntent()
+        private static void BuildViewIntent()
         {
             // Mirror openExternal's non-intent:// branch: new Intent(ACTION_VIEW, Uri.parse(url)).
             (string url, string scheme)[] cases =
@@ -937,7 +931,7 @@ namespace ZeyWinAds.Tests.Runtime
             }
         }
 
-        private static void DeepLink_IntentUri_ParsesFallback()
+        private static void ParseIntentUriFallback()
         {
             const string url =
                 "intent://x/#Intent;scheme=https;package=com.zeywinads.qa.nolauncher;" +
@@ -970,7 +964,7 @@ namespace ZeyWinAds.Tests.Runtime
             }
         }
 
-        private IEnumerator DeepLink_PopupDeepLink_IsRoutedOut_NotLoaded()
+        private IEnumerator PopupKeepsOfferOnPage()
         {
             yield return WaitForOfferWebView(); // Inconclusive if no live offer
             Assert.IsTrue(global::ZeyWinAds.UI.WebViewLock.IsLocked,
@@ -1013,10 +1007,10 @@ namespace ZeyWinAds.Tests.Runtime
             Assert.IsNotNull(ReadOfferWebViewField(),
                 "the offer WebView was destroyed after a popup deep link.");
 
-            Debug.Log("[ZeyWinAds QA] DeepLink_PopupDeepLink_IsRoutedOut_NotLoaded: PASS");
+            Debug.Log("[ZeyWinAds QA] PopupKeepsOfferOnPage: PASS");
         }
 
-        private IEnumerator BackReturnsToPreviousPage()
+        private IEnumerator ReturnsToPreviousPage()
         {
             var webView = _offerWebView;
 
@@ -1094,7 +1088,7 @@ namespace ZeyWinAds.Tests.Runtime
             Debug.Log("[ZeyWinAds QA] BackNavigation returns-to-previous-page: PASS");
         }
 
-        private IEnumerator BackOnFirstPageDoesNotClose()
+        private IEnumerator KeepsSurfaceOpenOnFirstPage()
         {
             var webView = _offerWebView;
 

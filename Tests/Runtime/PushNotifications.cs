@@ -25,14 +25,14 @@ namespace ZeyWinAds.Tests.Runtime
     // is what made this test un-runnable unattended. "Requested" is read from the durable
     // PlayerPrefs marker AndroidRuntimePermissions sets right before it fires the request.
     //
-    // Runs after AdPreloadRuntimeTests (Order(1)) — see that file's comment for why fixtures in
-    // this suite chain their Order values instead of running unordered.
+    // Runs after AdPreload (Order(1)) — see that file's comment for why fixtures in this suite
+    // chain their Order values instead of running unordered.
     //
     // `global::ZeyWinAds.ZeyWinAds.*` (not just `ZeyWinAds.*`) is required for the same reason
-    // documented in AdPreloadRuntimeTests.cs: this file's own namespace (ZeyWinAds.Tests.Runtime)
-    // is nested under the ZeyWinAds namespace, making a bare `ZeyWinAds` reference ambiguous.
+    // documented in AdPreload.cs: this file's own namespace (ZeyWinAds.Tests.Runtime) is nested
+    // under the ZeyWinAds namespace, making a bare `ZeyWinAds` reference ambiguous.
     [TestFixture]
-    public class PushNotificationRuntimeTests
+    public class PushNotifications
     {
         private const float PermissionBudgetSeconds = 30f;
         private const float TokenBudgetSeconds = 30f;
@@ -40,7 +40,7 @@ namespace ZeyWinAds.Tests.Runtime
 
         [UnityTest]
         [Order(2)]
-        public IEnumerator NotificationPermission_WasRequestedByStartup()
+        public IEnumerator PermissionRequestedAtStartup()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             const string postNotifications = "android.permission.POST_NOTIFICATIONS";
@@ -74,14 +74,14 @@ namespace ZeyWinAds.Tests.Runtime
                 yield return PollInterval;
             }
 #else
-            Debug.Log("[ZeyWinAds QA] NotificationPermission_WasRequestedByStartup: skipped (not an Android device).");
+            Debug.Log("[ZeyWinAds QA] PermissionRequestedAtStartup: skipped (not an Android device).");
             yield break;
 #endif
         }
 
         [UnityTest]
         [Order(2)]
-        public IEnumerator FcmToken_IsReceivedWithinBudget()
+        public IEnumerator FcmTokenReceivedWithinBudget()
         {
 #if UNITY_ANDROID || UNITY_IOS
             var startedAt = QaForegroundTimeTracker.ForegroundSeconds;
@@ -105,7 +105,7 @@ namespace ZeyWinAds.Tests.Runtime
             Debug.Log($"[ZeyWinAds QA] FCM token received (length={token.Length}).");
             Assert.IsFalse(string.IsNullOrEmpty(token), "FCM token was null/empty.");
 #else
-            Debug.Log("[ZeyWinAds QA] FcmToken_IsReceivedWithinBudget: skipped (not Android/iOS).");
+            Debug.Log("[ZeyWinAds QA] FcmTokenReceivedWithinBudget: skipped (not Android/iOS).");
             yield break;
 #endif
         }

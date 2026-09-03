@@ -22,14 +22,15 @@ namespace ZeyWinAds.Tests.Runtime
     // Rotation is driven via Screen.orientation, NOT Activity.setRequestedOrientation, which the
     // Unity player re-asserts away (see WebViewLock.AllowFreeRotationForOfferSurface comment).
     //
-    // Requires a REAL offer WebView to be up (same as OfferAndLoaderRuntimeTests.ShowsForceOffer):
-    // if the SDK's force offer never opens for this device/app, this FAILS — it does not open an
-    // offer of its own and does not go Inconclusive.
+    // Requires a REAL offer WebView to be up (same as OfferAndLoadingScreen.ForceOfferOpens): if the SDK's
+    // force offer never opens for this device/app, this FAILS — it does not open an offer of its own
+    // and does not go Inconclusive.
     //
-    // Class name starts "WebViewO..." so it sorts after "WebViewCapability..." — NUnit here executes
-    // fixtures in class-name order, so this is how the test is kept last (the [Order] is intent only).
+    // Class name starts "WebViewOrientation..." so it sorts after "WebViewCapabilities..." — NUnit
+    // here executes fixtures in class-name order, so this is how the test is kept after the
+    // capability suite (the [Order] is intent only).
     [TestFixture]
-    public class WebViewOrientationRuntimeTests
+    public class WebViewOrientation
     {
         private const float OfferOpenBudgetSeconds = 60f;       // wait for the SDK's force offer to open
         private const float RotationSettleBudgetSeconds = 12f;  // Screen.orientation setter -> native re-layout
@@ -67,9 +68,9 @@ namespace ZeyWinAds.Tests.Runtime
         }
 
         [UnityTest]
-        [Order(9)] // After WebViewCapabilityRuntimeTests' Order(3)-(8); reuses the offer surface they leave open.
+        [Order(9)] // After WebViewCapabilities' Order(3)-(8); reuses the offer surface they leave open.
         [Timeout(120000)] // hard cap — a stalled rotation must not hang the whole run
-        public IEnumerator OfferWebView_AllowsFreeRotationAndReLayouts()
+        public IEnumerator AllowsFreeRotationWhileOfferShowing()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             Debug.Log("[ZeyWinAds QA] orientation: START");
@@ -190,10 +191,10 @@ namespace ZeyWinAds.Tests.Runtime
             Assert.IsFalse((bool)overrideField.GetValue(instance),
                 "RestoreOrientationAfterOfferSurface did not clear _orientationOverrideActive.");
 
-            Debug.Log("[ZeyWinAds QA] OfferWebView_AllowsFreeRotationAndReLayouts: PASS " +
+            Debug.Log("[ZeyWinAds QA] AllowsFreeRotationWhileOfferShowing: PASS " +
                 "(offer surface followed the rotation and refilled the screen both ways).");
 #else
-            Debug.Log("[ZeyWinAds QA] OfferWebView_AllowsFreeRotationAndReLayouts: skipped (not an Android device).");
+            Debug.Log("[ZeyWinAds QA] AllowsFreeRotationWhileOfferShowing: skipped (not an Android device).");
             yield break;
 #endif
         }

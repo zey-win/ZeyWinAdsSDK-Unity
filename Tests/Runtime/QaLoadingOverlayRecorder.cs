@@ -5,7 +5,7 @@ using ZeyWinAds.UI;
 namespace ZeyWinAds.Tests.Runtime
 {
     // The native loading overlay's whole show->hide cycle can finish during startup — before the
-    // LoadingOverlay_AppearsAndDismissesWithinBudget [UnityTest] gets its first frame, since
+    // OfferAndLoadingScreen.OverlayAppearsAndDismissesWithinBudget [UnityTest] gets its first frame, since
     // Unity Test Framework boots after full engine init + test-scene load. This recorder installs
     // at RuntimeInitializeOnLoadMethod(BeforeSceneLoad) — the same early point the SDK's own
     // LoadingOverlayDiagnostic uses — and captures the lifecycle so the test can assert on what

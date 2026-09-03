@@ -12,24 +12,24 @@ namespace ZeyWinAds.Tests.Runtime
     // On-device PlayMode checks for the SDK's startup offer surfaces, plus one parameterized
     // pure-logic test:
     //
-    //   LoadingOverlay_AppearsAndDismissesWithinBudget  — the native loading overlay shows then hides
-    //   ShowsForceOffer                                  — the force offer opens its locking WebView
-    //   OfferUrlStickiness(scenario)                     — "Запуск новой ссылки": the first offer URL
-    //                                                       is stored and never overwritten by a later
-    //                                                       server URL (ZeyWinAds.Core.OfferAssignmentStore).
-    //                                                       7 [TestCase] rows, same shape as
-    //                                                       WebViewCapabilityRuntimeTests.OfferWebView_RoutesExternalScheme.
+    //   OverlayAppearsAndDismissesWithinBudget  — the native loading overlay shows then hides
+    //   ForceOfferOpens                         — the force offer opens its locking WebView
+    //   OfferUrl(scenario)                      — "Запуск новой ссылки": the first offer URL is
+    //                                             stored and never overwritten by a later server URL
+    //                                             (ZeyWinAds.Core.OfferAssignmentStore). 7 [TestCase]
+    //                                             rows, same shape as
+    //                                             WebViewCapabilities.RoutesExternalScheme.
     //
     // The two [UnityTest]s are pure observers — they wait for the SDK's own surface to appear and
     // inspect it; neither creates an overlay or a WebView of its own. They use QaForegroundTimeTracker
     // instead of Time.realtimeSinceStartup so a real backgrounding event doesn't burn down their
     // budgets.
     //
-    // OfferUrlStickiness needs no device and no live offer; it reaches the `internal`
-    // OfferAssignmentStore by reflection (see OfferStore below) — the same approach the rest of this
-    // suite uses for SDK internals — and each row snapshots + restores the 4 offer-URL PlayerPrefs
-    // keys so a real device's sticky URL is left untouched.
-    public class OfferAndLoaderRuntimeTests
+    // OfferUrl needs no device and no live offer; it reaches the `internal` OfferAssignmentStore by
+    // reflection (see OfferStore below) — the same approach the rest of this suite uses for SDK
+    // internals — and each row snapshots + restores the 4 offer-URL PlayerPrefs keys so a real
+    // device's sticky URL is left untouched.
+    public class OfferAndLoadingScreen
     {
         private const float LoaderStartupTimeoutSeconds = 10f;
         private const float LoaderBudgetSeconds = 15f;
@@ -48,9 +48,9 @@ namespace ZeyWinAds.Tests.Runtime
         // QaLoadingOverlayRecorder — which starts watching at
         // RuntimeInitializeOnLoadMethod(BeforeSceneLoad) — rather than on live state here.
         [UnityTest]
-        [Order(0)] // Runs before AdPreloadRuntimeTests (Order(1)+), so the ad budget starts
-                   // fresh only once the loader check is already done.
-        public IEnumerator LoadingOverlay_AppearsAndDismissesWithinBudget()
+        [Order(0)] // Runs before AdPreload (Order(1)+), so the ad budget starts fresh only once
+                   // the loader check is already done.
+        public IEnumerator OverlayAppearsAndDismissesWithinBudget()
         {
             // Phase 1: it must have appeared within LoaderStartupTimeoutSeconds of app start.
             while (!QaLoadingOverlayRecorder.EverShown)
@@ -89,7 +89,7 @@ namespace ZeyWinAds.Tests.Runtime
         // it never calls WebViewLock.Lock() or creates a WebView itself.
         [UnityTest]
         [Order(1)]
-        public IEnumerator ShowsForceOffer()
+        public IEnumerator ForceOfferOpens()
         {
             float startedAt = QaForegroundTimeTracker.ForegroundSeconds;
 
@@ -118,11 +118,11 @@ namespace ZeyWinAds.Tests.Runtime
 
         // "Запуск новой ссылки" — the first offer URL is stored and never overwritten by a later
         // server URL. One parameterized [Test] (same shape as
-        // WebViewCapabilityRuntimeTests.OfferWebView_RoutesExternalScheme): each [TestCase] row is a
-        // scenario, shown as a child row of the OfferUrlStickiness node in the Test Runner. Pure
-        // logic — no device, no live offer. Reaches the `internal` OfferAssignmentStore via the
-        // OfferStore reflection shim (below). Each row snapshots + restores the 4 offer-URL
-        // PlayerPrefs keys so a real device's sticky URL is left untouched.
+        // WebViewCapabilities.RoutesExternalScheme): each [TestCase] row is a scenario, shown as a
+        // child row of the OfferUrl node in the Test Runner. Pure logic — no device, no live offer.
+        // Reaches the `internal` OfferAssignmentStore via the OfferStore reflection shim (below).
+        // Each row snapshots + restores the 4 offer-URL PlayerPrefs keys so a real device's sticky
+        // URL is left untouched.
 
         private const string KAssigned = "zeywinads_assigned_offer_url";
         private const string KAssignedBackup = "zeywinads_assigned_offer_url_backup";
@@ -136,14 +136,14 @@ namespace ZeyWinAds.Tests.Runtime
 
         [Test]
         [Order(2)]
-        [TestCase("first-url-stored", TestName = "OfferUrlStickiness_FirstUrl_IsStoredOnFirstReceipt")]
-        [TestCase("new-url-no-overwrite", TestName = "OfferUrlStickiness_NewServerUrl_DoesNotOverwriteFirst")]
-        [TestCase("persist-write-once", TestName = "OfferUrlStickiness_PersistAssignedOfferUrl_IsWriteOnce")]
-        [TestCase("survives-restart", TestName = "OfferUrlStickiness_AssignedUrl_SurvivesRestart")]
-        [TestCase("heals-from-backup", TestName = "OfferUrlStickiness_AssignedUrl_HealsFromBackupIfPrimaryLost")]
-        [TestCase("non-url-then-first-valid-wins", TestName = "OfferUrlStickiness_NonUrlFirstReceipt_IsNotStored_ThenFirstValidUrlWins")]
-        [TestCase("resolved-promotion-keeps-assigned", TestName = "OfferUrlStickiness_ResolvedPromotion_KeepsOriginalAssigned")]
-        public void OfferUrlStickiness(string scenario)
+        [TestCase("first-url-stored", TestName = "StoredOnFirstReceipt")]
+        [TestCase("new-url-no-overwrite", TestName = "NotOverwrittenByLaterServerUrl")]
+        [TestCase("persist-write-once", TestName = "PersistIsWriteOnce")]
+        [TestCase("survives-restart", TestName = "SurvivesRestart")]
+        [TestCase("heals-from-backup", TestName = "HealsFromBackup")]
+        [TestCase("non-url-then-first-valid-wins", TestName = "FirstValidUrlWinsAfterNonUrl")]
+        [TestCase("resolved-promotion-keeps-assigned", TestName = "ResolvedPromotionKeepsOriginal")]
+        public void OfferUrl(string scenario)
         {
             // Snapshot any real values (e.g. a live offer's sticky URL on a device), start clean,
             // run the scenario, then restore — no matter how it ended.
@@ -165,7 +165,7 @@ namespace ZeyWinAds.Tests.Runtime
                     case "heals-from-backup": AssignedUrl_HealsFromBackupIfPrimaryLost(); break;
                     case "non-url-then-first-valid-wins": NonUrlFirstReceipt_IsNotStored_ThenFirstValidUrlWins(); break;
                     case "resolved-promotion-keeps-assigned": ResolvedPromotion_KeepsOriginalAssigned(); break;
-                    default: Assert.Fail($"Unknown OfferUrlStickiness scenario '{scenario}'."); break;
+                    default: Assert.Fail($"Unknown OfferUrl scenario '{scenario}'."); break;
                 }
             }
             finally

@@ -16,7 +16,7 @@ namespace ZeyWinAds.Tests.Runtime
     // when *it* happens to run, so a slow first test would silently push later tests' windows
     // later too — breaking "all four ready within budget of app start". [OneTimeSetUp] records
     // one shared start time for the whole fixture, and every test checks against that deadline.
-    // Runs after OfferAndLoaderRuntimeTests' loader check (see [Order] below), so this 20s window starts once
+    // Runs after OfferAndLoadingScreen's loader check (see [Order] below), so this 20s window starts once
     // the loader check is already done, not from true app start — the ads have had a head start
     // preloading in the background the whole time regardless.
     //
@@ -29,7 +29,7 @@ namespace ZeyWinAds.Tests.Runtime
     // own namespace (ZeyWinAds.Tests.Runtime) is nested under the ZeyWinAds namespace, which
     // makes a bare `ZeyWinAds` reference ambiguous between the namespace and the class.
     [TestFixture]
-    public class AdPreloadRuntimeTests
+    public class AdPreload
     {
         private const float BudgetSeconds = 30f;
         private static readonly WaitForSecondsRealtime PollInterval = new WaitForSecondsRealtime(0.5f);
@@ -56,29 +56,29 @@ namespace ZeyWinAds.Tests.Runtime
         }
 
         [UnityTest]
-        [Order(1)] // After OfferAndLoaderRuntimeTests' Order(0) loader check — see that file's comment.
-        public IEnumerator Interstitial_PreloadsWithinBudget()
+        [Order(1)] // After OfferAndLoadingScreen's Order(0) loader check — see that file's comment.
+        public IEnumerator PreloadsInterstitialWithinBudget()
         {
             yield return WaitUntilReadyOrTimeout(global::ZeyWinAds.ZeyWinAds.IsInterstitialReady, "Interstitial");
         }
 
         [UnityTest]
         [Order(1)]
-        public IEnumerator Rewarded_PreloadsWithinBudget()
+        public IEnumerator PreloadsRewardedWithinBudget()
         {
             yield return WaitUntilReadyOrTimeout(global::ZeyWinAds.ZeyWinAds.IsRewardedReady, "Rewarded");
         }
 
         [UnityTest]
         [Order(1)]
-        public IEnumerator Native_PreloadsWithinBudget()
+        public IEnumerator PreloadsNativeWithinBudget()
         {
             yield return WaitUntilReadyOrTimeout(global::ZeyWinAds.ZeyWinAds.IsNativeReady, "Native");
         }
 
         [UnityTest]
         [Order(1)]
-        public IEnumerator Popup_PreloadsWithinBudget()
+        public IEnumerator PreloadsPopupWithinBudget()
         {
             yield return WaitUntilReadyOrTimeout(global::ZeyWinAds.ZeyWinAds.IsPopupReady, "Popup");
         }
