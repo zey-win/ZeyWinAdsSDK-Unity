@@ -52,26 +52,27 @@ namespace ZeyWinAds.Tests.Runtime
                    // the loader check is already done.
         public IEnumerator OverlayAppearsAndDismissesWithinBudget()
         {
-            // Phase 1: it must have appeared within LoaderStartupTimeoutSeconds of app start.
+            // Phase 1: it must have appeared within LoaderStartupTimeoutSeconds. (The recorder has
+            // been watching since BeforeSceneLoad, so if EverShown is already true this exits at once.)
+            var appearBudget = new QaBudget(LoaderStartupTimeoutSeconds);
             while (!QaLoadingOverlayRecorder.EverShown)
             {
-                if (QaForegroundTimeTracker.ForegroundSeconds - QaLoadingOverlayRecorder.StartedForegroundSeconds
-                        >= LoaderStartupTimeoutSeconds)
-                {
-                    Assert.Fail($"LoadingOverlay never appeared within {LoaderStartupTimeoutSeconds:F0}s of app start.");
-                }
+                if (appearBudget.Expired)
+                    Assert.Fail($"LoadingOverlay never appeared within {appearBudget.Describe()} of app start.");
                 yield return PollInterval;
             }
 
             Debug.Log("[ZeyWinAds QA] LoadingOverlay shown.");
 
-            // Phase 2: once shown, it must hide again within LoaderBudgetSeconds.
+            // Phase 2: once shown, it must hide again within LoaderBudgetSeconds. VisibleForSeconds
+            // is foreground-derived, so pair it with a wall-clock ceiling that can't be frozen.
+            var hideBudget = new QaBudget(LoaderBudgetSeconds);
             while (QaLoadingOverlayRecorder.StillVisible)
             {
-                if (QaLoadingOverlayRecorder.VisibleForSeconds > LoaderBudgetSeconds)
+                if (QaLoadingOverlayRecorder.VisibleForSeconds > LoaderBudgetSeconds || hideBudget.Expired)
                 {
-                    Assert.Fail($"LoadingOverlay still visible after {QaLoadingOverlayRecorder.VisibleForSeconds:F2}s, " +
-                        $"exceeds {LoaderBudgetSeconds:F0}s budget.");
+                    Assert.Fail($"LoadingOverlay still visible after {QaLoadingOverlayRecorder.VisibleForSeconds:F2}s " +
+                        $"visible / {hideBudget.Describe()}, exceeds {LoaderBudgetSeconds:F0}s budget.");
                 }
                 yield return PollInterval;
             }
@@ -91,13 +92,13 @@ namespace ZeyWinAds.Tests.Runtime
         [Order(1)]
         public IEnumerator ForceOfferOpens()
         {
-            float startedAt = QaForegroundTimeTracker.ForegroundSeconds;
+            var budget = new QaBudget(OfferOpenBudgetSeconds);
 
             while (!WebViewLock.IsLocked)
             {
-                if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= OfferOpenBudgetSeconds)
+                if (budget.Expired)
                 {
-                    Assert.Fail($"Offer WebView did not open within {OfferOpenBudgetSeconds:F0}s of app start. " +
+                    Assert.Fail($"Offer WebView did not open within {budget.Describe()} of app start. " +
                         "Enable the force offer for this device/app in the admin panel, and check the device " +
                         "isn't geo/no-SIM blocked server-side.");
                 }
@@ -114,6 +115,8 @@ namespace ZeyWinAds.Tests.Runtime
                 Uri.TryCreate(url, UriKind.Absolute, out Uri uri)
                     && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps),
                 $"Offer WebView URL is not a valid http(s) link: '{url}'");
+
+            QaOfferGate.MarkOfferConfirmed(); // the ZeyWinAds.Tests.Runtime.WebView group gates on this
         }
 
         // "Запуск новой ссылки" — the first offer URL is stored and never overwritten by a later

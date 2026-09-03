@@ -34,8 +34,8 @@ namespace ZeyWinAds.Tests.Runtime
     [TestFixture]
     public class PushNotifications
     {
-        private const float PermissionBudgetSeconds = 30f;
-        private const float TokenBudgetSeconds = 30f;
+        private const float PermissionBudgetSeconds = 20f;
+        private const float TokenBudgetSeconds = 20f;
         private static readonly WaitForSecondsRealtime PollInterval = new WaitForSecondsRealtime(0.5f);
 
         [UnityTest]
@@ -48,7 +48,7 @@ namespace ZeyWinAds.Tests.Runtime
             // moment before it calls Permission.RequestUserPermission — a durable "the SDK asked"
             // marker that survives the "prompt once" short-circuit on later launches.
             const string promptedKey = "ZeyWinAds_PostNotificationsPrompted_v1";
-            var startedAt = QaForegroundTimeTracker.ForegroundSeconds;
+            var budget = new QaBudget(PermissionBudgetSeconds);
 
             while (true)
             {
@@ -64,9 +64,9 @@ namespace ZeyWinAds.Tests.Runtime
                     yield break;
                 }
 
-                if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= PermissionBudgetSeconds)
+                if (budget.Expired)
                 {
-                    Assert.Fail($"The SDK's startup path did not request POST_NOTIFICATIONS within {PermissionBudgetSeconds:F0}s " +
+                    Assert.Fail($"The SDK's startup path did not request POST_NOTIFICATIONS within {budget.Describe()} " +
                         $"(PlayerPrefs '{promptedKey}' never set and the permission isn't already granted). " +
                         "Check AndroidRuntimePermissions.ScheduleNotificationPermissionPrompt() and the " +
                         "zeywin_push_permission_enabled remote-config flag.");
@@ -84,7 +84,7 @@ namespace ZeyWinAds.Tests.Runtime
         public IEnumerator FcmTokenReceivedWithinBudget()
         {
 #if UNITY_ANDROID || UNITY_IOS
-            var startedAt = QaForegroundTimeTracker.ForegroundSeconds;
+            var budget = new QaBudget(TokenBudgetSeconds);
 
             // Prefer whatever's already cached (TokenReceived/startup fetch already ran under the
             // hood — see FirebaseMessagingService.Initialize()); only fall back to an explicit
@@ -93,9 +93,9 @@ namespace ZeyWinAds.Tests.Runtime
 
             while (string.IsNullOrEmpty(token))
             {
-                if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= TokenBudgetSeconds)
+                if (budget.Expired)
                 {
-                    Assert.Fail($"No FCM token available within {TokenBudgetSeconds:F0}s " +
+                    Assert.Fail($"No FCM token available within {budget.Describe()} " +
                         "(LastPushToken stayed null/empty).");
                 }
                 yield return PollInterval;

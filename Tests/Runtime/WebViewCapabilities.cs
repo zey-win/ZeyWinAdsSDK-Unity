@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.Scripting;
 using UnityEngine.TestTools;
 
-namespace ZeyWinAds.Tests.Runtime
+namespace ZeyWinAds.Tests.Runtime.WebView
 {
     // Checks the QA checklist's "Поддержка Javascript" and "Поддержка Cookie" items against the
     // REAL, already-open offer WebView — no second WebView is created: reflecting into the live
@@ -39,10 +39,10 @@ namespace ZeyWinAds.Tests.Runtime
     [TestFixture]
     public class WebViewCapabilities
     {
-        private const float WebViewReadyBudgetSeconds = 60f; // real offer must actually open
+        private const float WebViewReadyBudgetSeconds = 20f;  // real offer must actually open
         private const float JsResultBudgetSeconds = 10f;
         private const float CookieRoundTripBudgetSeconds = 5f;
-        private const float RedirectChainBudgetSeconds = 30f;
+        private const float RedirectChainBudgetSeconds = 20f;
         private const float ChecklistReadyBudgetSeconds = 90f;  // SPA + 2MB bundle over the device network
         private const float ChecklistRunBudgetSeconds = 180f;   // runAuto() over ~22 checks, several hitting the network
         private const float BackNavNavigateBudgetSeconds = 15f; // loadUrl() -> URL observed
@@ -57,10 +57,10 @@ namespace ZeyWinAds.Tests.Runtime
         private AndroidJavaObject _offerWebView;
         private string _backNavStartUrl; // offer's own URL, captured so the UnityTearDown can restore it
 
-        // Polls WebViewLock._webView (reflected) until the real offer WebView's native object
-        // exists, leaving it in _offerWebView. Marks the test Inconclusive (not Failed) if the
-        // offer never opens — that means it's disabled server-side or the device is geo/no-SIM
-        // blocked, not that the capability is broken.
+        // Polls WebViewLock._webView (reflected) until the real offer WebView's native object exists,
+        // leaving it in _offerWebView. The callers exercise the live offer surface, so if it never
+        // opens that's a FAIL (a geo/no-SIM/config problem) — same stance as OfferAndLoadingScreen
+        // .ForceOfferOpens and the orientation / safe-area tests.
         private IEnumerator WaitForOfferWebView()
         {
             _offerWebView = null;
@@ -69,7 +69,7 @@ namespace ZeyWinAds.Tests.Runtime
                 "_webView", BindingFlags.NonPublic | BindingFlags.Instance);
             Assert.IsNotNull(webViewField, "WebViewLock._webView field not found — did the SDK rename it?");
 
-            float startedAt = QaForegroundTimeTracker.ForegroundSeconds;
+            var budget = new QaBudget(WebViewReadyBudgetSeconds);
             while (_offerWebView == null)
             {
                 var instance = global::ZeyWinAds.UI.WebViewLock.Instance;
@@ -78,10 +78,11 @@ namespace ZeyWinAds.Tests.Runtime
 
                 if (_offerWebView == null)
                 {
-                    if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= WebViewReadyBudgetSeconds)
+                    if (budget.Expired)
                     {
-                        Assert.Inconclusive($"Real offer WebView never opened within {WebViewReadyBudgetSeconds:F0}s " +
-                            "(no_sim/geo block, or offer disabled) — nothing to check against.");
+                        Assert.Fail($"Real offer WebView never opened within {budget.Describe()}. Enable the " +
+                            "force offer for this device/app in the admin panel, and check the device isn't " +
+                            "geo/no-SIM blocked server-side.");
                     }
                     yield return new WaitForSecondsRealtime(0.5f);
                 }
@@ -108,12 +109,12 @@ namespace ZeyWinAds.Tests.Runtime
                 }));
             }
 
-            float startedAt = QaForegroundTimeTracker.ForegroundSeconds;
+            var budget = new QaBudget(JsResultBudgetSeconds);
             while (!done)
             {
-                if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= JsResultBudgetSeconds)
+                if (budget.Expired)
                 {
-                    onError($"UI-thread call did not complete within {JsResultBudgetSeconds:F0}s.");
+                    onError($"UI-thread call did not complete within {budget.Describe()}.");
                     yield break;
                 }
                 yield return null;
@@ -395,11 +396,11 @@ namespace ZeyWinAds.Tests.Runtime
                 () => webView.Call("evaluateJavascript", "String(1 + 1)", callback),
                 err => { evalError = err; received = true; });
 
-            float jsStartedAt = QaForegroundTimeTracker.ForegroundSeconds;
+            var jsBudget = new QaBudget(JsResultBudgetSeconds);
             while (!received)
             {
-                if (QaForegroundTimeTracker.ForegroundSeconds - jsStartedAt >= JsResultBudgetSeconds)
-                    Assert.Fail($"evaluateJavascript did not return a result within {JsResultBudgetSeconds:F0}s.");
+                if (jsBudget.Expired)
+                    Assert.Fail($"evaluateJavascript did not return a result within {jsBudget.Describe()}.");
                 yield return null;
             }
 
@@ -432,7 +433,7 @@ namespace ZeyWinAds.Tests.Runtime
 
                 string readBack = null;
                 bool found = false;
-                float startedAt = QaForegroundTimeTracker.ForegroundSeconds;
+                var budget = new QaBudget(CookieRoundTripBudgetSeconds);
                 while (!found)
                 {
                     readBack = cookieManager.Call<string>("getCookie", cookieUrl);
@@ -441,10 +442,10 @@ namespace ZeyWinAds.Tests.Runtime
                     if (found)
                         break;
 
-                    if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= CookieRoundTripBudgetSeconds)
+                    if (budget.Expired)
                     {
                         Assert.Fail($"Set a cookie for {cookieUrl} but CookieManager.getCookie() never returned it " +
-                            $"within {CookieRoundTripBudgetSeconds:F0}s (got: '{readBack}').");
+                            $"within {budget.Describe()} (got: '{readBack}').");
                     }
                     yield return new WaitForSecondsRealtime(0.25f);
                 }
@@ -475,15 +476,15 @@ namespace ZeyWinAds.Tests.Runtime
                 err => createError = err);
             Assert.IsNull(createError, $"Could not create the probe WebView: {createError}");
 
-            float startedAt = QaForegroundTimeTracker.ForegroundSeconds;
+            var budget = new QaBudget(RedirectChainBudgetSeconds);
             while (probe.LastNavigationUrl == null && probe.LoadError == null)
             {
-                if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= RedirectChainBudgetSeconds)
+                if (budget.Expired)
                 {
                     yield return DestroyProbeWebView();
                     UnityEngine.Object.Destroy(probeGo);
                     Assert.Inconclusive($"{redirectUrl} neither resolved nor errored within " +
-                        $"{RedirectChainBudgetSeconds:F0}s (network unreachable) — nothing to check.");
+                        $"{budget.Describe()} (network unreachable) — nothing to check.");
                 }
                 yield return new WaitForSecondsRealtime(0.25f);
             }
@@ -528,15 +529,15 @@ namespace ZeyWinAds.Tests.Runtime
                 err => createError = err);
             Assert.IsNull(createError, $"Could not create the probe WebView: {createError}");
 
-            float startedAt = QaForegroundTimeTracker.ForegroundSeconds;
+            var budget = new QaBudget(RedirectChainBudgetSeconds);
             while (probe.LastNavigationUrl == null && probe.LoadError == null)
             {
-                if (QaForegroundTimeTracker.ForegroundSeconds - startedAt >= RedirectChainBudgetSeconds)
+                if (budget.Expired)
                 {
                     yield return DestroyProbeWebView();
                     UnityEngine.Object.Destroy(probeGo);
                     Assert.Inconclusive($"{cleartextUrl} neither resolved nor errored within " +
-                        $"{RedirectChainBudgetSeconds:F0}s (network unreachable) — nothing to check.");
+                        $"{budget.Describe()} (network unreachable) — nothing to check.");
                 }
                 yield return new WaitForSecondsRealtime(0.25f);
             }
@@ -560,6 +561,7 @@ namespace ZeyWinAds.Tests.Runtime
 
         [UnityTest]
         [Order(7)]
+        [Timeout(300 * 1000)] // 300s — SPA boot (90s) + runAuto over ~22 checks (180s), several hitting the network
         public IEnumerator PassesChecklist()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -774,7 +776,7 @@ namespace ZeyWinAds.Tests.Runtime
 
         [UnityTest]
         [Order(9)] // After RoutesExternalScheme (Order 8); reuses the already-open offer surface.
-        [Timeout(120000)]
+        [Timeout(90 * 1000)] // 90s
         [TestCaseSource(nameof(BackNavigationCases))]
         public IEnumerator BackNavigation(string scenario)
         {
@@ -828,7 +830,7 @@ namespace ZeyWinAds.Tests.Runtime
 
         [UnityTest]
         [Order(9)] // After RoutesExternalScheme (Order 8); shares 9 with BackNavigation (order between them irrelevant).
-        [Timeout(120000)]
+        [Timeout(90 * 1000)] // 90s
         [TestCaseSource(nameof(DeepLinkCases))]
         public IEnumerator DeepLinks(string scenario)
         {

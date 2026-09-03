@@ -31,24 +31,23 @@ namespace ZeyWinAds.Tests.Runtime
     [TestFixture]
     public class AdPreload
     {
-        private const float BudgetSeconds = 30f;
+        private const float BudgetSeconds = 20f;
         private static readonly WaitForSecondsRealtime PollInterval = new WaitForSecondsRealtime(0.5f);
-        private static float _fixtureStartedAt;
+        private static QaBudget _budget;
 
         [OneTimeSetUp]
         public void RecordFixtureStart()
         {
-            _fixtureStartedAt = QaForegroundTimeTracker.ForegroundSeconds;
+            // One shared deadline for all four tests — see the header comment.
+            _budget = new QaBudget(BudgetSeconds);
         }
 
         private static IEnumerator WaitUntilReadyOrTimeout(Func<bool> isReady, string label)
         {
             while (!isReady())
             {
-                if (QaForegroundTimeTracker.ForegroundSeconds - _fixtureStartedAt > BudgetSeconds)
-                {
-                    Assert.Fail($"{label} did not preload within {BudgetSeconds:F0}s of app start.");
-                }
+                if (_budget.Expired)
+                    Assert.Fail($"{label} did not preload within {_budget.Describe()} of app start.");
                 yield return PollInterval;
             }
 

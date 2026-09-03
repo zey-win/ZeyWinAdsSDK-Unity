@@ -4,7 +4,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace ZeyWinAds.Tests.Runtime
+namespace ZeyWinAds.Tests.Runtime.WebView
 {
     // QA checklist row "Размер вебвью" — the offer WebView must render inside the Safe Area: display
     // cutouts / notches, the status bar and the navigation bar must never overlap WebView content,
@@ -29,13 +29,13 @@ namespace ZeyWinAds.Tests.Runtime
     // Requires a REAL offer WebView to be up (same as OfferAndLoadingScreen.ForceOfferOpens): no live offer
     // => FAIL, not Inconclusive.
     //
-    // Class name starts "WebViewSafeArea..." so it sorts after "WebViewOrientation..." /
-    // "WebViewCapabilities..." — NUnit here runs fixtures in class-name order, so this runs last
-    // (the [Order] is intent only).
+    // In the ZeyWinAds.Tests.Runtime.WebView namespace group. Class name "WebViewSafeArea..." sorts
+    // after "WebViewOrientation..." / "WebViewCapabilities..." — NUnit runs fixtures in name order,
+    // so this runs last of the three (the [Order] is intent only).
     [TestFixture]
     public class WebViewSafeArea
     {
-        private const float OfferOpenBudgetSeconds = 60f;       // wait for the SDK's force offer to open
+        private const float OfferOpenBudgetSeconds = 20f;       // wait for the SDK's force offer to open
         private const float RotationSettleBudgetSeconds = 12f;  // Screen.orientation setter -> native re-layout
         private const float InsetsSettleBudgetSeconds = 8f;     // safe-area padding catching up to the new insets
         private const int Slop = 4;                             // px — layout rounding + measurement timing
@@ -74,7 +74,7 @@ namespace ZeyWinAds.Tests.Runtime
 
         [UnityTest]
         [Order(10)] // After WebViewOrientation (Order 9); both mutate + restore orientation.
-        [Timeout(120000)] // hard cap — a stalled rotation must not hang the whole run
+        [Timeout(120 * 1000)] // 120s — hard cap — a stalled rotation must not hang the whole run
         public IEnumerator StaysInsideSafeAreaInAllOrientations()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR

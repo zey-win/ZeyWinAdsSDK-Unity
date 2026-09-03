@@ -4,7 +4,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace ZeyWinAds.Tests.Runtime
+namespace ZeyWinAds.Tests.Runtime.WebView
 {
     // QA checklist row "Поворот экрана" — while an offer WebView is on screen the user must be able
     // to rotate the device on every side even if the host game is pinned to one orientation, and the
@@ -26,13 +26,13 @@ namespace ZeyWinAds.Tests.Runtime
     // force offer never opens for this device/app, this FAILS — it does not open an offer of its own
     // and does not go Inconclusive.
     //
-    // Class name starts "WebViewOrientation..." so it sorts after "WebViewCapabilities..." — NUnit
-    // here executes fixtures in class-name order, so this is how the test is kept after the
-    // capability suite (the [Order] is intent only).
+    // In the ZeyWinAds.Tests.Runtime.WebView namespace group. Class name "WebViewOrientation..."
+    // sorts after "WebViewCapabilities..." — NUnit runs fixtures in name order, so this is kept
+    // after the capability suite (the [Order] is intent only).
     [TestFixture]
     public class WebViewOrientation
     {
-        private const float OfferOpenBudgetSeconds = 60f;       // wait for the SDK's force offer to open
+        private const float OfferOpenBudgetSeconds = 20f;       // wait for the SDK's force offer to open
         private const float RotationSettleBudgetSeconds = 12f;  // Screen.orientation setter -> native re-layout
 
 #if UNITY_ANDROID && !UNITY_EDITOR
@@ -69,7 +69,7 @@ namespace ZeyWinAds.Tests.Runtime
 
         [UnityTest]
         [Order(9)] // After WebViewCapabilities' Order(3)-(8); reuses the offer surface they leave open.
-        [Timeout(120000)] // hard cap — a stalled rotation must not hang the whole run
+        [Timeout(120 * 1000)] // 120s — hard cap — a stalled rotation must not hang the whole run
         public IEnumerator AllowsFreeRotationWhileOfferShowing()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
