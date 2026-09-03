@@ -211,4 +211,45 @@ internal class UniWebViewAndroidManifest : UniWebViewAndroidXmlDocument {
         filter.AppendChild(data);
         return filter;
     }
+
+    // ZeyWin: Harden UniWebViewProxyActivity against the "null activity handler found!" fatal crash.
+    // That transparent proxy activity resolves its handler from a process-static LinkedHashMap in
+    // onCreate() (keyed by an id carried in the launch Intent) and throws a RuntimeException when the
+    // lookup misses. When the OS kills the app while the proxy sits in the back stack, it later
+    // re-delivers the persisted Intent to a fresh proxy instance in a new process where that map is
+    // empty, crashing the app on the next cold start before Unity even loads. There is no
+    // savedInstanceState guard inside the (prebuilt) .aar, so we stop the OS from ever recreating the
+    // proxy instead: finishOnTaskLaunch discards a stranded instance when the task is relaunched, and
+    // noHistory keeps it out of the back stack once it loses focus. excludeFromRecents is cosmetic.
+    // If in-WebView file uploads ever regress, dropping only the noHistory line is the safe revert.
+    internal bool HardenProxyActivity() {
+        bool changed = false;
+        var list = SelectNodes(
+            "/manifest/application/activity[@android:name='com.onevcat.uniwebview.UniWebViewProxyActivity']",
+            nameSpaceManager);
+
+        XmlElement activity;
+        if (list.Count == 0) {
+            activity = CreateElement("activity");
+            activity.Attributes.Append(
+                CreateAndroidAttribute("name", "com.onevcat.uniwebview.UniWebViewProxyActivity"));
+            ApplicationElement.AppendChild(activity);
+            changed = true;
+        } else {
+            activity = list[0] as XmlElement;
+        }
+
+        changed = SetAndroidAttribute(activity, "finishOnTaskLaunch", "true") || changed;
+        changed = SetAndroidAttribute(activity, "excludeFromRecents", "true") || changed;
+        changed = SetAndroidAttribute(activity, "noHistory", "true") || changed;
+        return changed;
+    }
+
+    private bool SetAndroidAttribute(XmlElement element, string key, string value) {
+        if (element.GetAttribute(key, AndroidXmlNamespace) == value) {
+            return false;
+        }
+        element.SetAttribute(key, AndroidXmlNamespace, value);
+        return true;
+    }
 }
