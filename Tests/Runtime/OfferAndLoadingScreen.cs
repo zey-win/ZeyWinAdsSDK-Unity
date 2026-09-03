@@ -29,7 +29,7 @@ namespace ZeyWinAds.Tests.Runtime
     // reflection (see OfferStore below) — the same approach the rest of this suite uses for SDK
     // internals — and each row snapshots + restores the 4 offer-URL PlayerPrefs keys so a real
     // device's sticky URL is left untouched.
-    public class OfferAndLoadingScreen
+    public class OfferAndLoadingScreen : QaFixture
     {
         private const float LoaderStartupTimeoutSeconds = 10f;
         private const float LoaderBudgetSeconds = 15f;
@@ -128,7 +128,7 @@ namespace ZeyWinAds.Tests.Runtime
                     && (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps),
                 $"Offer WebView URL is not a valid http(s) link: '{url}'");
 
-            QaOfferGate.MarkOfferConfirmed(); // the ZeyWinAds.Tests.Runtime.WebView group gates on this
+            QaOfferGate.MarkOfferConfirmed(); // the WebViewFixture-derived tests gate on this
 
             // Visual proof the offer surface is really up (PixelCopy of the window — the native
             // offer WebView is included, which a Unity screenshot would miss). Give the page a

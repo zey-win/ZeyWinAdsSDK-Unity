@@ -32,7 +32,7 @@ namespace ZeyWinAds.Tests.Runtime
     // documented in AdPreload.cs: this file's own namespace (ZeyWinAds.Tests.Runtime) is nested
     // under the ZeyWinAds namespace, making a bare `ZeyWinAds` reference ambiguous.
     [TestFixture]
-    public class PushNotifications
+    public class PushNotifications : QaFixture
     {
         private const float PermissionBudgetSeconds = 20f;
         private const float TokenBudgetSeconds = 20f;

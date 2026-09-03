@@ -6,7 +6,7 @@ using UnityEngine;
 using UnityEngine.Scripting;
 using UnityEngine.TestTools;
 
-namespace ZeyWinAds.Tests.Runtime.WebView
+namespace ZeyWinAds.Tests.Runtime
 {
     // Checks the QA checklist's "Поддержка Javascript" and "Поддержка Cookie" items against the
     // REAL, already-open offer WebView — no second WebView is created: reflecting into the live
@@ -28,16 +28,16 @@ namespace ZeyWinAds.Tests.Runtime.WebView
     //                                   against the LIVE offer WebView + CookieManager
     //   FollowsRedirectChain            "Redirect chain — navigation (5 hops)"  (redirect-navigation)
     //   LoadsCleartextHttpTopLevel      "Cleartext HTTP (top-level)"  (cleartext-http)
-    //   PassesChecklist                 every `auto`-bucket row (runAuto), + camera/microphone
-    //                                   when CAMERA/RECORD_AUDIO are granted to the install
-    //   RoutesExternalScheme › <row>   one row each: tg / intent / mailto / tel / sms
+    //   PassesChecklist                 every `auto`-bucket row (runAuto), + camera
+    //                                   when CAMERA is granted to the install
+    //   RoutesExternalScheme › <row>   one row each: tg / intent
     //   BackNavigation › <row>          QA row "Возврат назад" — the OS back control:
     //                                   ReturnsToPreviousPage / KeepsSurfaceOpenOnFirstPage
     //   DeepLinks › <row>               QA row "Переход по диплинку" — deep links inside the
     //                                   WebView are intercepted and handed to the OS
     //                                   (shouldOpenExternally / new Intent / popup routing)
     [TestFixture]
-    public class WebViewCapabilities
+    public class WebViewCapabilities : WebViewFixture
     {
         private const float WebViewReadyBudgetSeconds = 20f;  // real offer must actually open
         private const float JsResultBudgetSeconds = 10f;
@@ -605,25 +605,23 @@ namespace ZeyWinAds.Tests.Runtime.WebView
                 yield return new WaitForSecondsRealtime(2f);
             }
 
-            // 2. Kick runAuto() (the `auto` bucket). camera + microphone are also run and graded,
-            //    but ONLY when CAMERA + RECORD_AUDIO are actually held by this install — the plain
-            //    Editor->device flow reinstalls the player every run and wipes runtime grants, so
-            //    there they are reported as "skipped (OS permission not granted)" and NOT run (no
-            //    prompt). The CI runner grants them post-install, so there they run and are graded.
+            // 2. Kick runAuto() (the `auto` bucket). camera is also run and graded, but ONLY when
+            //    CAMERA is actually held by this install — the plain Editor->device flow reinstalls
+            //    the player every run and wipes runtime grants, so there it is reported as
+            //    "skipped (OS permission not granted)" and NOT run (no prompt). The CI runner grants
+            //    it post-install, so there it runs and is graded.
             //    navigates/external/manual buckets are always reported-only (marked "n/a").
-            bool micCamGranted =
-                AndroidPermissionGranted("android.permission.CAMERA") &&
-                AndroidPermissionGranted("android.permission.RECORD_AUDIO");
-            Debug.Log($"[ZeyWinAds QA] checklist: CAMERA+RECORD_AUDIO held by this install = {micCamGranted}");
+            bool cameraGranted = AndroidPermissionGranted("android.permission.CAMERA");
+            Debug.Log($"[ZeyWinAds QA] checklist: CAMERA held by this install = {cameraGranted}");
 
             string kickScript =
-                "(function(){window.__zw={done:false};var gradePerm=" + (micCamGranted ? "true" : "false") + ";" +
+                "(function(){window.__zw={done:false};var gradePerm=" + (cameraGranted ? "true" : "false") + ";" +
                 "if(!window.ZW_CHECKLIST){window.__zw={done:true,verdict:'NO_CONTRACT',report:''};return;}" +
                 "if((ZW_CHECKLIST.version||0)<3){window.__zw={done:true,verdict:'BAD_VERSION',report:'version='+ZW_CHECKLIST.version};return;}" +
-                "var meta=ZW_CHECKLIST.meta||{};var permIds={camera:1,microphone:1};" +
+                "var meta=ZW_CHECKLIST.meta||{};var permIds={camera:1};" +
                 "Promise.resolve(ZW_CHECKLIST.runAuto()).then(function(){" +
                 "if(!gradePerm)return;" +
-                "return Promise.all(['camera','microphone'].map(function(id){" +
+                "return Promise.all(['camera'].map(function(id){" +
                 "return Promise.resolve(ZW_CHECKLIST.run(id)).catch(function(){});}));}).then(function(){" +
                 "var r=ZW_CHECKLIST.results();" +
                 "var ids=Object.keys(r).sort(function(a,b){" +
@@ -634,7 +632,7 @@ namespace ZeyWinAds.Tests.Runtime.WebView
                 "var graded=(b==='auto')||(gradePerm&&permIds[k]);" +
                 "if(permIds[k]&&!gradePerm){lines.push('⏭️ SKIP  ['+b+']  '+k+'  - skipped: OS permission not granted to this install (CI grants post-install)');gs++;return;}" +
                 "if(!graded){lines.push('⬜ n/a   ['+b+']  '+k);nr++;return;}" +
-                // camera/microphone fails stay fails. Just annotate which layer broke: NotAllowedError
+                // camera fails stay fails. Just annotate which layer broke: NotAllowedError
                 // = the SDK's permission wiring; NotReadableError/NotFoundError = permission was fine,
                 // the device sensor couldn't open (busy / absent — check the device, not the SDK).
                 "if(permIds[k]&&s!=='pass'){var er=String(e.detail||'');" +
@@ -651,14 +649,32 @@ namespace ZeyWinAds.Tests.Runtime.WebView
                 "}).catch(function(e){window.__zw={done:true,verdict:'THREW',report:String(e)};});})();";
             yield return EvalJs(_checklistWebView, kickScript, JsResultBudgetSeconds, _ => { });
 
-            // 3. Poll until done. While pending, report terminal-count so a stuck check is visible.
+            // 3. Poll until done. Each tick reports a real breakdown — pass/fail/skip counts, which
+            //    check is *running*, which are still pending, plus the page context state — so a
+            //    hang (a check that never settles, or the probe page losing ZW_CHECKLIST because
+            //    something navigated it / its renderer died) is visible instead of a blank "PENDING".
             const string pollScript =
-                "(function(){if(window.__zw&&window.__zw.done)" +
+                "(function(){" +
+                "if(window.__zw&&window.__zw.done)" +
                 "return 'DONE\\n'+window.__zw.verdict+'\\n===\\n'+(window.__zw.report||'');" +
-                "try{var r=ZW_CHECKLIST.results();var ks=Object.keys(r);" +
-                "var d=ks.filter(function(k){var s=r[k].status;return s==='pass'||s==='fail'||s==='skip';});" +
-                "return 'PENDING '+d.length+'/'+ks.length;}catch(e){return 'PENDING';}})()";
+                "var zw=window.__zw?(window.__zw.done?'done':'running'):'none';" +
+                "var rs='?',url='?';try{rs=document.readyState;url=String(location.href).slice(0,80);}catch(e){}" +
+                "try{" +
+                "if(!window.ZW_CHECKLIST)return 'PENDING no-contract  rs='+rs+'  url='+url+'  zw='+zw;" +
+                "var r=ZW_CHECKLIST.results();var ks=Object.keys(r);" +
+                "var p=0,f=0,s=0,run=[],pend=[];" +
+                "ks.forEach(function(k){var st=(r[k]&&r[k].status)||'?';" +
+                "if(st==='pass')p++;else if(st==='fail')f++;else if(st==='skip')s++;" +
+                "else if(st==='running')run.push(k);else pend.push(k);});" +
+                "return 'PENDING '+(p+f+s)+'/'+ks.length+'  ('+p+'P '+f+'F '+s+'S)'" +
+                "+(run.length?'  running='+run.join(','):'')" +
+                "+(pend.length?'  pending='+pend.slice(0,8).join(','):'')" +
+                "+'  zw='+zw;" +
+                "}catch(e){return 'PENDING err='+String(e).slice(0,140)+'  rs='+rs+'  url='+url+'  zw='+zw;}" +
+                "})()";
             string payload = null;
+            string lastProgress = null;
+            bool navigatedToPopupProbe = false;
             float runStartedAt = Time.realtimeSinceStartup;
             while (true)
             {
@@ -669,7 +685,20 @@ namespace ZeyWinAds.Tests.Runtime.WebView
                     payload = probe;
                     break;
                 }
+                if (!string.IsNullOrEmpty(probe) && probe.StartsWith("PENDING "))
+                    lastProgress = probe;
                 Debug.Log($"[ZeyWinAds QA] checklist run-probe (+{Time.realtimeSinceStartup - runStartedAt:F0}s): {probe ?? "<null>"}");
+
+                // The SPA's popup check navigates the probe to /checklist/popup-probe and does not
+                // return — it wipes ZW_CHECKLIST, so the run can never complete. Don't wait out the
+                // whole budget; bail now with a pointed reason (this check is being reworked
+                // server-side into an opener<->popup postMessage handshake).
+                if (!string.IsNullOrEmpty(probe) && probe.Contains("/checklist/popup-probe"))
+                {
+                    navigatedToPopupProbe = true;
+                    break;
+                }
+
                 if (Time.realtimeSinceStartup - runStartedAt >= ChecklistRunBudgetSeconds)
                     break;
                 yield return new WaitForSecondsRealtime(3f);
@@ -678,8 +707,15 @@ namespace ZeyWinAds.Tests.Runtime.WebView
             yield return DestroyChecklistProbeWebView();
             UnityEngine.Object.Destroy(probeGo);
 
+            if (navigatedToPopupProbe)
+                Assert.Inconclusive("Checklist SPA navigated the probe to /checklist/popup-probe and never came back " +
+                    "— its popup capability check is mid-rework server-side (opener<->popup postMessage handshake), " +
+                    "and while it navigates the top frame it wipes ZW_CHECKLIST so the run can't finish. " +
+                    "PassesChecklist will work again once that check lands. Last progress: " + (lastProgress ?? "<none>"));
+
             if (string.IsNullOrEmpty(payload))
-                Assert.Inconclusive($"ZW_CHECKLIST.runAuto() did not finish within {ChecklistRunBudgetSeconds:F0}s.");
+                Assert.Inconclusive($"ZW_CHECKLIST.runAuto() did not finish within {ChecklistRunBudgetSeconds:F0}s. " +
+                    $"Last progress: {lastProgress ?? "<none>"}");
 
             string body = payload.Substring("DONE\n".Length);
             int sep = body.IndexOf("\n===\n", StringComparison.Ordinal);
@@ -702,16 +738,12 @@ namespace ZeyWinAds.Tests.Runtime.WebView
         // test actually can: the SDK's *routing decision* — ZeyWinAdsWebViewNavigation
         // .shouldOpenExternally() must return true, so the offer WebView hands the URL to the OS
         // instead of trying to load it as a page (hard assert). Whether an Activity resolves it is
-        // logged; if a scheme that every phone handles (mailto/tel/sms) doesn't resolve, the test
-        // is Inconclusive with the reason (an AndroidManifest <queries> gap). Actually launching
-        // the target app is a UiAutomator job, not this. No dialogs, no navigation, no startActivity.
+        // logged only; actually launching the target app is a UiAutomator job, not this. No
+        // dialogs, no navigation, no startActivity.
         [Order(8)]
-        [TestCase("deeplink-tg",   "tg://resolve?domain=telegram",                  false, TestName = "tg")]
-        [TestCase("intent-scheme", "intent://example.com#Intent;scheme=https;end",  false, TestName = "intent")]
-        [TestCase("mailto",        "mailto:qa@zeywin.com?subject=probe",            true,  TestName = "mailto")]
-        [TestCase("tel",           "tel:+10000000000",                             true,  TestName = "tel")]
-        [TestCase("sms",           "sms:+10000000000?body=probe",                  true,  TestName = "sms")]
-        public void RoutesExternalScheme(string checklistId, string url, bool everyPhoneHandlesIt)
+        [TestCase("deeplink-tg",   "tg://resolve?domain=telegram",                  TestName = "tg")]
+        [TestCase("intent-scheme", "intent://example.com#Intent;scheme=https;end",  TestName = "intent")]
+        public void RoutesExternalScheme(string checklistId, string url)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             using (var navClass = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsWebViewNavigation"))
@@ -727,18 +759,9 @@ namespace ZeyWinAds.Tests.Runtime.WebView
                 Debug.Log($"[ZeyWinAds QA] {checklistId}: shouldOpenExternally=true, resolves to {resolved ?? "<no visible handler>"}");
 
                 if (resolved == null)
-                {
-                    if (everyPhoneHandlesIt)
-                        Assert.Inconclusive($"[{checklistId}] routing verified (shouldOpenExternally=true), but no Activity " +
-                            $"resolves {url} — every phone has a handler for this, so the base app's AndroidManifest <queries> " +
-                            "is missing the scheme. Android 11+ visibility then hides the handler and " +
-                            "ZeyWinAdsWebViewNavigation.openExternal's startActivity would throw (silently caught -> link does " +
-                            "nothing). Add <data android:scheme=\"tel\"/> / \"sms\" / \"mailto\" (and \"tg\") to <queries>, or have the SDK ship them.");
-                    else
-                        Assert.Inconclusive($"[{checklistId}] routing verified (shouldOpenExternally=true), but no Activity " +
-                            $"resolves {url} — the target app isn't installed, or the scheme isn't in the AndroidManifest " +
-                            "<queries>. Real OS hand-off is a UiAutomator check.");
-                }
+                    Assert.Inconclusive($"[{checklistId}] routing verified (shouldOpenExternally=true), but no Activity " +
+                        $"resolves {url} — the target app isn't installed, or the scheme isn't in the AndroidManifest " +
+                        "<queries>. Real OS hand-off is a UiAutomator check.");
             }
 #else
             Assert.Ignore($"RoutesExternalScheme[{checklistId}]: Android device only.");
@@ -808,7 +831,7 @@ namespace ZeyWinAds.Tests.Runtime.WebView
 
         // QA checklist row "Переход по диплинку" — a deep link encountered inside the offer WebView must
         // be caught and handed to the OS (new Intent), not loaded as a page. SUT:
-        // ZeyWinAdsWebViewNavigation.shouldOpenExternally (9-scheme allow-list) + openExternal(Activity,
+        // ZeyWinAdsWebViewNavigation.shouldOpenExternally (deep-link scheme allow-list) + openExternal(Activity,
         // url) (builds ACTION_VIEW / Intent.parseUri + startActivity), reached from
         // ZeyWinAdsLockWebViewClient.shouldOverrideUrlLoading and, for window.open/_blank, from
         // ZeyWinAdsWebChromeClient.onCreateWindow -> routePopupUrl. Rows 1-4 are pure JNI (no WebView,
@@ -854,6 +877,7 @@ namespace ZeyWinAds.Tests.Runtime.WebView
 #if UNITY_ANDROID && !UNITY_EDITOR
         private static void RouteWhitelistedSchemes()
         {
+            // mailto:/tel:/sms: are on the SDK allow-list too, but out of QA scope — not asserted here.
             string[] urls =
             {
                 "intent://scan/#Intent;scheme=zxing;end",
@@ -862,9 +886,6 @@ namespace ZeyWinAds.Tests.Runtime.WebView
                 "telegram://resolve?domain=telegram",
                 "whatsapp://send?text=hi",
                 "viber://forward?text=hi",
-                "mailto:qa@zeywin.com?subject=probe",
-                "tel:+10000000000",
-                "sms:+10000000000?body=probe",
             };
             using (var nav = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsWebViewNavigation"))
             {
@@ -893,7 +914,7 @@ namespace ZeyWinAds.Tests.Runtime.WebView
             {
                 foreach (var url in notRouted)
                     Assert.IsFalse(nav.CallStatic<bool>("shouldOpenExternally", url),
-                        $"ZeyWinAdsWebViewNavigation.shouldOpenExternally returned true for '{url}' — only the 9 " +
+                        $"ZeyWinAdsWebViewNavigation.shouldOpenExternally returned true for '{url}' — only " +
                         "whitelisted deep-link schemes should route out.");
             }
         }

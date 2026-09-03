@@ -29,7 +29,7 @@ namespace ZeyWinAds.Tests.Runtime
     // own namespace (ZeyWinAds.Tests.Runtime) is nested under the ZeyWinAds namespace, which
     // makes a bare `ZeyWinAds` reference ambiguous between the namespace and the class.
     [TestFixture]
-    public class AdPreload
+    public class AdPreload : QaFixture
     {
         private const float BudgetSeconds = 20f;
         private static readonly WaitForSecondsRealtime PollInterval = new WaitForSecondsRealtime(0.5f);

@@ -4,7 +4,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace ZeyWinAds.Tests.Runtime.WebView
+namespace ZeyWinAds.Tests.Runtime
 {
     // QA checklist row "Размер вебвью" — the offer WebView must render inside the Safe Area: display
     // cutouts / notches, the status bar and the navigation bar must never overlap WebView content,
@@ -29,11 +29,11 @@ namespace ZeyWinAds.Tests.Runtime.WebView
     // Requires a REAL offer WebView to be up (same as OfferAndLoadingScreen.ForceOfferOpens): no live offer
     // => FAIL, not Inconclusive.
     //
-    // In the ZeyWinAds.Tests.Runtime.WebView namespace group. Class name "WebViewSafeArea..." sorts
-    // after "WebViewOrientation..." / "WebViewCapabilities..." — NUnit runs fixtures in name order,
-    // so this runs last of the three (the [Order] is intent only).
+    // Class name "WebViewSafeArea..." sorts after "WebViewOrientation..." / "WebViewCapabilities..."
+    // — NUnit runs fixtures in name order, so this runs last of the three (the [Order] is intent
+    // only).
     [TestFixture]
-    public class WebViewSafeArea
+    public class WebViewSafeArea : WebViewFixture
     {
         private const float OfferOpenBudgetSeconds = 20f;       // wait for the SDK's force offer to open
         private const float RotationSettleBudgetSeconds = 12f;  // Screen.orientation setter -> native re-layout

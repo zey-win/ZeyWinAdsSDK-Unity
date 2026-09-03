@@ -4,7 +4,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 
-namespace ZeyWinAds.Tests.Runtime.WebView
+namespace ZeyWinAds.Tests.Runtime
 {
     // QA checklist row "Поворот экрана" — while an offer WebView is on screen the user must be able
     // to rotate the device on every side even if the host game is pinned to one orientation, and the
@@ -26,11 +26,10 @@ namespace ZeyWinAds.Tests.Runtime.WebView
     // force offer never opens for this device/app, this FAILS — it does not open an offer of its own
     // and does not go Inconclusive.
     //
-    // In the ZeyWinAds.Tests.Runtime.WebView namespace group. Class name "WebViewOrientation..."
-    // sorts after "WebViewCapabilities..." — NUnit runs fixtures in name order, so this is kept
-    // after the capability suite (the [Order] is intent only).
+    // Class name "WebViewOrientation..." sorts after "WebViewCapabilities..." — NUnit runs fixtures
+    // in name order, so this is kept after the capability suite (the [Order] is intent only).
     [TestFixture]
-    public class WebViewOrientation
+    public class WebViewOrientation : WebViewFixture
     {
         private const float OfferOpenBudgetSeconds = 20f;       // wait for the SDK's force offer to open
         private const float RotationSettleBudgetSeconds = 12f;  // Screen.orientation setter -> native re-layout

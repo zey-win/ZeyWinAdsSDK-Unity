@@ -10,7 +10,7 @@ namespace ZeyWinAds.Tests.Runtime
     //
     // Ships with the SDK (Tests/Runtime) so every consuming project gets the same QA suite —
     // enable it by adding "com.zeywin.ads" to the project's Packages/manifest.json "testables".
-    public class DeviceIdentity
+    public class DeviceIdentity : QaFixture
     {
         [Test]
         public void RunsOnAndroidDevice()
