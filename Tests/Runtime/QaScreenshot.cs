@@ -85,11 +85,10 @@ namespace ZeyWinAds.Tests.Runtime
 
             if (!state.Done)
                 Debug.LogWarning($"[QaScreenshot] '{name}' capture timed out after {timeoutSeconds:F0}s.");
-            else if (state.Ok)
-                Debug.Log($"[QaScreenshot] '{name}' captured -> {PendingPath(name)}");
             else if (state.Error != null)
                 Debug.LogWarning($"[QaScreenshot] '{name}' capture failed: {state.Error}");
-            // no Error and not Ok => not an Android player build; nothing to say
+            // on success the "screenshot saved -> <path>" log comes from the PixelCopy callback;
+            // no Error and not Ok => not an Android player build, nothing to say
         }
 
         /// <summary>
@@ -112,7 +111,7 @@ namespace ZeyWinAds.Tests.Runtime
                     if (File.Exists(final))
                         File.Delete(final);
                     File.Move(pending, final);
-                    Debug.Log($"[QaScreenshot] kept '{name}' ({final}) — test passed.");
+                    Debug.Log($"[QaScreenshot] '{name}' kept ({status}) -> {final}");
                 }
                 else
                 {
@@ -202,6 +201,7 @@ namespace ZeyWinAds.Tests.Runtime
                                 fos.Call("flush");
                             }
                             state.Ok = true;
+                            Debug.Log($"[QaScreenshot] screenshot saved -> {outPath}");
                         }
                         else
                         {
@@ -230,12 +230,16 @@ namespace ZeyWinAds.Tests.Runtime
                     "(Landroid/view/Window;Landroid/graphics/Bitmap;" +
                     "Landroid/view/PixelCopy$OnPixelCopyFinishedListener;Landroid/os/Handler;)V");
 
+                IntPtr listenerRef = AndroidJNIHelper.CreateJavaProxy(listener);
+
                 var args = new jvalue[4];
                 args[0].l = window.GetRawObject();
                 args[1].l = bitmap.GetRawObject();
-                args[2].l = listener.GetRawProxy();
+                args[2].l = listenerRef;
                 args[3].l = handler.GetRawObject();
                 AndroidJNI.CallStaticVoidMethod(cls, mid, args);
+
+                AndroidJNI.DeleteLocalRef(listenerRef);
                 AndroidJNI.DeleteLocalRef(cls);
             }
             catch (Exception e)
