@@ -19,6 +19,10 @@ namespace ZeyWinAds.Tests.Runtime
         [OneTimeSetUp]
         public void RequireOfferSurface()
         {
+            // A placeholder-id test player has no offer surface for a real reason — report that
+            // reason, not "force offer never opened".
+            QaBuildGuard.AssertRealConfiguredBuild();
+
 #if UNITY_ANDROID && !UNITY_EDITOR
             // OfferConfirmed = ForceOfferOpens verified it. IsLocked = the offer is up right now
             // regardless (e.g. a filtered run that skipped ForceOfferOpens but the SDK opened it).

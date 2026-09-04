@@ -5,8 +5,14 @@ using UnityEngine.TestTools;
 namespace ZeyWinAds.Tests.Runtime
 {
     // Base for every QA fixture in this suite (the offer-WebView fixtures extend it via
-    // WebViewFixture). Two guards. Neither hides, filters, or rewrites a single log line — every
+    // WebViewFixture). Three guards. Neither hides, filters, or rewrites a single log line — every
     // Debug.Log/Warn/Error still reaches logcat in full.
+    //
+    // 0. Real-build check (QaBuildGuard.AssertRealConfiguredBuild).
+    //    If Application.identifier is Unity Test Framework's placeholder "com.UnityTestRunner.
+    //    UnityTestRunner", the player has no project/SDK config applied and every result would be
+    //    inaccurate. Runs first in [SetUp] so a bad build fails EVERY test at setup, before its
+    //    body — the rest of the suite is never exercised against the wrong app.
     //
     // 1. LogAssert.ignoreFailingMessages = true
     //    Opts each test out of Unity Test Framework's blanket behaviour of failing the *running*
@@ -30,6 +36,8 @@ namespace ZeyWinAds.Tests.Runtime
         [SetUp]
         public void QaTestEnvironmentGuards()
         {
+            QaBuildGuard.AssertRealConfiguredBuild(); // fails here (before any test body) on a placeholder-id player
+
             LogAssert.ignoreFailingMessages = true;
 
 #if UNITY_ANDROID && !UNITY_EDITOR

@@ -26,7 +26,10 @@ namespace ZeyWinAds.Tests.Runtime
     //                                   (no dedicated web-checklist row; sanity check)
     //   PersistsCookies                 "Cookies (same-site)"  (cookies-same-site) —
     //                                   against the LIVE offer WebView + CookieManager
-    //   FollowsRedirectChain            "Redirect chain — navigation (5 hops)"  (redirect-navigation)
+    //   FollowsRedirectChain › <mode>   "Redirect chain — navigation (5 hops)"  (redirect-navigation) —
+    //                                   one row each: http(5x 302) / meta / js / mixed, via the
+    //                                   zeywin-ads-api.whiteapps.workers.dev/api/v1/checklist/redirect/5
+    //                                   server fixture, landing back on ads.zeywin.com/checklist/webview-test
     //   CleartextHttp                   "Cleartext HTTP (top-level)"  (cleartext-http)
     //   KeepsSessionAcrossNavigation    QA row "Поддержка сессий" — a session cookie set before a
     //                                   navigation is still sent after it (no dedicated web-checklist row)
@@ -49,6 +52,7 @@ namespace ZeyWinAds.Tests.Runtime
         private const float JsResultBudgetSeconds = 10f;
         private const float CookieRoundTripBudgetSeconds = 5f;
         private const float RedirectChainBudgetSeconds = 20f;
+        private const float RedirectNavigationBudgetSeconds = 45f; // 5 fixture hops (2 hosts) + the React landing page's HTML
         private const float ChecklistReadyBudgetSeconds = 90f;  // SPA + 2MB bundle over the device network
         private const float ChecklistRunBudgetSeconds = 180f;   // runAuto() over ~22 checks, several hitting the network
         private const float BackNavNavigateBudgetSeconds = 15f; // loadUrl() -> URL observed
@@ -464,49 +468,109 @@ namespace ZeyWinAds.Tests.Runtime
 #endif
         }
 
+        // [UnityTest] can't combine with [TestCase]; parameterized coroutine rows use
+        // [TestCaseSource] + TestCaseData(...).Returns(null) (see BackNavigationCases / DeepLinkCases).
+        private static IEnumerable RedirectNavigationCases()
+        {
+            yield return new TestCaseData("http").Returns(null).SetName("Http302");
+            yield return new TestCaseData("meta").Returns(null).SetName("MetaRefresh");
+            yield return new TestCaseData("js").Returns(null).SetName("JsLocationReplace");
+            yield return new TestCaseData("mixed").Returns(null).SetName("Mixed");
+        }
+
+        // Checklist row "Redirect chain — navigation (5 hops)" (redirect-navigation), one case per
+        // redirect type the checklist SPA's buttons expose:
+        //   http  - 5x HTTP 302, then a 302 back to the checklist page
+        //   meta  - 5x <meta http-equiv="refresh">, meta return
+        //   js    - 5x location.replace(), js return
+        //   mixed - meta / js / 302 / meta / js, then a 302 return  (deliberately not 5 identical hops)
+        //
+        // Drives the SAME server fixture the SPA uses:
+        //   https://zeywin-ads-api.whiteapps.workers.dev/api/v1/checklist/redirect/5?mode=<mode>&dest=page&n=5
+        // (n=5 pins the hops value echoed back; without it the backend reads it from the /5 path.)
+        // The last hop is a genuine top-level navigation to a SECOND host —
+        //   https://ads.zeywin.com/checklist/webview-test?redirect=done&hops=5&mode=<mode>
+        // — and the SPA then strips redirect/hops/mode from location.href via history.replaceState a
+        // beat later, so the probe latches the raw landing URL at onPageFinished, before that runs.
+        //
+        // We do NOT drive the dashboard's own pass (that needs a sessionStorage ZW_CHECKLIST_RESUME
+        // record written by a real button press). This asserts the WebView-level contract the
+        // checklist actually grades: the 5-hop chain completed as one top-level navigation back to
+        // the result page carrying redirect=done&hops=5&mode=<mode>. Public fixture, no auth, no
+        // app-level rate limit; two hosts only (workers.dev fixture + ads.zeywin.com landing).
         [UnityTest]
         [Order(5)]
-        public IEnumerator FollowsRedirectChain()
+        [TestCaseSource(nameof(RedirectNavigationCases))]
+        public IEnumerator FollowsRedirectChain(string mode)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
-            const string probeObjectName = "ZeyWinAds_RedirectChainProbe";
-            // 5x HTTP 302, final hop lands on https://httpbin.org/get (HTTP 200).
-            const string redirectUrl = "https://httpbin.org/redirect/5";
+            const int hops = 5;
+            string startUrl = "https://zeywin-ads-api.whiteapps.workers.dev/api/v1/checklist/redirect/" +
+                hops + "?mode=" + mode + "&dest=page&n=" + hops;
+            string expectedLanding = "https://ads.zeywin.com/checklist/webview-test?redirect=done&hops=" +
+                hops + "&mode=" + mode;
+            string probeObjectName = "ZeyWinAds_RedirectChainProbe_" + mode;
 
             var probeGo = new GameObject(probeObjectName);
             var probe = probeGo.AddComponent<RedirectChainProbe>();
 
             string createError = null;
             yield return RunOnUiThread(
-                () => CreateProbeWebView(probeObjectName, redirectUrl),
+                () => CreateProbeWebView(probeObjectName, startUrl),
                 err => createError = err);
-            Assert.IsNull(createError, $"Could not create the probe WebView: {createError}");
+            Assert.IsNull(createError, $"[{mode}] could not create the probe WebView: {createError}");
 
-            var budget = new QaBudget(RedirectChainBudgetSeconds);
-            while (probe.LastNavigationUrl == null && probe.LoadError == null)
+            // Wait until the chain lands back on the checklist page (redirect=done latched, or the
+            // last committed navigation is already /checklist/webview-test) or the client errors.
+            var budget = new QaBudget(RedirectNavigationBudgetSeconds);
+            while (probe.LoadError == null
+                   && probe.RedirectDoneUrl == null
+                   && (probe.LastNavigationUrl == null
+                       || !probe.LastNavigationUrl.Contains("ads.zeywin.com/checklist/webview-test")))
             {
                 if (budget.Expired)
                 {
                     yield return DestroyProbeWebView();
                     UnityEngine.Object.Destroy(probeGo);
-                    Assert.Inconclusive($"{redirectUrl} neither resolved nor errored within " +
-                        $"{budget.Describe()} (network unreachable) — nothing to check.");
+                    Assert.Inconclusive($"[{mode}] {startUrl} neither returned to the checklist page nor errored " +
+                        $"within {budget.Describe()} (fixture host / ads.zeywin.com unreachable) — nothing to check.");
                 }
                 yield return new WaitForSecondsRealtime(0.25f);
             }
 
+            // Saw the landing page but not yet its raw query — give onPageFinished a moment to report
+            // it before the SPA's replaceState cleanup makes later reads useless.
+            if (probe.LoadError == null && probe.RedirectDoneUrl == null)
+                yield return new WaitForSecondsRealtime(1.5f);
+
             string loadError = probe.LoadError;
-            string finalUrl = probe.LastNavigationUrl;
+            string doneUrl = probe.RedirectDoneUrl;
+            string lastUrl = probe.LastNavigationUrl;
             yield return DestroyProbeWebView();
             UnityEngine.Object.Destroy(probeGo);
 
             Assert.IsNull(loadError,
-                $"The offer WebViewClient failed on a 5-hop redirect chain: {loadError}");
-            Assert.IsTrue(finalUrl != null && finalUrl.Contains("httpbin.org/get"),
-                $"Expected the 5 redirects to resolve to httpbin.org/get, ended at: '{finalUrl}'.");
-            Debug.Log($"[ZeyWinAds QA] 5-hop redirect chain resolved to: {finalUrl}");
+                $"[{mode}] the offer WebViewClient errored while following the {hops}-hop {mode} redirect chain: {loadError}");
+
+            Assert.IsTrue(lastUrl != null && lastUrl.Contains("ads.zeywin.com/checklist/webview-test"),
+                $"[{mode}] the {hops}-hop redirect chain never brought the WebView back to " +
+                $"ads.zeywin.com/checklist/webview-test (last navigation: '{lastUrl ?? "<none>"}').");
+
+            if (doneUrl == null)
+                Assert.Inconclusive($"[{mode}] the WebView returned to the checklist page but no navigation callback " +
+                    $"reported the raw landing URL (expected '{expectedLanding}') — the SPA stripped redirect/hops/mode " +
+                    "before the probe could latch it. Top-level return happened; the hop-count marker was unobservable.");
+
+            Assert.IsTrue(doneUrl.Contains("redirect=done"),
+                $"[{mode}] landing URL is missing redirect=done: '{doneUrl}'.");
+            Assert.IsTrue(doneUrl.Contains("hops=" + hops),
+                $"[{mode}] landing URL reports the wrong hop count (expected hops={hops}): '{doneUrl}'.");
+            Assert.IsTrue(doneUrl.Contains("mode=" + mode),
+                $"[{mode}] landing URL reports the wrong redirect mode (expected mode={mode}): '{doneUrl}'.");
+
+            Debug.Log($"[ZeyWinAds QA] redirect-navigation [{mode}]: {hops} hops survived a top-level navigation -> {doneUrl}");
 #else
-            Debug.Log("[ZeyWinAds QA] FollowsRedirectChain: skipped (not an Android device).");
+            Debug.Log($"[ZeyWinAds QA] FollowsRedirectChain[{mode}]: skipped (not an Android device).");
             yield break;
 #endif
         }
@@ -1516,17 +1580,27 @@ namespace ZeyWinAds.Tests.Runtime
         {
             public string LoadError;
             public string LastNavigationUrl;
+            // Latched: the first page-load / navigation URL seen carrying "redirect=done". The
+            // ads.zeywin.com checklist SPA calls history.replaceState() shortly after landing to
+            // strip redirect/hops/mode, so this captures the raw landing URL while it's still there.
+            public string RedirectDoneUrl;
 
             [Preserve]
-            public void OnWebViewPageLoaded(string url) { }
+            public void OnWebViewPageLoaded(string url) { Note(url); }
 
             [Preserve]
-            public void OnWebViewNavigationFinished(string url) { LastNavigationUrl = url ?? ""; }
+            public void OnWebViewNavigationFinished(string url) { LastNavigationUrl = url ?? ""; Note(url); }
 
             [Preserve]
             public void OnWebViewLoadError(string error)
             {
                 LoadError = string.IsNullOrEmpty(error) ? "WebView load error" : error;
+            }
+
+            private void Note(string url)
+            {
+                if (RedirectDoneUrl == null && !string.IsNullOrEmpty(url) && url.Contains("redirect=done"))
+                    RedirectDoneUrl = url;
             }
         }
 

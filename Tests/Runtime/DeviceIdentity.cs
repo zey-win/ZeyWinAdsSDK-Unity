@@ -12,6 +12,17 @@ namespace ZeyWinAds.Tests.Runtime
     // enable it by adding "com.zeywin.ads" to the project's Packages/manifest.json "testables".
     public class DeviceIdentity : QaFixture
     {
+        // Headline row for the real-build check. QaFixture's [SetUp] already runs this guard before
+        // every test in the suite (so a placeholder-id player fails all of them at setup); this test
+        // is the single, self-describing row that names the cause. Ordered first in the fixture.
+        [Test]
+        [Order(-100)]
+        public void RunsOnRealBundleId()
+        {
+            Debug.Log($"[ZeyWinAds QA] Application.identifier = {Application.identifier}");
+            QaBuildGuard.AssertRealConfiguredBuild();
+        }
+
         [Test]
         public void RunsOnAndroidDevice()
         {
