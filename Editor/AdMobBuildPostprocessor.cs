@@ -30,6 +30,15 @@ namespace ZeyWinAds.Editor
         private const string UnityPlayerGameActivityName = "com.unity3d.player.UnityPlayerGameActivity";
         private const string StartupProviderName = "com.zeywinads.unity.ZeyWinAdsStartupProvider";
         private const string StartupProviderAuthoritySuffix = ".zeywinads.startup";
+        // Transparent trampoline activity from com.google.android.play:hsdp (pulled in transitively by
+        // com.google.android.gms:play-services-ads). See HardenPlayHsdpShimActivity.
+        private const string HsdpShimActivityName = "com.google.android.play.core.hsdp.service.HsdpShimActivity";
+        // Transparent trampoline activities from com.android.billingclient:billing — present only when a
+        // project pulls in Play Billing (typically via Unity IAP), never as a ZeyWinAds dependency.
+        // See HardenPlayBillingProxyActivities (guarded by GradleProjectDependsOnPlayBilling).
+        private const string ProxyBillingActivityName = "com.android.billingclient.api.ProxyBillingActivity";
+        private const string ProxyBillingActivityV2Name = "com.android.billingclient.api.ProxyBillingActivityV2";
+        private const string PlayBillingDependencyToken = "com.android.billingclient:billing";
         private const string UnityActivityConfigChanges =
             "mcc|mnc|locale|touchscreen|keyboard|keyboardHidden|navigation|orientation|screenLayout|uiMode|screenSize|smallestScreenSize|density|fontScale|layoutDirection|colorMode";
         private const string AndroidNs = "http://schemas.android.com/apk/res/android";
@@ -262,6 +271,8 @@ allprojects {
             EnsureUnityActivityConfigurationChanges(application, activity, AndroidNs);
             EnsureStartupProviderPriority(application, AndroidNs);
             EnsureLauncherIntentFilter(doc, activity, AndroidNs);
+            HardenPlayHsdpShimActivity(doc, manifest, application);
+            HardenPlayBillingProxyActivities(doc, application, fullPath);
 
             SaveXml(doc, fullPath);
             Debug.Log("[ZeyWinAds] Final Android manifest launch metadata verified: " + fullPath);
@@ -635,6 +646,136 @@ allprojects {
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// Hardens Google Play's <c>HsdpShimActivity</c> against the fatal
+        /// <c>IllegalStateException: targetPackageName is null</c> crash it throws from
+        /// <c>onAttachedToWindow</c>. That activity is a transparent trampoline (theme
+        /// <c>Theme.HsdpServiceTransparent</c>) shipped inside <c>com.google.android.play:hsdp</c>,
+        /// which <c>com.google.android.gms:play-services-ads</c> pulls in transitively. It reads
+        /// <c>targetPackageName</c> from its launch Intent's extras; when the framework recreates it
+        /// without that Intent state the value is null and the app is killed — frequently right as the
+        /// user reopens the app. Two recreation paths are covered here:
+        ///   1. In-place configuration changes. The .aar declares only
+        ///      <c>orientation|screenSize|screenLayout|keyboardHidden</c>, so a dark-mode toggle,
+        ///      font-size / display-size change, locale change or multi-window resize destroys and
+        ///      recreates it. We widen <c>configChanges</c> (via <c>tools:replace</c>, since we are
+        ///      overriding Google's value) to the full set Unity's own activity handles, so the shim
+        ///      rides out config changes instead of being recreated.
+        ///   2. Process death + task restore. If Android kills the process while the shim sits in the
+        ///      back stack (behind the Play Store UI it launched), reopening the app recreates it
+        ///      first. <c>finishOnTaskLaunch</c> finishes the stranded instance on task relaunch
+        ///      instead of recreating it.
+        /// The shim lives in a prebuilt .aar so this is done by merging attributes onto its
+        /// &lt;activity&gt; node from the app manifest. If a Play-brokered ad sub-flow ever regresses,
+        /// removing the <c>configChanges</c> override (keep <c>finishOnTaskLaunch</c>) is the safe
+        /// partial revert.
+        /// </summary>
+        private static void HardenPlayHsdpShimActivity(XmlDocument doc, XmlElement manifest, XmlElement application)
+        {
+            if (doc == null || manifest == null || application == null)
+                return;
+
+            XmlElement activity = FindActivity(application, AndroidNs, HsdpShimActivityName);
+            if (activity == null)
+            {
+                activity = doc.CreateElement("activity");
+                activity.SetAttribute("name", AndroidNs, HsdpShimActivityName);
+                application.AppendChild(activity);
+            }
+
+            activity.SetAttribute("configChanges", AndroidNs, UnityActivityConfigChanges);
+            activity.SetAttribute("finishOnTaskLaunch", AndroidNs, "true");
+            activity.SetAttribute("excludeFromRecents", AndroidNs, "true");
+
+            EnsureToolsNamespace(manifest);
+            EnsureToolsReplace(activity, "android:configChanges");
+        }
+
+        /// <summary>
+        /// Hardens Google Play Billing's <c>ProxyBillingActivity</c> / <c>ProxyBillingActivityV2</c>
+        /// against the fatal <c>NullPointerException</c> they throw from <c>onCreate</c>:
+        /// "Attempt to invoke 'android.content.IntentSender android.app.PendingIntent.getIntentSender()'
+        /// on a null object reference". They are transparent trampolines that carry a live
+        /// <c>BUY_INTENT</c> PendingIntent in their launch Intent. When Android kills the process
+        /// during a purchase and later restores the task, the extra's key survives but the
+        /// PendingIntent value does not, so <c>hasExtra("BUY_INTENT")</c> is true while
+        /// <c>getParcelableExtra</c> returns null and the unguarded <c>getIntentSender()</c> call
+        /// crashes the app on relaunch. Verified still unguarded in billing 8.0.0 and 8.3.0.
+        /// <c>finishOnTaskLaunch</c> makes the OS finish a stranded instance on task relaunch instead
+        /// of recreating it; <c>noHistory</c> keeps it out of the back stack once it is done. Neither
+        /// finishes an activity still awaiting <c>startIntentSenderForResult</c> on API 21+, so a live
+        /// purchase completes normally.
+        ///
+        /// Play Billing is not a ZeyWinAds dependency — it arrives only when a project uses Unity IAP
+        /// (or adds com.android.billingclient directly). This is a no-op unless the generated Gradle
+        /// project actually depends on it; otherwise it would leave a manifest &lt;activity&gt; node
+        /// pointing at a class that is not in the APK.
+        /// </summary>
+        private static void HardenPlayBillingProxyActivities(XmlDocument doc, XmlElement application, string manifestPath)
+        {
+            if (doc == null || application == null)
+                return;
+
+            if (!GradleProjectDependsOnPlayBilling(manifestPath))
+                return;
+
+            foreach (string activityName in new[] { ProxyBillingActivityName, ProxyBillingActivityV2Name })
+            {
+                XmlElement activity = FindActivity(application, AndroidNs, activityName);
+                if (activity == null)
+                {
+                    activity = doc.CreateElement("activity");
+                    activity.SetAttribute("name", AndroidNs, activityName);
+                    application.AppendChild(activity);
+                }
+
+                activity.SetAttribute("noHistory", AndroidNs, "true");
+                activity.SetAttribute("finishOnTaskLaunch", AndroidNs, "true");
+                activity.SetAttribute("excludeFromRecents", AndroidNs, "true");
+            }
+        }
+
+        /// <summary>
+        /// True when the generated Gradle project that contains <paramref name="manifestPath"/>
+        /// (expected layout: <c>&lt;root&gt;/&lt;module&gt;/src/main/AndroidManifest.xml</c>) declares
+        /// a dependency on <c>com.android.billingclient:billing</c> in the root or any module
+        /// <c>build.gradle</c>. Scans only those files — never recurses the whole tree.
+        /// </summary>
+        private static bool GradleProjectDependsOnPlayBilling(string manifestPath)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(manifestPath))
+                    return false;
+
+                string mainDir = Path.GetDirectoryName(Path.GetFullPath(manifestPath));   // .../src/main
+                string srcDir = Path.GetDirectoryName(mainDir);                            // .../src
+                string moduleDir = Path.GetDirectoryName(srcDir);                          // .../<module>
+                string gradleRoot = Path.GetDirectoryName(moduleDir);                      // Gradle project root
+                if (string.IsNullOrEmpty(gradleRoot) || !Directory.Exists(gradleRoot))
+                    return false;
+
+                var candidates = new List<string> { Path.Combine(gradleRoot, "build.gradle") };
+                foreach (string subDir in Directory.GetDirectories(gradleRoot))
+                    candidates.Add(Path.Combine(subDir, "build.gradle"));
+
+                foreach (string gradleFile in candidates)
+                {
+                    if (File.Exists(gradleFile)
+                        && File.ReadAllText(gradleFile).IndexOf(PlayBillingDependencyToken, StringComparison.OrdinalIgnoreCase) >= 0)
+                    {
+                        return true;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning("[ZeyWinAds] Play Billing dependency probe failed; skipping ProxyBillingActivity hardening. " + ex.Message);
+            }
+
+            return false;
         }
 
         private static void EnsureStartupProviderPriority(XmlElement application, string ns)

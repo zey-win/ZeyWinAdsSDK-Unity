@@ -45,6 +45,10 @@ class UniWebViewPostBuildProcessor : IPostGenerateGradleAndroidProject
             changed = manifest.AddAuthCallbacksIntentFilter(new string[] { "lineauth://auth" }) || changed;
         }
 
+        // ZeyWin: always applied - stops UniWebViewProxyActivity from being recreated after process
+        // death, which otherwise crashes the app on cold start with "null activity handler found!".
+        changed = manifest.HardenProxyActivity() || changed;
+
         if (changed) {
             manifest.Save();
         }
