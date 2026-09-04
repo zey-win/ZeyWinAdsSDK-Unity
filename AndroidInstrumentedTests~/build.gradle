@@ -1,0 +1,8 @@
+// Root build script for the standalone Android instrumented-test lane.
+// This project is deliberately OUTSIDE the Unity package's Assets graph — it is a
+// plain Gradle/AGP project that compiles a small slice of the SDK's Android
+// sources and runs on-device (Espresso) tests against the real offer WebView
+// wiring. Unity never sees this folder.
+plugins {
+    id 'com.android.library' version '8.7.3' apply false
+}
