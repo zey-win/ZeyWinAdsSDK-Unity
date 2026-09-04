@@ -2,6 +2,19 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.59
+
+- `FactoryBuildPreprocessor` moved into the SDK (`Editor/FactoryBuildPreprocessor.cs`) instead of
+  living per base repo — every consuming project now gets the factory-config wiring (bundle id /
+  product name / AdMob + ZeyWinAdsSettings config / icon / google-services.json) and on-device
+  test-build bundle-id healing automatically, without copying the file into each repo. Generalized
+  to run for whichever platform is active instead of assuming Android, and the bundle-id snapshot
+  is now scoped per project so it can't leak between different repos on the same machine.
+- Added `.github/workflows/factory-build.yml` — the canonical copy of the factory-build CI
+  workflow now lives in the SDK repo instead of being hand-maintained separately in each base
+  repo. Still copy-per-repo for now (triggered by `repository_dispatch`, not yet a reusable
+  `workflow_call` workflow); base repos should sync their copy from here.
+
 ## 3.9.58
 
 - Added a native iOS startup overlay (`Runtime/Plugins/iOS/ZeyWinAdsStartupOverlay.mm`).

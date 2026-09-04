@@ -1,0 +1,192 @@
+# Factory build workflow — copy to .github/workflows/factory-build.yml in each
+# base repo. Per-repo GitHub Secrets required: UNITY_LICENSE, UNITY_EMAIL,
+# UNITY_PASSWORD. Everything client-specific arrives in the encrypted bundle
+# fetched from the worker; nothing secret lives in this file or in the payload.
+name: Factory Build
+
+on:
+  repository_dispatch:
+    types: [factory-build]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CB: ${{ github.event.client_payload.callback_url }}
+      BID: ${{ github.event.client_payload.build_id }}
+      TOKEN: ${{ github.event.client_payload.token }}
+    steps:
+      - name: Report running
+        run: |
+          curl -sf -X POST "$CB/builds/$BID/status?token=$TOKEN" \
+            -H 'content-type: application/json' \
+            -d "{\"status\":\"running\",\"gh_run_id\":${{ github.run_id }},\"gh_run_url\":\"${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}\"}"
+
+      - uses: jlumbroso/free-disk-space@v1.3.1
+        with:
+          # Free everything the runner preinstalls that this job never touches, to make
+          # room for the Unity Editor Docker image (game-ci/unity-builder pulls one bundling the
+          # full Editor + installed modules — routinely 10-20GB — against a runner that starts
+          # with only ~14GB genuinely free).
+          android: true
+          tool-cache: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
+
+      - uses: actions/checkout@v4
+
+      - name: Fetch factory bundle
+        run: curl -sf "$CB/builds/$BID/bundle?token=$TOKEN" -o /tmp/bundle.json
+
+      - name: Apply factory config
+        run: |
+          set -euo pipefail
+          mkdir -p factory
+          jq -r '.files.icon_png_b64' /tmp/bundle.json | base64 -d > factory/icon.png
+          jq -r '.files.google_services_json_b64' /tmp/bundle.json | base64 -d > factory/google-services.json
+          jq '{schema: .schema, build: .build, app: .app, sdk: .sdk}' /tmp/bundle.json > factory/factory-config.json
+
+          KS_PASS=$(jq -r '.signing.keystore_pass' /tmp/bundle.json)
+          KEY_PASS=$(jq -r '.signing.keyalias_pass' /tmp/bundle.json)
+          KEY_ALIAS=$(jq -r '.signing.keyalias' /tmp/bundle.json)
+          KS_B64=$(jq -r '.files.keystore_b64' /tmp/bundle.json)
+          echo "::add-mask::$KS_PASS"
+          echo "::add-mask::$KEY_PASS"
+          echo "::add-mask::$KS_B64"
+          {
+            echo "KS_PASS=$KS_PASS"
+            echo "KEY_PASS=$KEY_PASS"
+            echo "KEY_ALIAS=$KEY_ALIAS"
+            echo "KS_B64<<EOF_KS"; echo "$KS_B64"; echo "EOF_KS"
+          } >> "$GITHUB_ENV"
+
+          rm /tmp/bundle.json
+
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-Android
+
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          targetPlatform: Android
+          versioning: Custom
+          androidExportType: ${{ github.event.client_payload.build_type == 'aab' && 'androidAppBundle' || 'androidPackage' }}
+          androidVersionCode: ${{ github.event.client_payload.version_code }}
+          version: ${{ github.event.client_payload.version_name }}
+          androidKeystoreName: user.keystore
+          androidKeystoreBase64: ${{ env.KS_B64 }}
+          androidKeystorePass: ${{ env.KS_PASS }}
+          androidKeyaliasName: ${{ env.KEY_ALIAS }}
+          androidKeyaliasPass: ${{ env.KEY_PASS }}
+
+      - name: Locate build artifact
+        run: |
+          set -euo pipefail
+          FILE=$(find build/Android -type f \( -name '*.aab' -o -name '*.apk' \) | head -1)
+          test -n "$FILE"
+          echo "ARTIFACT_PATH=$FILE" >> "$GITHUB_ENV"
+
+      - name: Reclaim disk space used by the Unity build container
+        run: |
+          # game-ci/unity-builder runs Unity inside a Docker image (the Editor + installed
+          # modules, routinely 10-20GB) that stays on disk after the build step finishes.
+          # Nothing downstream needs it once $ARTIFACT_PATH exists — so free it here.
+          docker system prune -af --volumes || true
+          df -h /
+
+      - name: "QA: App size check (fail > ${{ env.FAIL_MB }}MB)"
+        id: qa-app-size
+        continue-on-error: true
+        env:
+          FAIL_MB: 100
+        run: |
+          set -euo pipefail
+          echo "## QA Checks" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "_API level, adaptive icon, and other pre-build checks are enforced by \`QaTestsPreProcessor\` as part of the Unity build step above — a failure there stops the build directly._" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "### App size" >> "$GITHUB_STEP_SUMMARY"
+          SDK_DIR=$(find Library/PackageCache -maxdepth 1 -iname "com.zeywin.ads@*" | head -1)
+          if [ -z "$SDK_DIR" ]; then
+            echo "::error::Could not locate com.zeywin.ads package under Library/PackageCache"
+            echo "- ❌ Could not locate com.zeywin.ads package to run the check" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          if bash "$SDK_DIR/tools/check_app_size.sh" "$ARTIFACT_PATH"; then
+            echo "- ✅ App size within limits" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "- ❌ App size exceeds the hard limit (see step log above for exact size)" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+      - name: "QA: Gate (fail build only after all QA checks have run)"
+        run: |
+          set -euo pipefail
+          FAILED=0
+          if [ "${{ steps.qa-app-size.outcome }}" != "success" ]; then
+            echo "::error::QA check failed: App size check"
+            FAILED=1
+          fi
+          if [ "$FAILED" -eq 1 ]; then
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            echo "**Result: one or more QA checks failed — see details above. Build artifact was not uploaded.**" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "**Result: all QA checks passed.**" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload artifact to factory
+        run: |
+          set -euo pipefail
+          curl -sf -X PUT "$CB/builds/$BID/artifact?token=$TOKEN" \
+            -H 'content-type: application/octet-stream' \
+            --data-binary "@$ARTIFACT_PATH"
+
+      # Best-effort: never fail an already-delivered build over a symbol-upload hiccup.
+      # `crashlytics:symbols:upload` needs only --app=<mobilesdk_app_id> (not a secret —
+      # it ships in every APK); the endpoint takes anonymous requests, so no service
+      # account / GOOGLE_APPLICATION_CREDENTIALS is required.
+      - name: Upload native symbols to Crashlytics
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+
+          mapfile -t SYMS < <(find build/Android -type f -name '*.symbols.zip')
+          if [ "${#SYMS[@]}" -eq 0 ]; then
+            echo "::warning::No *.symbols.zip under build/Android — is FactoryBuildPreprocessor setting DebugSymbols.level? Skipping."
+            exit 0
+          fi
+
+          BUNDLE_ID=$(jq -r '.app.bundle_id' factory/factory-config.json)
+          APP_ID=$(jq -r --arg p "$BUNDLE_ID" \
+            '.client[] | select(.client_info.android_client_info.package_name == $p) | .client_info.mobilesdk_app_id' \
+            factory/google-services.json)
+          if [ -z "$APP_ID" ] || [ "$APP_ID" = "null" ]; then
+            APP_ID=$(jq -r '.client[0].client_info.mobilesdk_app_id' factory/google-services.json)
+          fi
+          if [ -z "$APP_ID" ] || [ "$APP_ID" = "null" ]; then
+            echo "::warning::No mobilesdk_app_id in google-services.json for '$BUNDLE_ID' — skipping symbol upload"
+            exit 0
+          fi
+
+          npm install -g firebase-tools@latest
+
+          for z in "${SYMS[@]}"; do
+            echo "Uploading symbols: $z  (app $APP_ID)"
+            firebase crashlytics:symbols:upload --app="$APP_ID" "$z"
+          done
+
+      - name: Report failure
+        if: failure()
+        run: |
+          curl -s -X POST "$CB/builds/$BID/status?token=$TOKEN" \
+            -H 'content-type: application/json' \
+            -d '{"status":"failed","error":"CI failed — see the run logs"}'
