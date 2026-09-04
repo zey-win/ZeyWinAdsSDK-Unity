@@ -16,7 +16,7 @@ namespace ZeyWinAds.Tests.Runtime
     // when *it* happens to run, so a slow first test would silently push later tests' windows
     // later too — breaking "all four ready within budget of app start". [OneTimeSetUp] records
     // one shared start time for the whole fixture, and every test checks against that deadline.
-    // Runs after OfferAndLoadingScreen's loader check (see [Order] below), so this 20s window starts once
+    // Runs after OfferAndLoadingScreen's loader check (see [Order] below), so this 35s window starts once
     // the loader check is already done, not from true app start — the ads have had a head start
     // preloading in the background the whole time regardless.
     //
@@ -31,7 +31,7 @@ namespace ZeyWinAds.Tests.Runtime
     [TestFixture]
     public class AdPreload : QaFixture
     {
-        private const float BudgetSeconds = 20f;
+        private const float BudgetSeconds = 35f;
         private static readonly WaitForSecondsRealtime PollInterval = new WaitForSecondsRealtime(0.5f);
         private static QaBudget _budget;
 

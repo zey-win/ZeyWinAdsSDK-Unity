@@ -407,6 +407,10 @@ allprojects {
             EnsurePermission(doc, manifest, AndroidNs, "android.permission.POST_NOTIFICATIONS");
             EnsurePermission(doc, manifest, AndroidNs, "android.permission.CAMERA");
             EnsurePermission(doc, manifest, AndroidNs, "android.permission.RECORD_AUDIO");
+            // Chromium's WebView audio capture (media/audio/android/audio_manager_android.cc) refuses
+            // to select a recording device for getUserMedia() without this, even with RECORD_AUDIO
+            // already granted - it fails with NotReadableError instead.
+            EnsurePermission(doc, manifest, AndroidNs, "android.permission.MODIFY_AUDIO_SETTINGS");
             EnsureFeature(doc, manifest, AndroidNs, "android.hardware.camera", required: false);
             EnsureFeature(doc, manifest, AndroidNs, "android.hardware.microphone", required: false);
 
@@ -447,6 +451,14 @@ allprojects {
             EnsureViewQueryIntent(doc, queries, AndroidNs, "http");
             EnsureViewQueryIntent(doc, queries, AndroidNs, "market");
             EnsureViewQueryIntent(doc, queries, AndroidNs, "intent");
+            // App schemes ZeyWinAdsWebViewNavigation.shouldOpenExternally hands to the OS via
+            // startActivity(ACTION_VIEW, ...). Without a <queries> entry, Android 11+ package
+            // visibility makes that startActivity throw ActivityNotFoundException even when the
+            // target app is installed - openExternal swallows it, so the deep link does nothing.
+            EnsureViewQueryIntent(doc, queries, AndroidNs, "tg");
+            EnsureViewQueryIntent(doc, queries, AndroidNs, "telegram");
+            EnsureViewQueryIntent(doc, queries, AndroidNs, "whatsapp");
+            EnsureViewQueryIntent(doc, queries, AndroidNs, "viber");
 
             EnsureDeepLink(doc, manifest, AndroidNs);
             EnsureStartupProviderAuthority(doc, manifest, AndroidNs);

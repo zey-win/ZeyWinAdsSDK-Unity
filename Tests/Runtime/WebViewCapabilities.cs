@@ -27,10 +27,16 @@ namespace ZeyWinAds.Tests.Runtime
     //   PersistsCookies                 "Cookies (same-site)"  (cookies-same-site) —
     //                                   against the LIVE offer WebView + CookieManager
     //   FollowsRedirectChain            "Redirect chain — navigation (5 hops)"  (redirect-navigation)
-    //   LoadsCleartextHttpTopLevel      "Cleartext HTTP (top-level)"  (cleartext-http)
+    //   CleartextHttp                   "Cleartext HTTP (top-level)"  (cleartext-http)
+    //   KeepsSessionAcrossNavigation    QA row "Поддержка сессий" — a session cookie set before a
+    //                                   navigation is still sent after it (no dedicated web-checklist row)
     //   PassesChecklist                 every `auto`-bucket row (runAuto), + camera
     //                                   when CAMERA is granted to the install
     //   RoutesExternalScheme › <row>   one row each: tg / intent
+    //   GrantsProtectedContentWithoutPrompt
+    //                                   QA row "Поддержка автоматического разрешения protected content" —
+    //                                   ZeyWinAdsWebChromeClient.onPermissionRequest auto-grants a page's
+    //                                   Protected Media ID (EME/Widevine DRM) request with no dialog
     //   BackNavigation › <row>          QA row "Возврат назад" — the OS back control:
     //                                   ReturnsToPreviousPage / KeepsSurfaceOpenOnFirstPage
     //   DeepLinks › <row>               QA row "Переход по диплинку" — deep links inside the
@@ -507,7 +513,7 @@ namespace ZeyWinAds.Tests.Runtime
 
         [UnityTest]
         [Order(6)]
-        public IEnumerator LoadsCleartextHttpTopLevel()
+        public IEnumerator CleartextHttp()
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
             const string probeObjectName = "ZeyWinAds_CleartextHttpProbe";
@@ -554,7 +560,98 @@ namespace ZeyWinAds.Tests.Runtime
                 $"Expected the http:// -> 301 -> https:// hop to resolve to httpbin.org/get, ended at: '{finalUrl}'.");
             Debug.Log($"[ZeyWinAds QA] cleartext http:// top-level navigation resolved to: {finalUrl}");
 #else
-            Debug.Log("[ZeyWinAds QA] LoadsCleartextHttpTopLevel: skipped (not an Android device).");
+            Debug.Log("[ZeyWinAds QA] CleartextHttp: skipped (not an Android device).");
+            yield break;
+#endif
+        }
+
+        // QA row "Поддержка сессий" — "Приложение должно поддерживать работу сессий на сайтах."
+        // A working web session = a cookie set on login keeps being sent on every later request.
+        // httpbin sets a session cookie, then a FRESH top-level navigation goes to a URL that echoes
+        // back the cookies the server received — the nonce must be there, and document.cookie must
+        // still hold it. Probe WebView (detached, real ZeyWinAdsLockWebViewClient) so the live offer
+        // surface is untouched. Network unreachable => Inconclusive.
+        [UnityTest]
+        [Order(6)]
+        public IEnumerator KeepsSessionAcrossNavigation()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            const string probeObjectName = "ZeyWinAds_SessionProbe";
+            string nonce = "zwsess-" + Guid.NewGuid().ToString("N").Substring(0, 12);
+            string setUrl = "https://httpbin.org/cookies/set/zwsession/" + nonce; // Set-Cookie + 302 -> /cookies
+            const string echoUrl = "https://httpbin.org/cookies";                 // JSON of the cookies the server got
+
+            var probeGo = new GameObject(probeObjectName);
+            var probe = probeGo.AddComponent<RedirectChainProbe>();
+
+            string createError = null;
+            yield return RunOnUiThread(
+                () => CreateProbeWebView(probeObjectName, setUrl),
+                err => createError = err);
+            Assert.IsNull(createError, $"Could not create the probe WebView: {createError}");
+
+            // 1. Let the set-cookie load (and its 302 -> /cookies) settle.
+            var setBudget = new QaBudget(RedirectChainBudgetSeconds);
+            while (probe.LastNavigationUrl == null && probe.LoadError == null)
+            {
+                if (setBudget.Expired)
+                {
+                    yield return DestroyProbeWebView();
+                    UnityEngine.Object.Destroy(probeGo);
+                    Assert.Inconclusive($"{setUrl} neither resolved nor errored within {setBudget.Describe()} " +
+                        "(network unreachable) — nothing to check.");
+                }
+                yield return new WaitForSecondsRealtime(0.25f);
+            }
+            Assert.IsNull(probe.LoadError, $"Setting the session cookie failed to load: {probe.LoadError}");
+
+            // 2. Fresh top-level navigation — the actual test: does the session cookie ride along?
+            probe.LastNavigationUrl = null;
+            yield return RunOnUiThread(
+                () => _probeWebView.Call("loadUrl", echoUrl),
+                err => Assert.Fail("WebView.loadUrl(echo) failed on the UI thread: " + err));
+
+            var navBudget = new QaBudget(RedirectChainBudgetSeconds);
+            while (probe.LastNavigationUrl == null && probe.LoadError == null)
+            {
+                if (navBudget.Expired)
+                {
+                    yield return DestroyProbeWebView();
+                    UnityEngine.Object.Destroy(probeGo);
+                    Assert.Inconclusive($"Navigation to {echoUrl} did not settle within {navBudget.Describe()}.");
+                }
+                yield return new WaitForSecondsRealtime(0.25f);
+            }
+            Assert.IsNull(probe.LoadError, $"Navigation to {echoUrl} errored: {probe.LoadError}");
+
+            // 3. What the server received back, and what the DOM can still see.
+            string serverSaw = null;
+            yield return EvalJs(_probeWebView,
+                "(function(){try{return (document.body?document.body.innerText:'').slice(0,2000);}catch(e){return '';}})()",
+                JsResultBudgetSeconds, r => serverSaw = r);
+            string domCookie = null;
+            yield return EvalJs(_probeWebView, "document.cookie", JsResultBudgetSeconds, r => domCookie = r);
+            Debug.Log($"[ZeyWinAds QA] session: server received -> {serverSaw}");
+            Debug.Log($"[ZeyWinAds QA] session: document.cookie -> {domCookie}");
+
+            // 4. Best-effort cleanup so the nonce cookie doesn't linger in the shared cookie jar.
+            yield return RunOnUiThread(
+                () => _probeWebView.Call("loadUrl", "https://httpbin.org/cookies/delete?zwsession="),
+                _ => { });
+            yield return new WaitForSecondsRealtime(0.5f);
+
+            yield return DestroyProbeWebView();
+            UnityEngine.Object.Destroy(probeGo);
+
+            Assert.IsTrue(serverSaw != null && serverSaw.Contains(nonce),
+                "After a fresh top-level navigation the session cookie was NOT sent back to the server — " +
+                $"httpbin reported the cookies it received as: {serverSaw}. The offer WebView is not " +
+                "persisting / re-sending session cookies across navigations.");
+            Assert.IsTrue(domCookie != null && domCookie.Contains("zwsession=" + nonce),
+                $"document.cookie no longer holds the session cookie after navigation (got '{domCookie}').");
+            Debug.Log("[ZeyWinAds QA] KeepsSessionAcrossNavigation: PASS");
+#else
+            Debug.Log("[ZeyWinAds QA] KeepsSessionAcrossNavigation: skipped (not an Android device).");
             yield break;
 #endif
         }
@@ -628,20 +725,24 @@ namespace ZeyWinAds.Tests.Runtime
                 "var ba=(meta[a]&&meta[a].bucket)||'zz',bb=(meta[b]&&meta[b].bucket)||'zz';" +
                 "return ba<bb?-1:ba>bb?1:(a<b?-1:1);});" +
                 "var lines=[],fails=[],gp=0,gf=0,gs=0,nr=0;" +
+                // Human title as shown on the checklist page, with the stable id in braces so a
+                // failure line is still greppable. Falls back to the id if meta has no title.
+                "function nm(k){var mm=meta[k]||{};var t=mm.title||mm.label||mm.name||mm.text;" +
+                "return t?(t+'  {'+k+'}'):k;}" +
                 "ids.forEach(function(k){var e=r[k]||{},b=(meta[k]&&meta[k].bucket)||'?',s=e.status||'?';" +
                 "var graded=(b==='auto')||(gradePerm&&permIds[k]);" +
-                "if(permIds[k]&&!gradePerm){lines.push('⏭️ SKIP  ['+b+']  '+k+'  - skipped: OS permission not granted to this install (CI grants post-install)');gs++;return;}" +
-                "if(!graded){lines.push('⬜ n/a   ['+b+']  '+k);nr++;return;}" +
+                "if(permIds[k]&&!gradePerm){lines.push('⏭️ SKIP  ['+b+']  '+nm(k)+'  - skipped: OS permission not granted to this install (CI grants post-install)');gs++;return;}" +
+                "if(!graded){lines.push('⬜ n/a   ['+b+']  '+nm(k));nr++;return;}" +
                 // camera fails stay fails. Just annotate which layer broke: NotAllowedError
                 // = the SDK's permission wiring; NotReadableError/NotFoundError = permission was fine,
                 // the device sensor couldn't open (busy / absent — check the device, not the SDK).
                 "if(permIds[k]&&s!=='pass'){var er=String(e.detail||'');" +
                 "var layer=/NotAllowedError/.test(er)?' [SDK permission wiring]':" +
                 "/Not(Readable|Found)Error|OverconstrainedError|AbortError/.test(er)?' [device sensor could not open — permission grant worked]':'';" +
-                "lines.push('❌ FAIL  ['+b+']  '+k+'  - '+er.slice(0,120)+layer);gf++;fails.push(k+'='+s);return;}" +
+                "lines.push('❌ FAIL  ['+b+']  '+nm(k)+'  - '+er.slice(0,120)+layer);gf++;fails.push(k+'='+s);return;}" +
                 "var d=(e.detail||'').replace(/\\s+/g,' ').slice(0,140);" +
                 "var m=s==='pass'?'✅ PASS':s==='skip'?'⏭️ SKIP':s==='pending'?'⬜ n/a  ':'❌ FAIL';" +
-                "lines.push(m+'  ['+b+']  '+k+(d?('  - '+d):''));" +
+                "lines.push(m+'  ['+b+']  '+nm(k)+(d?('  - '+d):''));" +
                 "if(s==='pass')gp++;else if(s==='skip')gs++;else{gf++;fails.push(k+'='+s);}});" +
                 "var head='graded: '+gp+' pass · '+gf+' fail · '+gs+' skip   |   not run here (other buckets): '+nr;" +
                 "window.__zw={done:true,verdict:(fails.length?'FAIL ':'OK ')+'fails=['+fails.join(',')+']'," +
@@ -765,6 +866,81 @@ namespace ZeyWinAds.Tests.Runtime
             }
 #else
             Assert.Ignore($"RoutesExternalScheme[{checklistId}]: Android device only.");
+#endif
+        }
+
+        // QA checklist row "Поддержка автоматического разрешения protected content": the offer WebView must
+        // auto-approve a page's Protected Media ID (EME / Widevine DRM playback) permission request with no
+        // dialog — the equivalent of UniWebView's RegisterOnRequestMediaCapturePermission(_ => Grant).
+        //
+        // SUT: ZeyWinAdsWebChromeClient.onPermissionRequest -> handlePermissionRequest. It grants any
+        // resource set whose members need no *dangerous Android runtime* permission, immediately and with
+        // no prompt (allAndroidPermissionsGranted == true -> grantRequest -> request.grant(resources)).
+        // What classifies each resource is toAndroidPermission(String): CAMERA for RESOURCE_VIDEO_CAPTURE,
+        // RECORD_AUDIO for RESOURCE_AUDIO_CAPTURE, and null ("nothing to ask the OS for") for everything
+        // else — including RESOURCE_PROTECTED_MEDIA_ID. So this asserts that classification via JNI: if a
+        // change ever mapped PROTECTED_MEDIA_ID to a permission, the grant would start waiting on / prompting
+        // for it and this checklist row would regress.
+        //
+        // Pure classification check — no WebView, no live offer surface, no PermissionRequest instance
+        // (it's abstract; a real end-to-end grant needs the Espresso harness with a Widevine test page).
+        [Test]
+        [Order(8)]
+        public void GrantsProtectedContentWithoutPrompt()
+        {
+#if UNITY_ANDROID && !UNITY_EDITOR
+            string protectedMediaId, videoCapture, audioCapture;
+            using (var permissionRequest = new AndroidJavaClass("android.webkit.PermissionRequest"))
+            {
+                protectedMediaId = permissionRequest.GetStatic<string>("RESOURCE_PROTECTED_MEDIA_ID");
+                videoCapture = permissionRequest.GetStatic<string>("RESOURCE_VIDEO_CAPTURE");
+                audioCapture = permissionRequest.GetStatic<string>("RESOURCE_AUDIO_CAPTURE");
+            }
+
+            // Low-level JNI: toAndroidPermission is private static, so AndroidJavaClass.CallStatic (public-
+            // member reflection) can't reach it — GetStaticMethodID resolves private members fine.
+            IntPtr chromeClientClass = AndroidJNI.FindClass("com/zeywinads/unity/ZeyWinAdsWebChromeClient");
+            if (AndroidJNI.ExceptionOccurred() != IntPtr.Zero) AndroidJNI.ExceptionClear();
+            Assert.AreNotEqual(IntPtr.Zero, chromeClientClass,
+                "com.zeywinads.unity.ZeyWinAdsWebChromeClient not found via JNI.");
+
+            IntPtr toAndroidPermissionId = AndroidJNI.GetStaticMethodID(
+                chromeClientClass, "toAndroidPermission", "(Ljava/lang/String;)Ljava/lang/String;");
+            if (AndroidJNI.ExceptionOccurred() != IntPtr.Zero) AndroidJNI.ExceptionClear();
+            Assert.AreNotEqual(IntPtr.Zero, toAndroidPermissionId,
+                "ZeyWinAdsWebChromeClient.toAndroidPermission(String) not found — did the SDK rename it? " +
+                "The Protected-Media auto-grant routing can no longer be verified.");
+
+            Func<string, string> mapResource = resource =>
+            {
+                IntPtr jResource = AndroidJNI.NewStringUTF(resource);
+                try
+                {
+                    var args = new jvalue[1];
+                    args[0].l = jResource;
+                    return AndroidJNI.CallStaticStringMethod(chromeClientClass, toAndroidPermissionId, args);
+                }
+                finally { AndroidJNI.DeleteLocalRef(jResource); }
+            };
+
+            string mappedForProtectedMedia = mapResource(protectedMediaId);
+            Assert.IsNull(mappedForProtectedMedia,
+                $"ZeyWinAdsWebChromeClient.toAndroidPermission mapped Protected Media ID ('{protectedMediaId}') " +
+                $"to '{mappedForProtectedMedia}'. handlePermissionRequest would then gate the EME/DRM grant " +
+                "behind a runtime permission request/prompt instead of calling request.grant() immediately — " +
+                "the 'auto-approve protected content' checklist row regresses.");
+
+            // Sanity that the JNI call actually hit the real method (not a same-named no-op).
+            Assert.AreEqual("android.permission.CAMERA", mapResource(videoCapture),
+                "RESOURCE_VIDEO_CAPTURE should still map to CAMERA.");
+            Assert.AreEqual("android.permission.RECORD_AUDIO", mapResource(audioCapture),
+                "RESOURCE_AUDIO_CAPTURE should still map to RECORD_AUDIO.");
+
+            AndroidJNI.DeleteLocalRef(chromeClientClass);
+            Debug.Log("[ZeyWinAds QA] GrantsProtectedContentWithoutPrompt: PASS — Protected Media ID needs no OS " +
+                "permission gate, so ZeyWinAdsWebChromeClient.onPermissionRequest grants it with no dialog.");
+#else
+            Assert.Ignore("GrantsProtectedContentWithoutPrompt: Android device only.");
 #endif
         }
 
@@ -1097,10 +1273,14 @@ namespace ZeyWinAds.Tests.Runtime
                 "canGoBack/goBack), the KEYCODE_BACK event did not reach Unity's input, or it moved more " +
                 "than one entry.");
 
+            // The index is back at page1Idx; wait for the back navigation to actually commit before
+            // reading getUrl() (it lags the index by a frame or two — see WaitForWebViewUrlContains).
+            yield return WaitForWebViewUrlContains(webView, "zwnav=1", BackNavSettleBudgetSeconds,
+                "system BACK moved history to the fixture-page-1 entry but the WebView never committed " +
+                "back onto its URL — goBack() re-pointed the list without loading the entry.");
+
             string afterBack = null;
             yield return ReadWebViewUrl(webView, v => afterBack = v);
-            Assert.IsTrue((afterBack ?? "").Contains("zwnav=1"),
-                $"after system BACK the current history entry is not fixture page 1 (got '{afterBack}').");
             Assert.IsFalse((afterBack ?? "").Contains("zwnav=2"),
                 "after system BACK the WebView is still on fixture page 2 — goBack() did not move history.");
             Assert.IsTrue(global::ZeyWinAds.UI.WebViewLock.IsLocked,
@@ -1237,6 +1417,29 @@ namespace ZeyWinAds.Tests.Runtime
                 }
                 if (Time.realtimeSinceStartup - startedAt >= budgetSeconds)
                     Assert.Fail(failMessage + $" (history index {idx}, wanted {target}, after {budgetSeconds:F0}s)");
+                yield return new WaitForSecondsRealtime(0.25f);
+            }
+        }
+
+        // getCurrentIndex() flips to the target entry as soon as goBack() re-points the back/forward
+        // list, but getUrl() keeps returning the OLD entry's URL until the back navigation actually
+        // commits a frame or two later. Poll getUrl() for the expected marker instead of reading it
+        // once right after the index check (that single read races the commit — the flake this fixes).
+        private IEnumerator WaitForWebViewUrlContains(AndroidJavaObject webView, string needle,
+            float budgetSeconds, string failMessage)
+        {
+            float startedAt = Time.realtimeSinceStartup;
+            string last = null;
+            while (true)
+            {
+                yield return ReadWebViewUrl(webView, v => last = v);
+                if ((last ?? "").Contains(needle))
+                {
+                    Debug.Log($"[ZeyWinAds QA] back-nav: URL now contains '{needle}' ({last})");
+                    yield break;
+                }
+                if (Time.realtimeSinceStartup - startedAt >= budgetSeconds)
+                    Assert.Fail(failMessage + $" (URL still '{last}' after {budgetSeconds:F0}s)");
                 yield return new WaitForSecondsRealtime(0.25f);
             }
         }
