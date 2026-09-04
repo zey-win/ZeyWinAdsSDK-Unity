@@ -2,6 +2,39 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.58
+
+- Added a native iOS startup overlay (`Runtime/Plugins/iOS/ZeyWinAdsStartupOverlay.mm`).
+  `LoadingOverlay` now renders it on iOS before the Unity view is ready, matching the existing
+  Android behaviour.
+- Fixed three fatal cold-start crashes, all the same shape: a transparent third-party "trampoline"
+  activity that reads transient state from its launch Intent, is handed a stale Intent after Android
+  kills the app mid-flow and later restores the task, and then throws in `onCreate` — killing the app
+  on the next launch before the game loads. Each is hardened by merging `noHistory` /
+  `finishOnTaskLaunch` / `excludeFromRecents` onto its `<activity>` in the generated manifest so the OS
+  never recreates a stranded instance:
+  - `java.lang.RuntimeException: null activity handler found!` in
+    `com.onevcat.uniwebview.UniWebViewProxyActivity.onCreate` (bundled `UniWebView.aar`; the
+    in-WebView file chooser / runtime-permission proxy, which resolves its handler from a
+    process-static map that is empty in a fresh process). Handled in `UniWebViewPostBuildProcessor`
+    (`HardenProxyActivity`).
+  - `java.lang.IllegalStateException: targetPackageName is null` in
+    `com.google.android.play.core.hsdp.service.HsdpShimActivity.onAttachedToWindow`
+    (`com.google.android.play:hsdp`, transitive via `play-services-ads`). Handled in
+    `AdMobBuildPostprocessor` (`HardenPlayHsdpShimActivity`), which also widens `configChanges` (via
+    `tools:replace`) so in-place configuration changes — dark mode, font/display size, locale,
+    multi-window — stop recreating it too.
+  - `java.lang.NullPointerException` on `PendingIntent.getIntentSender()` in
+    `com.android.billingclient.api.ProxyBillingActivity` / `ProxyBillingActivityV2` (Play Billing
+    `8.0.0`, transitive via Unity IAP; the `BUY_INTENT` key survives Intent persistence but the live
+    PendingIntent does not — still unguarded in `8.3.0`). Handled in `AdMobBuildPostprocessor`
+    (`HardenPlayBillingProxyActivities`), gated on the project actually depending on Play Billing so
+    projects without IAP get no manifest change.
+  None of these affect the normal WebView / ad / purchase flow (`noHistory` does not finish an
+  activity still awaiting a `startActivityForResult` / `startIntentSenderForResult` result on API
+  21+). Removing the relevant attribute in the corresponding `Harden…` method is the safe per-crash
+  revert.
+
 ## 3.9.57
 
 - Removed the low-memory startup guard (`AndroidDeviceProfile.IsStartupAdPreloadConstrained`, added in
