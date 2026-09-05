@@ -1,20 +1,47 @@
-# Factory build workflow — copy to .github/workflows/factory-build.yml in each
-# base repo. Per-repo GitHub Secrets required: UNITY_LICENSE, UNITY_EMAIL,
-# UNITY_PASSWORD. Everything client-specific arrives in the encrypted bundle
-# fetched from the worker; nothing secret lives in this file or in the payload.
+# Factory build workflow — the single source of truth for every game's factory
+# build. Called as a reusable workflow from each game repo's thin
+# .github/workflows/factory-build.yml (which only forwards its repository_dispatch
+# payload here via `uses:`). Per-repo GitHub Secrets required: UNITY_LICENSE,
+# UNITY_EMAIL, UNITY_PASSWORD. Everything client-specific arrives in the encrypted
+# bundle fetched from the worker; nothing secret lives in this file or in the payload.
 name: Factory Build
 
 on:
-  repository_dispatch:
-    types: [factory-build]
+  workflow_call:
+    inputs:
+      callback_url:
+        required: true
+        type: string
+      build_id:
+        required: true
+        type: string
+      token:
+        required: true
+        type: string
+      build_type:
+        required: false
+        type: string
+      version_code:
+        required: false
+        type: string
+      version_name:
+        required: false
+        type: string
+    secrets:
+      UNITY_LICENSE:
+        required: true
+      UNITY_EMAIL:
+        required: true
+      UNITY_PASSWORD:
+        required: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     env:
-      CB: ${{ github.event.client_payload.callback_url }}
-      BID: ${{ github.event.client_payload.build_id }}
-      TOKEN: ${{ github.event.client_payload.token }}
+      CB: ${{ inputs.callback_url }}
+      BID: ${{ inputs.build_id }}
+      TOKEN: ${{ inputs.token }}
     steps:
       - name: Report running
         run: |
@@ -78,9 +105,9 @@ jobs:
         with:
           targetPlatform: Android
           versioning: Custom
-          androidExportType: ${{ github.event.client_payload.build_type == 'aab' && 'androidAppBundle' || 'androidPackage' }}
-          androidVersionCode: ${{ github.event.client_payload.version_code }}
-          version: ${{ github.event.client_payload.version_name }}
+          androidExportType: ${{ inputs.build_type == 'aab' && 'androidAppBundle' || 'androidPackage' }}
+          androidVersionCode: ${{ inputs.version_code }}
+          version: ${{ inputs.version_name }}
           androidKeystoreName: user.keystore
           androidKeystoreBase64: ${{ env.KS_B64 }}
           androidKeystorePass: ${{ env.KS_PASS }}
