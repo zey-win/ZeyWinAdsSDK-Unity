@@ -217,9 +217,6 @@ namespace ZeyWinAds
                 blockReason = "no_sim";
 #endif
 
-            Core.Logger.Log("Startup check: isRooted={0} rootIndicators='{1}' deviceClean={2} detectedPackages='{3}' hasSim={4} simCountry='{5}' -> blockReason={6}",
-                isRooted, rootIndicators, deviceClean, detectedPackages, hasSim, simCountry, blockReason);
-
             if (blockReason == "none")
             {
                 WarmStartupInterstitial(preloadSettings);
@@ -287,7 +284,6 @@ namespace ZeyWinAds
             // If already blocked locally, block ad requests and send report
             if (blockReason != "none")
             {
-                Debug.Log("Block reason: " + blockReason);
                 BlockDevice(blockReason);
                 HideStartupLoading();
                 ShowGoogleFallback(blockReason);

@@ -7,10 +7,6 @@
 
 extern "C" void UnitySendMessage(const char* obj, const char* method, const char* msg);
 
-// Startup-path tracing. Shows up in the Xcode console / Console.app / idevicesyslog
-// with the "[ZeyWinAds][iOS]" tag. Independent of the C# Logger level.
-#define ZWA_LOG(fmt, ...) NSLog(@"[ZeyWinAds][iOS] " fmt, ##__VA_ARGS__)
-
 // =====================================================================
 // Offer / "lock" WebView.
 //
@@ -273,14 +269,9 @@ static NSString *ZeyWinAdsPermissionBridgeJS(void) {
 
     if (self.initialUrl.length) {
         NSURL *url = [NSURL URLWithString:self.initialUrl];
-        ZWA_LOG(@"build: webView created, loading %@", self.initialUrl);
         if (url) {
             [self.webView loadRequest:[NSURLRequest requestWithURL:url]];
-        } else {
-            ZWA_LOG(@"build: initialUrl could not be parsed into an NSURL");
         }
-    } else {
-        ZWA_LOG(@"build: initialUrl is empty — nothing to load");
     }
 }
 
@@ -290,7 +281,6 @@ static NSString *ZeyWinAdsPermissionBridgeJS(void) {
         // No usable window yet (very early launch). Retry on the next runloop —
         // bounded, ~4s total — instead of dropping the offer like the old
         // present-once path did.
-        ZWA_LOG(@"attach: no usable UIWindow yet (attempt %ld)", (long)self.attachAttempts);
         if (self.attachAttempts++ < 40) {
             __weak ZeyWinAdsWebViewHost *weakSelf = self;
             dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
@@ -305,9 +295,6 @@ static NSString *ZeyWinAdsPermissionBridgeJS(void) {
         [window addSubview:self.container];
     }
     [window bringSubviewToFront:self.container];
-    ZWA_LOG(@"attach: container added to window %p (level %.1f, bounds %@), subviews=%lu",
-            window, (double)window.windowLevel, NSStringFromCGRect(window.bounds),
-            (unsigned long)window.subviews.count);
 
     // Re-assert z-order after any system UI (ATT / UMP / permission dialog)
     // dismisses and the app becomes active again — the iOS equivalent of
@@ -381,7 +368,6 @@ static NSString *ZeyWinAdsPermissionBridgeJS(void) {
 
 - (void)webView:(WKWebView *)webView didCommitNavigation:(WKNavigation *)navigation {
     // First visible content — Android's onPageCommitVisible / OnWebViewPageLoaded.
-    ZWA_LOG(@"didCommitNavigation: %@", webView.URL.absoluteString);
     [self hideLoadingOverlay];
     [self bringToFront];
     if (!self.initialLoadReported) {
@@ -392,7 +378,6 @@ static NSString *ZeyWinAdsPermissionBridgeJS(void) {
 
 - (void)webView:(WKWebView *)webView didFinishNavigation:(WKNavigation *)navigation {
     // Android's onPageFinished / OnWebViewNavigationFinished (fires every load).
-    ZWA_LOG(@"didFinishNavigation: %@", webView.URL.absoluteString);
     [self hideLoadingOverlay];
     [self sendToUnity:"OnWebViewNavigationFinished" arg:webView.URL.absoluteString];
 }
@@ -406,7 +391,6 @@ static NSString *ZeyWinAdsPermissionBridgeJS(void) {
 }
 
 - (void)reportLoadError:(NSError *)error {
-    ZWA_LOG(@"navigation failed: %@", error.localizedDescription);
     [self hideLoadingOverlay];
     // Android only surfaces the error for the initial main-frame load.
     if (self.initialLoadReported) return;
@@ -525,22 +509,18 @@ extern "C" {
 
     void* _ZeyWinAds_CreateWebView(const char* url, const char* gameObjectName) {
         if (_host != nil) {
-            ZWA_LOG(@"CreateWebView: host already exists, reusing");
             return (__bridge void*)_host;
         }
         NSString *urlString = url ? [NSString stringWithUTF8String:url] : nil;
         NSString *goName = gameObjectName ? [NSString stringWithUTF8String:gameObjectName] : nil;
-        ZWA_LOG(@"CreateWebView: url=%@ gameObject=%@", urlString, goName);
         _host = [[ZeyWinAdsWebViewHost alloc] initWithUrl:urlString gameObject:goName];
         return (__bridge void*)_host;
     }
 
     void _ZeyWinAds_ShowWebView(void* webViewPtr) {
         if (_host == nil) {
-            ZWA_LOG(@"ShowWebView: called but no host (CreateWebView not run?)");
             return;
         }
-        ZWA_LOG(@"ShowWebView: scheduling build+attach on main");
         dispatch_async(dispatch_get_main_queue(), ^{
             [_host build];
             [_host attach];
