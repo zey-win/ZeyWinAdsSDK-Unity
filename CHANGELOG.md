@@ -2,6 +2,22 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.60
+
+- Fixed a family of fatal cold-start crashes on aggressive ROMs (observed almost entirely on
+  OnePlus 8 Pro / OxygenOS 11): `com.android.billingclient.api.ProxyBillingActivity` NPE on a null
+  `PendingIntent`, `com.google.android.play.core.hsdp.service.HsdpShimActivity`
+  "targetPackageName is null", and `com.onevcat.uniwebview.UniWebViewProxyActivity`
+  "null activity handler found!". All three are the same failure — the OS kills the app mid-flow,
+  then rebuilds the task on relaunch and recreates a transparent third-party trampoline activity
+  whose live state (a `PendingIntent`, an Intent extra, a process-static handler) did not survive
+  the process death, so it throws in `onCreate` / `onAttachedToWindow` before Unity loads.
+  Per-activity `noHistory` / `finishOnTaskLaunch` finish the stranded instance only after it has
+  already thrown. `AdMobBuildPostprocessor` now sets `android:clearTaskOnLaunch="true"` on the
+  launcher activity, so the OS drops those instances before recreating them. Player impact:
+  relaunching from the home-screen icon after the app was killed opens at the game's main screen
+  instead of restoring the last screen; Recent-apps / in-session resume is unaffected.
+
 ## 3.9.59
 
 - `FactoryBuildPreprocessor` moved into the SDK (`Editor/FactoryBuildPreprocessor.cs`) instead of
