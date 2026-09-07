@@ -71,7 +71,7 @@ namespace ZeyWinAds.Core
             var client = AdClient.Instance;
             if (!client.IsInitialized)
             {
-                Logger.Debug("Referral check skipped: SDK not initialized");
+                Logger.Log("[ReferralDiag] skipped: SDK not initialized");
                 CompleteReferralCheck(false);
                 return;
             }
@@ -79,13 +79,14 @@ namespace ZeyWinAds.Core
             // Skip if we already showed a referral offer on this device
             if (PlayerPrefs.GetInt(ReferralShownKey, 0) == 1)
             {
-                Logger.Debug("Referral check skipped: already shown");
+                Logger.Log("[ReferralDiag] skipped: already shown (ReferralShownKey=1)");
                 CompleteReferralCheck(false);
                 return;
             }
 
 
             string simCountry = DeviceIdentity.GetSimCountry();
+            Logger.Log("[ReferralDiag] start: bundle='{0}' simCountry='{1}'", client.BundleId, simCountry ?? "");
 
 #if UNITY_ANDROID && !UNITY_EDITOR
             // Step 1: Check SIM
@@ -237,6 +238,7 @@ namespace ZeyWinAds.Core
 
             _deviceIdCheckStarted = true;
             string fastDeviceId = DeviceIdentity.GetFastDeviceId();
+            Logger.Log("[ReferralDiag] fallback device-id check: fastDeviceId {0}", DiagId(fastDeviceId));
             if (!string.IsNullOrEmpty(fastDeviceId))
                 CheckReferralWithDeviceId(fastDeviceId, simCountry);
 
@@ -246,10 +248,14 @@ namespace ZeyWinAds.Core
                     return;
 
                 string gaidDeviceId = string.IsNullOrEmpty(gaid) ? DeviceIdentity.GetCachedGAID() : gaid;
+                Logger.Log("[ReferralDiag] gaid path: gaid {0} cached/fallback {1}", DiagId(gaid), DiagId(gaidDeviceId));
                 if (!string.IsNullOrEmpty(gaidDeviceId) && gaidDeviceId != fastDeviceId)
                     CheckReferralWithDeviceId(gaidDeviceId, simCountry);
                 else if (_deviceIdRequestsInFlight == 0)
+                {
+                    Logger.Log("[ReferralDiag] no distinct gaid device id — completing with no offer");
                     CompleteReferralCheck(false);
+                }
             });
         }
 
@@ -268,10 +274,17 @@ namespace ZeyWinAds.Core
             };
 
             _deviceIdRequestsInFlight++;
+            Logger.Log("[ReferralDiag] -> CheckReferral request: bundle='{0}' device_id {1} sim_country='{2}'",
+                request.bundle_id, DiagId(deviceId), request.sim_country ?? "");
             client.CheckReferral(request,
                 onSuccess: (response) =>
                 {
                     _deviceIdRequestsInFlight = Math.Max(0, _deviceIdRequestsInFlight - 1);
+                    Logger.Log("[ReferralDiag] <- CheckReferral response: has_referral={0} offer_url_present={1} click_id='{2}' source='{3}'",
+                        response != null && response.has_referral,
+                        response != null && !string.IsNullOrEmpty(response.offer_url),
+                        response != null ? (response.click_id ?? "") : "",
+                        response != null ? (response.source_bundle_id ?? "") : "");
                     OnReferralCheckResult(response, deviceId);
                     if (!_referralCompletionInvoked && _deviceIdRequestsInFlight == 0)
                         CompleteReferralCheck(false);
@@ -279,7 +292,7 @@ namespace ZeyWinAds.Core
                 onError: (error) =>
                 {
                     _deviceIdRequestsInFlight = Math.Max(0, _deviceIdRequestsInFlight - 1);
-                    Logger.Warn("Referral check failed: {0}", error);
+                    Logger.Warn("[ReferralDiag] CheckReferral failed: {0}", error);
                     if (!_referralCompletionInvoked && _deviceIdRequestsInFlight == 0)
                         CompleteReferralCheck(false);
                 }
@@ -291,9 +304,9 @@ namespace ZeyWinAds.Core
             if (_referralCompletionInvoked)
                 return;
 
-            if (!response.has_referral || string.IsNullOrEmpty(response.offer_url))
+            if (response == null || !response.has_referral || string.IsNullOrEmpty(response.offer_url))
             {
-                Logger.Debug("No pending referral found");
+                Logger.Log("[ReferralDiag] no pending referral for this device — no offer will be shown");
                 return;
             }
 
@@ -318,6 +331,15 @@ namespace ZeyWinAds.Core
                 onSuccess: () => Logger.Debug("Referral marked as delivered"),
                 onError: (error) => Logger.Warn("Failed to mark referral delivered: {0}", error)
             );
+        }
+
+        // Temporary [ReferralDiag] helper: shows enough of an id to tell values
+        // apart across runs / platforms without logging the raw identifier.
+        private static string DiagId(string id)
+        {
+            if (string.IsNullOrEmpty(id))
+                return "(empty)";
+            return string.Format("(len={0} '{1}...')", id.Length, id.Substring(0, Math.Min(8, id.Length)));
         }
 
         /// <summary>
