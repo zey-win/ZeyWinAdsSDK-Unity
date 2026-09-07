@@ -229,9 +229,39 @@ namespace ZeyWinAds.Editor
             if (icon != null)
             {
                 PlayerSettings.SetIconsForTargetGroup(BuildTargetGroup.Unknown, new[] { icon });
+
+                if (group == BuildTargetGroup.Android)
+                {
+                    // Explicitly wire Legacy, Round, AND Adaptive icon slots to the same square
+                    // icon. Leaving any of them to Unity's automatic derivation from the generic
+                    // default set above makes Unity shrink-and-pad the square icon (and, for
+                    // Adaptive, default the background layer to white) so nothing can clip when
+                    // it's masked into a circle — on round-icon launchers that renders the logo
+                    // as a tiny square floating in a white circle instead of filling it. Setting
+                    // the slots directly makes Unity just scale the square icon edge-to-edge into
+                    // each required size/layer, no padding, no synthesized white background.
+                    //
+                    // Adaptive matters most here: on API 26+ (virtually every device in the
+                    // field) launchers mask the Adaptive icon (foreground+background), not the
+                    // Legacy/Round resource — Round is only consulted on API 25 (Android 7.1),
+                    // which is effectively extinct. So Adaptive being auto-derived is what
+                    // actually causes the "small icon, white bg" symptom on real round-icon
+                    // phones even after Legacy/Round are fixed.
+                    SetAndroidIcon(AndroidPlatformIconKind.Legacy, icon);
+                    SetAndroidIcon(AndroidPlatformIconKind.Round, icon);
+                    SetAndroidIcon(AndroidPlatformIconKind.Adaptive, icon);
+                }
             }
 
             AssetDatabase.SaveAssets();
+        }
+
+        private static void SetAndroidIcon(PlatformIconKind kind, Texture2D icon)
+        {
+            var slots = PlayerSettings.GetPlatformIcons(BuildTargetGroup.Android, kind);
+            foreach (var slot in slots)
+                slot.SetTextures(Enumerable.Repeat(icon, slot.maxLayerCount).ToArray());
+            PlayerSettings.SetPlatformIcons(BuildTargetGroup.Android, kind, slots);
         }
 
         private static void ApplySdkConfig(SdkConfig sdk, string cfgPath)
