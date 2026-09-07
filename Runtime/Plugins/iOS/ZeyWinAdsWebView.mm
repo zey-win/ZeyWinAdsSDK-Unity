@@ -335,10 +335,10 @@ static NSString *ZeyWinAdsPermissionBridgeJS(void) {
         [self.webView stopLoading];
         self.webView.navigationDelegate = nil;
         self.webView.UIDelegate = nil;
-        @try {
-            [self.webView.configuration.userContentController
-                removeScriptMessageHandlerForName:@"ZeyWinAdsPermissions"];
-        } @catch (__unused NSException *ignored) {}
+        // Safe to call unconditionally: removeScriptMessageHandlerForName: is a
+        // no-op when the name isn't registered (it does not raise).
+        [self.webView.configuration.userContentController
+            removeScriptMessageHandlerForName:@"ZeyWinAdsPermissions"];
     }
     [self.container removeFromSuperview];
     self.webView = nil;
