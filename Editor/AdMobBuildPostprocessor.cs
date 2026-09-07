@@ -268,6 +268,21 @@ allprojects {
 
             activity.SetAttribute("enabled", AndroidNs, "true");
             activity.SetAttribute("exported", AndroidNs, "true");
+
+            // Clear anything stacked above the game's root activity whenever the user relaunches
+            // from the launcher. Transparent third-party trampoline activities
+            // (com.android.billingclient ProxyBillingActivity, com.google.android.play HsdpShimActivity,
+            // com.onevcat.uniwebview UniWebViewProxyActivity) crash in onCreate / onAttachedToWindow
+            // when the OS kills the app mid-flow and then rebuilds the task on relaunch: they read
+            // live state (a PendingIntent, an Intent extra, a process-static handler) that did not
+            // survive the process death. Per-activity noHistory / finishOnTaskLaunch only finish the
+            // stranded instance *after* it has already been created and thrown. clearTaskOnLaunch
+            // drops those instances before they are recreated, covering the whole family in one place.
+            // Player impact: relaunching from the home-screen icon after the app was killed starts at
+            // the game's main screen instead of restoring the last screen; in-session multitasking /
+            // Recent-apps resume is unaffected. Safe revert: remove this line.
+            activity.SetAttribute("clearTaskOnLaunch", AndroidNs, "true");
+
             EnsureUnityActivityConfigurationChanges(application, activity, AndroidNs);
             EnsureStartupProviderPriority(application, AndroidNs);
             EnsureLauncherIntentFilter(doc, activity, AndroidNs);

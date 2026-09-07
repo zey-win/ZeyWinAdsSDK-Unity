@@ -2,6 +2,35 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.60
+
+- Fixed a family of fatal cold-start crashes on aggressive ROMs (observed almost entirely on
+  OnePlus 8 Pro / OxygenOS 11): `com.android.billingclient.api.ProxyBillingActivity` NPE on a null
+  `PendingIntent`, `com.google.android.play.core.hsdp.service.HsdpShimActivity`
+  "targetPackageName is null", and `com.onevcat.uniwebview.UniWebViewProxyActivity`
+  "null activity handler found!". All three are the same failure — the OS kills the app mid-flow,
+  then rebuilds the task on relaunch and recreates a transparent third-party trampoline activity
+  whose live state (a `PendingIntent`, an Intent extra, a process-static handler) did not survive
+  the process death, so it throws in `onCreate` / `onAttachedToWindow` before Unity loads.
+  Per-activity `noHistory` / `finishOnTaskLaunch` finish the stranded instance only after it has
+  already thrown. `AdMobBuildPostprocessor` now sets `android:clearTaskOnLaunch="true"` on the
+  launcher activity, so the OS drops those instances before recreating them. Player impact:
+  relaunching from the home-screen icon after the app was killed opens at the game's main screen
+  instead of restoring the last screen; Recent-apps / in-session resume is unaffected.
+
+## 3.9.59
+
+- `FactoryBuildPreprocessor` moved into the SDK (`Editor/FactoryBuildPreprocessor.cs`) instead of
+  living per base repo — every consuming project now gets the factory-config wiring (bundle id /
+  product name / AdMob + ZeyWinAdsSettings config / icon / google-services.json) and on-device
+  test-build bundle-id healing automatically, without copying the file into each repo. Generalized
+  to run for whichever platform is active instead of assuming Android, and the bundle-id snapshot
+  is now scoped per project so it can't leak between different repos on the same machine.
+- Added `.github/workflows/factory-build.yml` — the canonical copy of the factory-build CI
+  workflow now lives in the SDK repo instead of being hand-maintained separately in each base
+  repo. Still copy-per-repo for now (triggered by `repository_dispatch`, not yet a reusable
+  `workflow_call` workflow); base repos should sync their copy from here.
+
 ## 3.9.58
 
 - Added a native iOS startup overlay (`Runtime/Plugins/iOS/ZeyWinAdsStartupOverlay.mm`).
