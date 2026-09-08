@@ -5,8 +5,7 @@ using UnityEngine.TestTools;
 namespace ZeyWinAds.Tests.Runtime
 {
     // Base for every QA fixture in this suite (the offer-WebView fixtures extend it via
-    // WebViewFixture). Three guards. Neither hides, filters, or rewrites a single log line — every
-    // Debug.Log/Warn/Error still reaches logcat in full.
+    // WebViewFixture). Guards run at the top of every [SetUp].
     //
     // 0. Real-build check (QaBuildGuard.AssertRealConfiguredBuild).
     //    If Application.identifier is Unity Test Framework's placeholder "com.UnityTestRunner.
@@ -14,11 +13,14 @@ namespace ZeyWinAds.Tests.Runtime
     //    inaccurate. Runs first in [SetUp] so a bad build fails EVERY test at setup, before its
     //    body — the rest of the suite is never exercised against the wrong app.
     //
-    // 1. LogAssert.ignoreFailingMessages = true
-    //    Opts each test out of Unity Test Framework's blanket behaviour of failing the *running*
-    //    test whenever an unexpected [Error]-level log fires — even one unrelated to what the test
-    //    checks. Our own Assert calls decide pass/fail here. Has to be a per-test [SetUp]; a
-    //    one-shot [SetUpFixture] didn't reliably hold across the suite.
+    // 1. QaLogGuard.Install() + LogAssert.ignoreFailingMessages = true
+    //    Opt out of Unity Test Framework's behaviour of failing the *running* test whenever an
+    //    unexpected [Error]-level log fires — even one from unrelated background code. QaLogGuard
+    //    (an ITestRunCallback) is the real mechanism: it downgrades Error/Assert/Exception logs to
+    //    Warning for the whole run, so UTF's LogScope never sees a failing log (the text still
+    //    reaches logcat, re-tagged "[downgraded-from-X]"). The Install() here is an idempotent
+    //    safety net; ignoreFailingMessages is a leaky older guard kept as a third layer. Pass/fail
+    //    is decided solely by the tests' own Assert calls.
     //
     // 2. Stretch the SDK ad preloader's retry budget for the test run.
     //    Guard 1 covers errors logged synchronously inside a test. It does NOT reliably absorb an
@@ -38,6 +40,9 @@ namespace ZeyWinAds.Tests.Runtime
         {
             QaBuildGuard.AssertRealConfiguredBuild(); // fails here (before any test body) on a placeholder-id player
 
+            // QaLogGuard (an ITestRunCallback) normally installs the log-handler shim at run start;
+            // this is an idempotent safety net for any path that skips run callbacks.
+            QaLogGuard.Install();
             LogAssert.ignoreFailingMessages = true;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
