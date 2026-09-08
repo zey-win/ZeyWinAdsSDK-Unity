@@ -1,0 +1,81 @@
+plugins {
+    id 'com.android.library'
+}
+
+// ---------------------------------------------------------------------------
+// Vendored SDK sources
+//
+// The offer WebView's file-chooser flow lives entirely in five .java files under
+// Runtime/Plugins/Android. We compile the REAL files (no copies checked in) by
+// syncing exactly those five into a build dir every build, so the harness can
+// never drift from production. Adding the whole directory instead would drag in
+// unrelated classes (Install Referrer, device id, sensors) and their extra
+// dependencies, so the include list is explicit.
+// ---------------------------------------------------------------------------
+def sdkAndroidSrcDir = file("${rootDir}/../Runtime/Plugins/Android")
+def vendoredRoot = layout.buildDirectory.dir("vendored-sdk-src").get().asFile
+def vendoredPkgDir = new File(vendoredRoot, "com/zeywinads/unity")
+
+def vendorSdkSources = tasks.register('vendorSdkSources', Copy) {
+    description = 'Copies the offer-WebView SDK sources this harness compiles against.'
+    from(sdkAndroidSrcDir) {
+        include 'ZeyWinAdsWebChromeClient.java'
+        include 'ZeyWinAdsFileChooserFragment.java'
+        include 'ZeyWinAdsWebViewNavigation.java'
+        include 'ZeyWinAdsLockWebViewClient.java'
+        include 'ZeyWinAdsPermissionBridge.java'
+    }
+    into vendoredPkgDir
+    doFirst {
+        if (!sdkAndroidSrcDir.exists()) {
+            throw new GradleException("SDK Android sources not found at ${sdkAndroidSrcDir}. " +
+                "This project must sit at <repo>/AndroidInstrumentedTests.")
+        }
+    }
+}
+
+android {
+    namespace 'com.zeywinads.instrumentedtests'
+    compileSdk 35
+
+    // Unity 6000.3.x installs build-tools 36.0.0 only. AGP accepts a newer
+    // build-tools than its default; if this errors on a machine without 36.0.0,
+    // either `sdkmanager "build-tools;34.0.0"` or drop this line.
+    buildToolsVersion '36.0.0'
+
+    defaultConfig {
+        minSdk 24
+        targetSdk 34
+        testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    sourceSets {
+        // The stub com.unity3d.player.UnityPlayer lives in src/main/java as usual;
+        // the vendored SDK sources are added from the build dir.
+        main.java.srcDir vendoredRoot
+    }
+
+    testOptions {
+        animationsDisabled = true
+    }
+}
+
+// Make sure the vendored sources exist before anything tries to compile them.
+tasks.named('preBuild') {
+    dependsOn vendorSdkSources
+}
+
+dependencies {
+    androidTestImplementation 'androidx.test.ext:junit:1.2.1'
+    androidTestImplementation 'androidx.test:core:1.6.1'
+    androidTestImplementation 'androidx.test:runner:1.6.2'
+    androidTestImplementation 'androidx.test:rules:1.6.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-core:3.6.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-web:3.6.1'
+    androidTestImplementation 'androidx.test.espresso:espresso-intents:3.6.1'
+}

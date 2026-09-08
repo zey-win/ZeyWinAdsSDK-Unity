@@ -23,6 +23,11 @@ namespace ZeyWinAds.UI
 #endif
 
         private static WebViewLock _instance;
+        // Set in OnApplicationQuit. Once true, teardown must NOT bounce a managed-callback
+        // AndroidJavaRunnable through runOnUiThread — it can fire after the scripting runtime is
+        // gone and crash the process (SIGSEGV in UnityJavaProxy_invoke). The OS reclaims native
+        // views with the process anyway.
+        private static bool _isQuitting;
         public static WebViewLock Instance => _instance;
         public static event Action<string> OnLocked;
         public static event Action OnUnlocked;
@@ -35,6 +40,15 @@ namespace ZeyWinAds.UI
         private string _lockedUrl;
         private float _lockStartedAt;
         private bool _legacyBackInputUnavailable;
+
+        // Orientation state captured when the offer surface forces free rotation, so
+        // EndZeyWinSurface can put the host game's orientation back exactly as it was.
+        private bool _orientationOverrideActive;
+        private ScreenOrientation _preOfferOrientation;
+        private bool _preOfferAutoPortrait;
+        private bool _preOfferAutoPortraitUpsideDown;
+        private bool _preOfferAutoLandscapeLeft;
+        private bool _preOfferAutoLandscapeRight;
 
 #if UNITY_ANDROID
         private AndroidJavaObject _webView;
@@ -53,6 +67,7 @@ namespace ZeyWinAds.UI
         /// </summary>
         public static bool IsLocked => _instance != null && _instance._isLocked;
         public static string CurrentLockedUrl => _instance != null ? _instance._lockedUrl : null;
+
         internal static bool HasPersistedLock =>
             PlayerPrefs.GetInt(LOCK_ACTIVE_KEY, 0) == 1
             && !string.IsNullOrEmpty(PlayerPrefs.GetString(LOCK_URL_KEY, ""));
@@ -80,6 +95,11 @@ namespace ZeyWinAds.UI
                 return;
             }
             _instance = this;
+        }
+
+        private void OnApplicationQuit()
+        {
+            _isQuitting = true;
         }
 
         private void OnDestroy()
@@ -423,6 +443,7 @@ namespace ZeyWinAds.UI
 
             _zeyWinSurfaceActive = true;
             AdMediator.BeginZeyWinSurface("locked_webview");
+            AllowFreeRotationForOfferSurface();
         }
 
         private void EndZeyWinSurface()
@@ -432,6 +453,59 @@ namespace ZeyWinAds.UI
 
             _zeyWinSurfaceActive = false;
             AdMediator.EndZeyWinSurface("locked_webview");
+            RestoreOrientationAfterOfferSurface();
+        }
+
+        // While the offer WebView is on screen the user must be able to rotate the device on any
+        // side, even if the host game is pinned to one orientation. Snapshots the host's orientation
+        // state, then enables all four autorotate directions and puts Unity into AutoRotation — Unity
+        // then drives the Activity's orientation to a sensor value and keeps it there (a raw
+        // Activity.setRequestedOrientation is re-asserted away by the Unity player).
+        private void AllowFreeRotationForOfferSurface()
+        {
+            if (_orientationOverrideActive)
+                return;
+
+            _preOfferOrientation = Screen.orientation;
+            _preOfferAutoPortrait = Screen.autorotateToPortrait;
+            _preOfferAutoPortraitUpsideDown = Screen.autorotateToPortraitUpsideDown;
+            _preOfferAutoLandscapeLeft = Screen.autorotateToLandscapeLeft;
+            _preOfferAutoLandscapeRight = Screen.autorotateToLandscapeRight;
+            _orientationOverrideActive = true;
+
+            Screen.autorotateToPortrait = true;
+            Screen.autorotateToPortraitUpsideDown = true;
+            Screen.autorotateToLandscapeLeft = true;
+            Screen.autorotateToLandscapeRight = true;
+            Screen.orientation = ScreenOrientation.AutoRotation;
+
+            Logger.Log("Offer surface: free screen rotation enabled");
+        }
+
+        // Puts the host game's orientation back the way it was before the offer surface forced free
+        // rotation. The Screen.orientation getter never returns AutoRotation, so if the host had all
+        // rotate axes open before, treat that as AutoRotation intent rather than locking to whatever
+        // physical orientation happened to be current at snapshot time.
+        private void RestoreOrientationAfterOfferSurface()
+        {
+            if (!_orientationOverrideActive)
+                return;
+
+            Screen.autorotateToPortrait = _preOfferAutoPortrait;
+            Screen.autorotateToPortraitUpsideDown = _preOfferAutoPortraitUpsideDown;
+            Screen.autorotateToLandscapeLeft = _preOfferAutoLandscapeLeft;
+            Screen.autorotateToLandscapeRight = _preOfferAutoLandscapeRight;
+
+            bool hostWasFreelyRotating = _preOfferAutoPortrait
+                && _preOfferAutoLandscapeLeft
+                && _preOfferAutoLandscapeRight;
+            Screen.orientation = hostWasFreelyRotating
+                ? ScreenOrientation.AutoRotation
+                : _preOfferOrientation;
+
+            _orientationOverrideActive = false;
+
+            Logger.Log("Offer surface: screen rotation restored to host baseline");
         }
 
 #if UNITY_EDITOR
@@ -601,6 +675,19 @@ namespace ZeyWinAds.UI
             if (_webView == null && _nativeWebViewContainer == null)
                 return;
 
+            // App is shutting down: don't post a managed-callback runnable to the UI thread — it
+            // could run after the scripting runtime is torn down and crash the process. Drop the
+            // references and let the OS reclaim the native views with the process.
+            if (_isQuitting)
+            {
+                _nativeWebViewContainer = null;
+                _nativeSafeAreaContainer = null;
+                _webView = null;
+                _webViewClient = null;
+                _permissionBridge = null;
+                return;
+            }
+
             try
             {
                 AndroidJavaClass unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer");
@@ -656,7 +743,7 @@ namespace ZeyWinAds.UI
 
         private void PromoteAndroidOfferSurface()
         {
-            if (_nativeWebViewContainer == null)
+            if (_isQuitting || _nativeWebViewContainer == null)
                 return;
 
             AdMediator.SuppressAdMobForZeyWinSurface("locked_webview_promote");
@@ -779,7 +866,7 @@ namespace ZeyWinAds.UI
 
         private void Update()
         {
-            if (!_isLocked)
+            if (!_isLocked || _isQuitting)
                 return;
 
 #if !UNITY_EDITOR
