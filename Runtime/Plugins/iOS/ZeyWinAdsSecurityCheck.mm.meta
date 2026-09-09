@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 7f3c1e9a4b6d48e2a9c05f81d2e6b4a3
+guid: 4b8f1d6c2a7e49a1b3d9f5c8e0a2b6d4
 PluginImporter:
   externalObjects: {}
   serializedVersion: 2
@@ -7,7 +7,7 @@ PluginImporter:
   executionOrder: {}
   defineConstraints: []
   isPreloaded: 0
-  isOverridable: 0
+  isOverridable: 1
   isExplicitlyReferenced: 0
   validateReferences: 1
   platformData:
@@ -29,7 +29,7 @@ PluginImporter:
       settings:
         AddToEmbeddedBinaries: false
         CompileFlags:
-        FrameworkDependencies: WebKit;AVFoundation
+        FrameworkDependencies:
   userData:
   assetBundleName:
   assetBundleVariant:

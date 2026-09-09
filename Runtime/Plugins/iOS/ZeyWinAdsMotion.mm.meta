@@ -1,5 +1,5 @@
 fileFormatVersion: 2
-guid: 7f3c1e9a4b6d48e2a9c05f81d2e6b4a3
+guid: b2aca1b1c46941038c4c17b79b561532
 PluginImporter:
   externalObjects: {}
   serializedVersion: 2
@@ -7,7 +7,7 @@ PluginImporter:
   executionOrder: {}
   defineConstraints: []
   isPreloaded: 0
-  isOverridable: 0
+  isOverridable: 1
   isExplicitlyReferenced: 0
   validateReferences: 1
   platformData:
@@ -29,7 +29,7 @@ PluginImporter:
       settings:
         AddToEmbeddedBinaries: false
         CompileFlags:
-        FrameworkDependencies: WebKit;AVFoundation
+        FrameworkDependencies: CoreMotion
   userData:
   assetBundleName:
   assetBundleVariant:

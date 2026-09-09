@@ -69,16 +69,23 @@ namespace ZeyWinAds.Mediation
         /// <summary>
         /// Called from ZeyWinAds.Initialize after the ad client is ready.
         /// Boots AdMob in parallel — failure is silently logged, ZeyWin keeps working.
+        /// <paramref name="onConsentResolved"/> fires once AdMob's UMP consent form (if any)
+        /// has been dismissed, so callers can defer their own permission prompts until then.
         /// </summary>
-        public static void Initialize()
+        public static void Initialize(Action onConsentResolved = null)
         {
-            if (_initialized) return;
+            if (_initialized)
+            {
+                onConsentResolved?.Invoke();
+                return;
+            }
             _initialized = true;
 
             var settings = ZeyWinAdsSettings.Load();
             if (settings == null)
             {
                 Logger.Debug("[Mediator] No ZeyWinAdsSettings asset — AdMob fallback disabled");
+                onConsentResolved?.Invoke();
                 return;
             }
 
@@ -88,7 +95,7 @@ namespace ZeyWinAds.Mediation
             FrameRateController.Apply("mediator_initialize");
             bool wasAdMobInitialized = AdMobNetwork.IsInitialized;
 
-            AdMobNetwork.Initialize(settings);
+            AdMobNetwork.Initialize(settings, onConsentResolved);
             if (wasAdMobInitialized)
                 AdMobNetwork.RepreloadAll();
         }

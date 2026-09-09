@@ -199,11 +199,27 @@ namespace ZeyWinAds.Ads
             cardRect.pivot = new Vector2(0.5f, 0);
 
             // Account for safe area + bottom margin
+#if UNITY_IOS && !UNITY_EDITOR
+            // iOS: sit the card almost flush with the bottom edge instead of
+            // floating it above the home-indicator inset, but keep it clear of
+            // the notch / Dynamic Island on the sides (matters in landscape,
+            // where safe-area insets are horizontal).
+            float scaleFactor = _canvas.GetScaleFactor();
+            if (scaleFactor <= 0f) scaleFactor = 1f;
+            float safeLeft = Screen.safeArea.x / scaleFactor;
+            float safeRight = (Screen.width - (Screen.safeArea.x + Screen.safeArea.width)) / scaleFactor;
+            float leftMargin = Mathf.Max(cardMarginH, safeLeft);
+            float rightMargin = Mathf.Max(cardMarginH, safeRight);
+            cardRect.anchoredPosition = new Vector2(0, 8f);
+            cardRect.offsetMin = new Vector2(leftMargin, cardRect.offsetMin.y);
+            cardRect.offsetMax = new Vector2(-rightMargin, cardRect.offsetMax.y);
+#else
             float bottomInset = Screen.safeArea.y / _canvas.GetScaleFactor();
             cardRect.anchoredPosition = new Vector2(0, bottomInset + cardMarginB);
             // offsetMin.x = left margin, offsetMax.x = -right margin
             cardRect.offsetMin = new Vector2(cardMarginH, cardRect.offsetMin.y);
             cardRect.offsetMax = new Vector2(-cardMarginH, cardRect.offsetMax.y);
+#endif
             cardRect.sizeDelta = new Vector2(cardRect.sizeDelta.x, totalHeight);
 
             // Card background with rounded corners
