@@ -2,6 +2,43 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.61
+
+- Fixed the fatal cold-start `SIGABRT` ("JNI DETECTED ERROR IN APPLICATION: expected non-null
+  method in call to `FromReflectedMethod`") during `ZeyWinAds.Initialize` on the
+  `RuntimeInitializeOnLoad` path. `AndroidJavaObject.CallStatic<T>()` resolves the target method
+  by walking `Class.getMethods()` reflectively and passing the result through
+  `AndroidJNI.FromReflectedMethod`; on memory-starved cold starts / some OEM ROMs (Vivo, Oppo,
+  Infinix, Samsung; 30–44 MiB free RAM) that walk returns empty even though the method exists,
+  Unity 6 forwards the null into `FromReflectedMethod`, and ART aborts the whole process —
+  uncatchable from C#. New `Runtime/Core/AndroidJniSafe.cs` resolves via raw
+  `AndroidJNI.GetStaticMethodID` (direct name+signature lookup, no reflection, no
+  `FromReflectedMethod`) with every handle null-checked and any pending Java exception cleared,
+  degrading to a fallback instead of killing the app. Converted every early static call into a
+  `com.zeywinads.unity.*` class: `SecurityCheck` (`getRootIndicators` / `getDetectedPackages` —
+  already done via its own copy), `DeviceIdentity.HasSim` / `GetSimCountry` / `getAndroidId`,
+  `GoogleAdsAttribution` (`getReferrerRaw`), `MotionCollector` (`collect`), `ReferralManager`
+  (`getClickId`). Left as-is: `DeviceIdentity.GetGAID` (background thread — raw JNI needs an
+  attached thread) and `DeviceIdentity.IsAppInstalled` (on-demand, never the cold-start path).
+- Added `CrashReportingService` (`Runtime/Core/CrashReportingService.cs`) — a reflection-only
+  soft bridge to `Firebase.Crashlytics.Crashlytics` (no hard dependency; no-op and never throws
+  when the package is absent, same pattern as `FirebaseMessagingService`). `ZeyWinAds.Initialize`
+  now stamps `zw_sdk_version`, `zw_device_id` (stable pseudonymous install id — a custom key,
+  not `SetUserId`, so the game keeps its user-id slot), `zw_platform`, and walks `zw_init_stage`
+  (`start` → `security_check` → `device_identity` → `crashguard` → `att` → `admob` →
+  `firebase_messaging` → `done`) plus `zw_root_indicators` / `zw_device_clean` / `zw_block_reason`,
+  with matching breadcrumb logs. A crash during init now carries the failing stage as a
+  filterable custom key with no symbolication needed.
+- `FactoryBuildPreprocessor` now deletes any stray `google-services.json` (anywhere under
+  `Assets/`, plus the project root) before staging `factory/google-services.json` as
+  `Assets/google-services.json`. The Firebase Editor plugin bakes the Android
+  `google-services.xml` string resources from whatever `google-services.json` it finds and does
+  not prefer the factory-written one when several exist, so a stale copy committed into a base
+  repo (typically `Assets/Plugins/Android/google-services.json`) was silently overriding the
+  factory Firebase config and shipping builds pointed at the wrong Firebase project. Runs only
+  on CI factory builds (inside the `factory-config.json` branch); local / Test Runner builds are
+  untouched.
+
 ## 3.9.60
 
 - Fixed a family of fatal cold-start crashes on aggressive ROMs (observed almost entirely on
