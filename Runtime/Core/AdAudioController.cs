@@ -44,11 +44,18 @@ namespace ZeyWinAds.Core
         // result send queue never drains: the Editor Test Runner window hangs on "Wait For
         // Player Run" and produces no results.xml, even though the run itself completes and
         // every result still reaches the Editor Console via the separate log channel.
-        // Suppress the offer's game-pause in that case only. UnityEngine.TestRunner.dll is
-        // linked into a build solely when Unity builds a test player, so this is always false
-        // in production players and the pause behaves exactly as before.
-        private static bool IsRunningInTestPlayer =>
-            Type.GetType("UnityEngine.TestTools.UnityTestAttribute, UnityEngine.TestRunner") != null;
+        // Suppress the offer's game-pause while a test run is in progress.
+        //
+        // QaTestRun.InProgress is the explicit, Unity-intended signal: the QA suite's
+        // ITestRunCallback (QaLogGuard) sets it for the duration of a run — and, on a device test
+        // player, from an earlier RuntimeInitializeOnLoadMethod so an offer that opens during
+        // startup (before RunStarted) is covered too. It is always false in a shipped game (the
+        // "QA Runtime Tests" assembly compiles only under UNITY_INCLUDE_TESTS), so the pause
+        // behaves exactly as before in production.
+        //
+        // This replaces an earlier reflection heuristic (Type.GetType on a UTF attribute string),
+        // which IL2CPP managed-code stripping could silently drop on device.
+        private static bool IsRunningInTestPlayer => QaTestRun.InProgress;
 
         public static void ApplyAdMobVolume(string reason)
         {
