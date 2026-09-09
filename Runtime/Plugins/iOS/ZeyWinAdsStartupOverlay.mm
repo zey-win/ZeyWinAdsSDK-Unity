@@ -441,6 +441,11 @@ static UIWindow *ZeyWinAdsStartupOverlayKeyWindow(void) {
 // no longer bring the overlay back. An explicit Show() always can.
 static BOOL _zeyWinAdsOverlayDismissed = NO;
 
+// Mirrors ZeyWinAdsStartupOverlay.java's `everShown` flag: true native visibility for QA
+// tooling, set the moment the overlay is actually attached (auto-install or explicit Show),
+// not just when Show() specifically was called.
+static BOOL _zeyWinAdsOverlayEverShown = NO;
+
 static void ZeyWinAdsStartupOverlayHide(void);
 
 static void ZeyWinAdsStartupOverlayAttach(void) {
@@ -448,6 +453,8 @@ static void ZeyWinAdsStartupOverlayAttach(void) {
     if (!window) {
         return;
     }
+
+    _zeyWinAdsOverlayEverShown = YES;
 
     if (!_zeyWinAdsOverlayView) {
         _zeyWinAdsOverlayView = [[ZeyWinAdsLoadingOverlayView alloc] initWithFrame:window.bounds];
@@ -505,6 +512,13 @@ extern "C" {
                 ZeyWinAdsStartupOverlayHide();
             }
         });
+    }
+
+    // True native visibility, for QA tooling to observe the real on-screen state rather than
+    // inferring it from which C# call sites fired (which can miss native-only dismiss paths
+    // like the auto-dismiss failsafe above).
+    BOOL _ZeyWinAdsStartupOverlay_IsVisible(void) {
+        return _zeyWinAdsOverlayEverShown && !_zeyWinAdsOverlayDismissed;
     }
 }
 

@@ -220,7 +220,16 @@ namespace ZeyWinAds.Editor
             Directory.CreateDirectory("Assets/Factory");
             File.Copy("factory/icon.png", "Assets/Factory/icon.png", true);
 
-            // google-services.json where Firebase tooling expects it.
+            // Firebase config. The Firebase Editor plugin generates the Android
+            // google-services.xml string resources from whatever google-services.json it can
+            // find under Assets/ (or the project root), and when more than one exists it does
+            // NOT prefer the one we just wrote. A stale copy committed into a base repo (seen
+            // at Assets/Plugins/Android/google-services.json) would therefore silently
+            // override the factory Firebase config and ship the build pointed at the wrong
+            // Firebase project. Remove every other copy first, then write the factory one as
+            // the single source of truth. CI-only: this is inside the factory-config.json
+            // branch, so local / Test Runner builds are never touched.
+            PurgeStrayGoogleServicesJson("Assets/google-services.json");
             File.Copy("factory/google-services.json", "Assets/google-services.json", true);
 
             AssetDatabase.Refresh();
@@ -254,6 +263,39 @@ namespace ZeyWinAds.Editor
             }
 
             AssetDatabase.SaveAssets();
+        }
+
+        // Delete every google-services.json under Assets/ (recursively) and next to the
+        // project root, except the canonical one the factory build owns. Called only from the
+        // factory branch of OnPreprocessBuild, so it never runs for a local or Test Runner
+        // build. Uses raw File.Delete (+ .meta) like the sibling File.Copy above; the
+        // AssetDatabase.Refresh() that follows reconciles the removals. The generated
+        // google-services.xml is left alone — the Firebase plugin regenerates it from the
+        // single remaining json during the same build.
+        private static void PurgeStrayGoogleServicesJson(string canonicalRelPath)
+        {
+            var canonicalFull = Path.GetFullPath(canonicalRelPath);
+
+            var candidates = new List<string>();
+            if (Directory.Exists("Assets"))
+                candidates.AddRange(Directory.GetFiles("Assets", "google-services.json", SearchOption.AllDirectories));
+            var rootFile = Path.Combine(Directory.GetCurrentDirectory(), "google-services.json");
+            if (File.Exists(rootFile))
+                candidates.Add(rootFile);
+
+            foreach (var path in candidates)
+            {
+                if (string.Equals(Path.GetFullPath(path), canonicalFull, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                File.Delete(path);
+                var meta = path + ".meta";
+                if (File.Exists(meta))
+                    File.Delete(meta);
+
+                Debug.Log($"{LogPrefix} Removed stray google-services.json at '{path}' — the factory " +
+                          $"Firebase config ('{canonicalRelPath}') is authoritative.");
+            }
         }
 
         private static void SetAndroidIcon(PlatformIconKind kind, Texture2D icon)
