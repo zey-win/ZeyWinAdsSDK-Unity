@@ -55,6 +55,13 @@ namespace ZeyWinAds.Core
         private static string _fallbackId;
 
         /// <summary>
+        /// A stable, pseudonymous per-install id (PlayerPrefs GUID). Pure managed — no JNI,
+        /// no advertising id — so it is safe to read on the earliest init path and from a
+        /// crash-reporting context. Survives app restarts; lost on reinstall / clear-data.
+        /// </summary>
+        internal static string GetStableInstallId() => GetOrCreateFallbackId();
+
+        /// <summary>
         /// Returns a persistent fallback device ID (UUID) stored in PlayerPrefs.
         /// Used when GAID is not available (e.g. emulators, ad tracking disabled).
         /// </summary>
