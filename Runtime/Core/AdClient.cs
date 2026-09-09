@@ -560,7 +560,7 @@ namespace ZeyWinAds.Core
             return GetEndpointByAbsoluteIndex(_currentEndpointIndex + retryCount);
         }
 
-        private static int GetRequestTimeoutSeconds()
+        internal static int GetRequestTimeoutSeconds()
         {
             int timeout = RemoteConfigBridge.GetInt("zeywin_request_timeout_seconds", (int)ZeyWinAdsConfig.RequestTimeoutSeconds);
             return Mathf.Clamp(timeout, 5, 120);

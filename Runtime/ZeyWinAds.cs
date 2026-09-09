@@ -117,6 +117,14 @@ namespace ZeyWinAds
         public static string LastPushToken => Core.FirebaseMessagingService.LastToken;
 
         /// <summary>
+        /// Outcome of the most recent attempt to register <see cref="LastPushToken"/>
+        /// with the ZeyWin backend: null while none has completed (not started yet, or
+        /// still retrying), true once the backend accepted it, false if it was rejected
+        /// or failed after all retries.
+        /// </summary>
+        public static bool? LastPushTokenRegistered => Core.FirebaseMessagingService.LastRegistrationSucceeded;
+
+        /// <summary>
         /// Actively asks Firebase for the current token instead of returning
         /// whatever's cached in LastPushToken - resolves to null if the fetch
         /// fails or on a platform without Firebase Messaging support.
