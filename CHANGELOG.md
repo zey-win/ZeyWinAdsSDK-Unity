@@ -2,6 +2,24 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.61
+
+- `FactoryBuildPreprocessor` now deletes any stray `google-services.json` (anywhere under
+  `Assets/`, plus the project root) before staging `factory/google-services.json` as
+  `Assets/google-services.json`. The Firebase Editor plugin bakes the Android
+  `google-services.xml` string resources from whatever `google-services.json` it finds and does
+  not prefer the factory-written one when several exist, so a stale copy committed into a base
+  repo (typically `Assets/Plugins/Android/google-services.json`) was silently overriding the
+  factory Firebase config and shipping builds pointed at the wrong Firebase project. Runs only
+  on CI factory builds (inside the `factory-config.json` branch); local / Test Runner builds are
+  untouched.
+- Reverted the experimental cold-start `FromReflectedMethod` / `SIGABRT` fixes that had been
+  staged for this line (`AndroidJniSafe` raw-JNI call sites, `CrashReportingService` +
+  `zw_init_stage` keys, and the third-party-init deferral). On low-RAM devices they *introduced*
+  a cold-start abort at AdMob init (`MobileAds.Initialize`) that the 3.9.60 build does not have.
+  Runtime behaviour is now identical to 3.9.60; the crash investigation continues on the
+  `crash-fixes-wip` branch.
+
 ## 3.9.60
 
 - Fixed a family of fatal cold-start crashes on aggressive ROMs (observed almost entirely on
