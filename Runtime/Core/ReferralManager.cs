@@ -123,23 +123,17 @@ namespace ZeyWinAds.Core
         private void TryInstallReferrer(string simCountry)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
-            try
-            {
-                using (var cls = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsInstallReferrer"))
-                {
-                    cls.CallStatic("getClickId", gameObject.name, "OnInstallReferrerResult");
-                }
-                // Store simCountry for callback
-                _pendingSimCountry = simCountry;
-                // Device-id referral matching is a valid fallback and is faster on
-                // some devices than waiting for Play Install Referrer to finish.
-                FallbackToDeviceIdCheck(simCountry);
-            }
-            catch (Exception e)
-            {
-                Logger.Warn("Install referrer failed: {0}", e.Message);
-                FallbackToDeviceIdCheck(simCountry);
-            }
+            // Raw-JNI resolve (see AndroidJniSafe): early-session call into one of our own
+            // classes, where CallStatic can hit ART's "expected non-null method" abort on
+            // memory-starved devices. On failure the native callback never fires; the
+            // device-id fallback below still runs, same as the old catch path.
+            AndroidJniSafe.CallStaticVoidStringArgs(
+                "com.zeywinads.unity.ZeyWinAdsInstallReferrer", "getClickId",
+                gameObject.name, "OnInstallReferrerResult");
+            _pendingSimCountry = simCountry;
+            // Device-id referral matching is a valid fallback and is faster on
+            // some devices than waiting for Play Install Referrer to finish.
+            FallbackToDeviceIdCheck(simCountry);
 #else
             FallbackToDeviceIdCheck(simCountry);
 #endif
