@@ -1,14 +1,21 @@
 using System;
+using System.Runtime.InteropServices;
 using UnityEngine;
 
 namespace ZeyWinAds.Core
 {
     /// <summary>
     /// Collects a short window of accelerometer data via native platform code, for the
-    /// anti-fraud motion signal. Android-only; no-ops on other platforms.
+    /// anti-fraud motion signal. Implemented on Android and iOS; on other platforms
+    /// (e.g. Editor), onDone fires immediately with empty/zeroed data.
     /// </summary>
     public static class MotionCollector
     {
+#if UNITY_IOS && !UNITY_EDITOR
+        [DllImport("__Internal")]
+        private static extern void _ZeyWinAds_CollectMotion(string gameObjectName);
+#endif
+
         [Serializable]
         public class MotionData
         {
@@ -24,7 +31,8 @@ namespace ZeyWinAds.Core
 
         /// <summary>
         /// Starts native motion collection (~2s). Invokes onDone on the main thread once
-        /// the result is ready. On non-Android platforms, onDone is never invoked.
+        /// the result is ready. On platforms without a native implementation, onDone
+        /// fires immediately with empty/zeroed data.
         /// </summary>
         public static void Collect(Action<MotionData> onDone)
         {
@@ -41,6 +49,27 @@ namespace ZeyWinAds.Core
             {
                 _pendingCallback = null;
             }
+#elif UNITY_IOS && !UNITY_EDITOR
+            _pendingCallback = onDone;
+            try
+            {
+                _ZeyWinAds_CollectMotion(UnityMainThreadDispatcher.Instance.gameObject.name);
+            }
+            catch (Exception e)
+            {
+                Logger.Error("Failed to start motion collection: {0}", e.Message);
+                _pendingCallback = null;
+            }
+#else
+            onDone?.Invoke(new MotionData
+            {
+                v = 1,
+                elapsed_ms = 0,
+                events = 0,
+                has_accel = false,
+                has_gyro = false,
+                s = ""
+            });
 #endif
         }
 

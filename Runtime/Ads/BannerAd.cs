@@ -180,7 +180,7 @@ namespace ZeyWinAds.Ads
                 rectTransform.anchorMin = new Vector2(0, 0);
                 rectTransform.anchorMax = new Vector2(1, 0);
                 rectTransform.pivot = new Vector2(0.5f, 0);
-                rectTransform.anchoredPosition = new Vector2(0, bottomInset / scaleFactor);
+                rectTransform.anchoredPosition = new Vector2(0, Mathf.Max(0, bottomInset / scaleFactor - 15f));
             }
 
             rectTransform.sizeDelta = new Vector2(0, bannerHeight);
@@ -344,7 +344,7 @@ namespace ZeyWinAds.Ads
                     rectTransform.anchorMin = new Vector2(0, 0);
                     rectTransform.anchorMax = new Vector2(1, 0);
                     rectTransform.pivot = new Vector2(0.5f, 0);
-                    rectTransform.anchoredPosition = new Vector2(0, bottomInset / scaleFactor);
+                    rectTransform.anchoredPosition = new Vector2(0, Mathf.Max(0, bottomInset / scaleFactor - 15f));
                 }
 
                 rectTransform.sizeDelta = new Vector2(0, bannerHeight);

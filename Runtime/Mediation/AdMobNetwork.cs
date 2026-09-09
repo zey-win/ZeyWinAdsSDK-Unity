@@ -56,28 +56,40 @@ namespace ZeyWinAds.Mediation
 
         public static bool IsInitialized => _initialized;
 
-        public static void Initialize(ZeyWinAdsSettings settings)
+        /// <summary>
+        /// Initializes AdMob. If UMP consent is enabled, <paramref name="onConsentResolved"/>
+        /// fires once the consent form (if shown) has been dismissed — callers that also
+        /// trigger their own native permission prompts (e.g. push notifications) should wait
+        /// for this before firing, so iOS doesn't stack multiple system dialogs at once.
+        /// </summary>
+        public static void Initialize(ZeyWinAdsSettings settings, Action onConsentResolved = null)
         {
             _settings = settings;
 
 #if ZEYWIN_ADMOB
             if (_initStarted || settings == null || !settings.IsAdMobConfigured())
+            {
+                onConsentResolved?.Invoke();
                 return;
+            }
 
             _initStarted = true;
             Core.Logger.Log("[AdMob] Initializing");
             if (settings.enableUmpConsent)
             {
-                UpdateConsentThenInitialize(settings);
+                UpdateConsentThenInitialize(settings, onConsentResolved);
                 return;
             }
 
             InitializeMobileAds();
+            onConsentResolved?.Invoke();
+#else
+            onConsentResolved?.Invoke();
 #endif
         }
 
 #if ZEYWIN_ADMOB
-        private static void UpdateConsentThenInitialize(ZeyWinAdsSettings settings)
+        private static void UpdateConsentThenInitialize(ZeyWinAdsSettings settings, Action onConsentResolved)
         {
             var request = new ConsentRequestParameters
             {
@@ -90,6 +102,7 @@ namespace ZeyWinAds.Mediation
                 {
                     Core.Logger.Warn("[AdMob] UMP consent update failed: {0}", updateError.Message);
                     InitializeMobileAds();
+                    onConsentResolved?.Invoke();
                     return;
                 }
 
@@ -108,6 +121,8 @@ namespace ZeyWinAds.Mediation
                     {
                         Core.Logger.Warn("[AdMob] UMP consent flow completed but ads cannot be requested yet");
                     }
+
+                    onConsentResolved?.Invoke();
                 });
             });
         }
@@ -143,7 +158,7 @@ namespace ZeyWinAds.Mediation
             _initStarted = true;
             Core.Logger.Log("[AdMob] Lazy initialize for {0}", string.IsNullOrEmpty(label) ? "ad request" : label);
             if (_settings.enableUmpConsent)
-                UpdateConsentThenInitialize(_settings);
+                UpdateConsentThenInitialize(_settings, null);
             else
                 InitializeMobileAds();
 
