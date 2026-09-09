@@ -2,6 +2,29 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.62
+
+- Restored `CrashReportingService` (`Runtime/Core/CrashReportingService.cs`) and the `zw_*`
+  Crashlytics custom keys / breadcrumbs (`zw_sdk_version`, `zw_device_id`, `zw_platform`,
+  `zw_init_stage`, `zw_block_reason`). This is crash *reporting*, not a crash *fix* — it was
+  reverted in error in 3.9.61 alongside the cold-start SIGABRT experiments. Reflection-only soft
+  bridge to `Firebase.Crashlytics`; no-op when the package is absent. Note: the bridge's managed
+  reflection still runs during synchronous `RuntimeInitializeOnLoad` init and remains a
+  watch-item for the low-RAM cold-start abort under investigation on `crash-fixes-wip`.
+- Merged the `ios-integration` branch. Adds the iOS-native layer — `ZeyWinAdsATT`,
+  `ZeyWinAdsIDFA`, `ZeyWinAdsMotion`, `ZeyWinAdsSecurityCheck`, `ZeyWinAdsTheme` plugins and a
+  substantially expanded `ZeyWinAdsWebView` / `ZeyWinAdsHtmlView` — bringing iOS to parity with
+  the Android anti-fraud / attribution / theming paths.
+- `ZeyWinAds.Initialize` now gates third-party init on ATT resolving first (iOS can drop an
+  in-flight system prompt when another is requested before the first is dismissed). AdMob and
+  Firebase Messaging are started independently rather than chained, with a timeout so Firebase
+  init always runs even if AdMob's / UMP's callback never fires. `AdMediator.Initialize` takes
+  an optional `onConsentResolved` callback.
+- `ZeyWinAdsStartupOverlay` (iOS) no longer restarts the progress animation or resets its
+  auto-dismiss window on every app resume — only a genuine fresh attach or an explicit `Show()`
+  does. Prevents the loader visibly snapping back to 0% after an ATT / UMP / push-permission
+  dialog. The native `_ZeyWinAdsStartupOverlay_IsVisible()` QA-visibility hook is retained.
+
 ## 3.9.61
 
 - `FactoryBuildPreprocessor` now deletes any stray `google-services.json` (anywhere under
