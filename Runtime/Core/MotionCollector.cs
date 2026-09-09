@@ -32,12 +32,10 @@ namespace ZeyWinAds.Core
             _pendingCallback = onDone;
             try
             {
-                // Raw-JNI resolve (see AndroidJniSafe): fires right after ZeyWinAds.Initialize
-                // via the dispatcher, still inside the memory-starved cold-start window where
-                // CallStatic can hit ART's "expected non-null method" abort.
-                AndroidJniSafe.CallStaticVoidStringArgs(
-                    "com.zeywinads.unity.ZeyWinAdsMotionCollector", "collect",
-                    UnityMainThreadDispatcher.Instance.gameObject.name, "OnMotionCollected");
+                using (var cls = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsMotionCollector"))
+                {
+                    cls.CallStatic("collect", UnityMainThreadDispatcher.Instance.gameObject.name, "OnMotionCollected");
+                }
             }
             catch (Exception)
             {

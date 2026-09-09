@@ -73,14 +73,18 @@ namespace ZeyWinAds.Core
 
 #if UNITY_ANDROID && !UNITY_EDITOR
             EnsureHost();
-            // Raw-JNI resolve (see AndroidJniSafe): this runs on the synchronous
-            // ZeyWinAds.Initialize path, where CallStatic can hit ART's "expected non-null
-            // method" abort on memory-starved cold starts. On failure the native callback
-            // never fires, StatusKey stays 0, and the next launch retries — same outcome as
-            // the old catch block.
-            AndroidJniSafe.CallStaticVoidStringArgs(
-                "com.zeywinads.unity.ZeyWinAdsInstallReferrer", "getReferrerRaw",
-                CallbackHostName, CallbackMethodName);
+            try
+            {
+                using (var cls = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsInstallReferrer"))
+                {
+                    cls.CallStatic("getReferrerRaw", CallbackHostName, CallbackMethodName);
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.Warn("[GoogleAdsAttribution] Failed to invoke native: {0}", e.Message);
+                // Don't mark as checked — let the next launch retry.
+            }
 #else
             // iOS / Editor: no Install Referrer, mark checked with empty values
             // so we don't keep trying.
