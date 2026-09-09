@@ -52,9 +52,25 @@ namespace ZeyWinAds.Core
         private static string _lastSentLocale;
         private static int _lastSentTzOffsetMin;
         private static bool _hasSentOnce;
+        private static bool _registrationInFlight;
+        private static string _registeredToken;
+        private static bool? _lastRegistrationSucceeded;
+
+        // Backoff before each retry after a full pass over every endpoint fails.
+        // 4 attempts total (initial + 3). Realtime waits so an app pause between
+        // tries doesn't stretch them out.
+        private static readonly float[] RegistrationRetryBackoffSeconds = { 5f, 20f, 60f };
 
         /// <summary>The most recently retrieved FCM token, or null if none has been received yet.</summary>
         internal static string LastToken => _lastToken;
+
+        /// <summary>
+        /// Outcome of the most recent push-token registration POST to the backend:
+        /// null while none has completed (not attempted, or still in progress),
+        /// true once the backend accepted it, false if it was rejected or failed
+        /// after all retries.
+        /// </summary>
+        internal static bool? LastRegistrationSucceeded => _lastRegistrationSucceeded;
 
         /// <summary>
         /// Actively asks Firebase for the current token instead of relying on the
@@ -320,15 +336,19 @@ namespace ZeyWinAds.Core
             if (string.IsNullOrEmpty(token))
                 return;
 
-            DevicePushRegisterRequest payload = BuildPayload(token, out string locale, out int tzOffsetMin);
+            // Both the TokenReceived event and the explicit GetTokenAsync fetch route
+            // here, and Firebase can raise both for the same token. Skip if this exact
+            // token is already registered or a registration for it is already running.
+            if (token == _registeredToken)
+                return;
+            if (_registrationInFlight && token == _lastToken)
+                return;
 
             _lastToken = token;
-            _lastSentLocale = locale;
-            _lastSentTzOffsetMin = tzOffsetMin;
             _hasSentOnce = true;
-
-            string json = JsonUtility.ToJson(payload);
-            UnityMainThreadDispatcher.Instance.StartCoroutine(SendWithFailover(json, 0));
+            _registrationInFlight = true;
+            _lastRegistrationSucceeded = null;
+            UnityMainThreadDispatcher.Instance.StartCoroutine(RegisterTokenRoutine(token));
         }
 
         private static DevicePushRegisterRequest BuildPayload(string token, out string locale, out int tzOffsetMin)
@@ -373,50 +393,87 @@ namespace ZeyWinAds.Core
                 return;
 
             Logger.Log("Locale/timezone changed, re-registering push token.");
+            // Force past the "already registered" guard - the payload contents changed.
+            _registeredToken = null;
             RegisterToken(_lastToken);
         }
 
-        private static IEnumerator SendWithFailover(string json, int retryCount)
+        private static IEnumerator RegisterTokenRoutine(string token)
         {
-            string url = AdClient.Instance.GetEndpointByIndex(retryCount) + "/device/push";
+            int endpointCount = Mathf.Max(1, AdClient.Instance.EndpointCount);
+            int timeoutSeconds = AdClient.GetRequestTimeoutSeconds();
 
-            using (UnityWebRequest request = new UnityWebRequest(ProxyConfig.WrapUrl(url), "POST"))
+            for (int attempt = 0; ; attempt++)
             {
-                byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
-                request.uploadHandler = new UploadHandlerRaw(bodyRaw);
-                request.downloadHandler = new DownloadHandlerBuffer();
-                request.SetRequestHeader("Content-Type", "application/json");
-                ProxyConfig.AddAuthHeader(request);
-                request.timeout = 3;
-                yield return request.SendWebRequest();
+                // Rebuild the payload each attempt so a locale change, or a GAID that
+                // only resolved after the first try (it's fetched on a background
+                // thread), is picked up on the retry.
+                DevicePushRegisterRequest payload = BuildPayload(token, out string locale, out int tzOffsetMin);
+                _lastSentLocale = locale;
+                _lastSentTzOffsetMin = tzOffsetMin;
+                string json = JsonUtility.ToJson(payload);
 
-                if (request.result == UnityWebRequest.Result.Success)
+                bool rejected = false;
+
+                for (int endpoint = 0; endpoint < endpointCount; endpoint++)
                 {
-                    try
-                    {
-                        var response = JsonUtility.FromJson<DevicePushRegisterResponse>(request.downloadHandler.text);
-                        if (response != null && response.success)
-                            Logger.Debug("Push token registered.");
-                        else
-                            Logger.Warn("Push token registration rejected: {0}", response?.error ?? "unknown error");
-                    }
-                    catch
-                    {
-                        Logger.Debug("Push token registered (response parse skipped).");
-                    }
+                    string url = AdClient.Instance.GetEndpointByIndex(endpoint) + "/device/push";
 
+                    using (UnityWebRequest request = new UnityWebRequest(ProxyConfig.WrapUrl(url), "POST"))
+                    {
+                        byte[] bodyRaw = Encoding.UTF8.GetBytes(json);
+                        request.uploadHandler = new UploadHandlerRaw(bodyRaw);
+                        request.downloadHandler = new DownloadHandlerBuffer();
+                        request.SetRequestHeader("Content-Type", "application/json");
+                        ProxyConfig.AddAuthHeader(request);
+                        request.timeout = timeoutSeconds;
+                        yield return request.SendWebRequest();
+
+                        if (request.result == UnityWebRequest.Result.Success)
+                        {
+                            DevicePushRegisterResponse response = null;
+                            try { response = JsonUtility.FromJson<DevicePushRegisterResponse>(request.downloadHandler.text); }
+                            catch { /* non-JSON 2xx - treat as accepted */ }
+
+                            if (response == null || response.success)
+                            {
+                                Logger.Log("Push token registration succeeded.");
+                                _registeredToken = token;
+                                _lastRegistrationSucceeded = true;
+                                _registrationInFlight = false;
+                                yield break;
+                            }
+
+                            // Explicit server rejection is a definitive "no", not a
+                            // transient failure - stop, don't burn retries on it.
+                            Logger.Warn("Push token registration rejected: {0}", response.error ?? "unknown error");
+                            rejected = true;
+                            break;
+                        }
+
+                        Logger.Warn("Push token registration attempt failed: {0}", request.error);
+                    }
+                }
+
+                if (rejected)
+                {
+                    _lastRegistrationSucceeded = false;
+                    _registrationInFlight = false;
                     yield break;
                 }
 
-                if (retryCount + 1 < AdClient.Instance.EndpointCount)
+                if (attempt >= RegistrationRetryBackoffSeconds.Length)
                 {
-                    Logger.Warn("Push token registration failed on endpoint {0}, trying next...", retryCount);
-                    yield return SendWithFailover(json, retryCount + 1);
+                    Logger.Warn("Push token registration gave up after {0} attempts.", attempt + 1);
+                    _lastRegistrationSucceeded = false;
+                    _registrationInFlight = false;
+                    yield break;
                 }
-                else
-                {
-                    Logger.Warn("Push token registration failed on all endpoints: {0}", request.error);
-                }
+
+                float delay = RegistrationRetryBackoffSeconds[attempt];
+                Logger.Log("Push token registration retry {0} of {1} in {2}s.",
+                    attempt + 1, RegistrationRetryBackoffSeconds.Length, delay);
+                yield return new WaitForSecondsRealtime(delay);
             }
         }
 
@@ -455,6 +512,9 @@ namespace ZeyWinAds.Core
             _lastSentLocale = null;
             _lastSentTzOffsetMin = 0;
             _hasSentOnce = false;
+            _registrationInFlight = false;
+            _registeredToken = null;
+            _lastRegistrationSucceeded = null;
             _initializeStarted = false;
         }
 

@@ -36,6 +36,7 @@ namespace ZeyWinAds.Tests.Runtime
     {
         private const float PermissionBudgetSeconds = 20f;
         private const float TokenBudgetSeconds = 20f;
+        private const float RegistrationBudgetSeconds = 45f;
         private static readonly WaitForSecondsRealtime PollInterval = new WaitForSecondsRealtime(0.5f);
 
         [UnityTest]
@@ -106,6 +107,43 @@ namespace ZeyWinAds.Tests.Runtime
             Assert.IsFalse(string.IsNullOrEmpty(token), "FCM token was null/empty.");
 #else
             Debug.Log("[ZeyWinAds QA] FcmTokenReceivedWithinBudget: skipped (not Android/iOS).");
+            yield break;
+#endif
+        }
+
+        // The third checkpoint on the same feature: once an FCM token exists, the SDK POSTs it
+        // to the ZeyWin backend (FirebaseMessagingService.RegisterTokenRoutine → /device/push)
+        // so server-originated pushes can target this device. Read the outcome via
+        // ZeyWinAds.LastPushTokenRegistered — the SDK's own public wrapper — which is null while
+        // the POST is in flight / retrying, true once the backend accepted it, false if it was
+        // rejected or ran out of retries. A null that never resolves within budget is itself a
+        // failure: the request never completed (typically network / endpoint unreachable).
+        [UnityTest]
+        [Order(2)]
+        public IEnumerator PushTokenRegisteredWithBackendWithinBudget()
+        {
+#if UNITY_ANDROID || UNITY_IOS
+            var budget = new QaBudget(RegistrationBudgetSeconds);
+
+            bool? registered = global::ZeyWinAds.ZeyWinAds.LastPushTokenRegistered;
+            while (registered == null)
+            {
+                if (budget.Expired)
+                {
+                    Assert.Fail($"Push token was not registered with the backend within {budget.Describe()} " +
+                        "(LastPushTokenRegistered stayed null — the /device/push POST never completed). " +
+                        "Check network reachability and FirebaseMessagingService.RegisterTokenRoutine.");
+                }
+                yield return PollInterval;
+                registered = global::ZeyWinAds.ZeyWinAds.LastPushTokenRegistered;
+            }
+
+            Debug.Log($"[ZeyWinAds QA] Push token backend registration result: {registered.Value}.");
+            Assert.IsTrue(registered.Value,
+                "The backend rejected the push-token registration, or it failed after every retry. " +
+                "See the '[ZeyWinAds] Push token registration ...' warnings in the device log.");
+#else
+            Debug.Log("[ZeyWinAds QA] PushTokenRegisteredWithBackendWithinBudget: skipped (not Android/iOS).");
             yield break;
 #endif
         }
