@@ -2,6 +2,7 @@ using System;
 using NUnit.Framework.Interfaces;
 using UnityEngine;
 using UnityEngine.TestRunner;
+using ZeyWinAds.Core;
 
 [assembly: TestRunCallback(typeof(ZeyWinAds.Tests.Runtime.QaLogGuard))]
 
@@ -40,12 +41,21 @@ namespace ZeyWinAds.Tests.Runtime
     {
         private static Shim _shim;
 
-        // A device test player exists only to run this suite, so install at the earliest possible
-        // point — before SDK init — to also cover an error logged during startup, before
-        // RunStarted fires.
+        // A device test player exists only to run this suite, so act at the earliest possible
+        // point — before SDK init:
+        //   * install the log shim, to also cover an error logged during startup (before
+        //     RunStarted fires);
+        //   * mark the test run in progress, so AdAudioController suppresses the Offer WebView
+        //     game-pause (Time.timeScale = 0) even if the force offer opens during startup — that
+        //     pause freezes the on-device result sender and the Editor Test Runner gets nothing.
 #if !UNITY_EDITOR
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
-        private static void InstallEarly() => Install();
+        private static void InstallEarly()
+        {
+            QaTestRun.InProgress = true;
+            Debug.Log("[ZeyWinAds QA] device test player boot — test run marked in progress; Offer WebView game-pause suppressed.");
+            Install();
+        }
 #endif
 
         internal static void Install()
@@ -65,8 +75,17 @@ namespace ZeyWinAds.Tests.Runtime
             _shim = null;
         }
 
-        public void RunStarted(ITest testsToRun) => Install();
-        public void RunFinished(ITestResult testResults) => Uninstall();
+        public void RunStarted(ITest testsToRun)
+        {
+            QaTestRun.InProgress = true;
+            Install();
+        }
+
+        public void RunFinished(ITestResult testResults)
+        {
+            QaTestRun.InProgress = false;
+            Uninstall();
+        }
         public void TestStarted(ITest test) { }
         public void TestFinished(ITestResult result) { }
 
