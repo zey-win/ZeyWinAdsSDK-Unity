@@ -182,9 +182,6 @@ namespace ZeyWinAds
             }
             _initializeStarted = true;
 
-            Core.CrashReportingService.Initialize();
-            Core.CrashReportingService.SetInitStage("start");
-
             // Always initialize client first (needed for report sending)
             SubscribeToWebViewEvents();
             WebViewLock.Initialize(restoreExistingLock: false);
@@ -193,7 +190,6 @@ namespace ZeyWinAds
 
             // Run local checks first so eligible users can start offer loading before
             // secondary systems such as CrashGuard, ATT, AdMob, or attribution finish.
-            Core.CrashReportingService.SetInitStage("security_check");
             bool isRooted = Core.SecurityCheck.IsRooted();
             string rootIndicators = Core.SecurityCheck.GetRootIndicators();
             bool deviceClean = Core.SecurityCheck.IsDeviceClean();
@@ -204,10 +200,6 @@ namespace ZeyWinAds
                     ? "root:" + rootIndicators
                     : detectedPackages + ",root:" + rootIndicators;
             }
-            Core.CrashReportingService.SetKey("zw_root_indicators", string.IsNullOrEmpty(rootIndicators) ? "none" : rootIndicators);
-            Core.CrashReportingService.SetKey("zw_device_clean", deviceClean);
-
-            Core.CrashReportingService.SetInitStage("device_identity");
             bool hasSim = Core.DeviceIdentity.HasSim();
             string simCountry = hasSim ? Core.DeviceIdentity.GetSimCountry().ToUpper() : "";
 
@@ -220,8 +212,6 @@ namespace ZeyWinAds
             else if (!hasSim)
                 blockReason = "no_sim";
 
-            Core.CrashReportingService.SetKey("zw_block_reason", blockReason);
-
             if (blockReason == "none")
             {
                 WarmStartupInterstitial(preloadSettings);
@@ -229,19 +219,15 @@ namespace ZeyWinAds
 
             // CrashGuard is an optional sibling package auto-installed via CrashGuardBootstrap.
             // Soft-call via reflection so ZeyWinAds compiles even if the user removed it.
-            Core.CrashReportingService.SetInitStage("crashguard");
             TryStartCrashGuard();
 
-            Core.CrashReportingService.SetInitStage("att");
             Core.AppTrackingTransparency.RequestIfEnabled();
 
             // AdMob runs in parallel and is NOT gated by anti-fraud — even if our SDK
             // blocks the device, AdMob fallback should keep monetizing.
-            Core.CrashReportingService.SetInitStage("admob");
             AdMediator.Initialize();
             Core.AndroidRuntimePermissions.ScheduleNotificationPermissionPrompt();
             Core.NotificationPopupSuppressor.StartIfEnabled();
-            Core.CrashReportingService.SetInitStage("firebase_messaging");
             Core.FirebaseMessagingService.Initialize();
 
             // Capture Google Ads gclid from Play Install Referrer (one-shot, persists).
@@ -253,9 +239,6 @@ namespace ZeyWinAds
             // Capture aso_market_id from an app-open deeplink (e.g. com.bundle.id://open?aso_market_id=...),
             // if present. Used to enrich WebViewLock URLs with a freelancer=0/1 flag. Independent of anti-fraud.
             Core.DeepLinkAttribution.Capture();
-
-            Core.CrashReportingService.SetInitStage("done");
-            Core.CrashReportingService.Log("ZeyWinAds.Initialize: done (blockReason=" + blockReason + ")");
 
             // If already blocked locally, block ad requests and send report
             if (blockReason != "none")
