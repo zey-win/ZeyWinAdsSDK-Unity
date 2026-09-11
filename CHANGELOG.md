@@ -2,6 +2,30 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.63
+
+- Fixed the cold-start `SIGABRT` (`JNI DETECTED ERROR IN APPLICATION: jlr_method == null`) seen on
+  memory-starved Android devices during `ZeyWinAds.Initialize`. `AndroidJavaObject.CallStatic<T>`
+  resolves methods via a reflective `Class.getMethods()` walk converted through
+  `AndroidJNI.FromReflectedMethod`; on a low-RAM cold start that walk can come back empty even
+  though the method exists, and Unity 6 forwards the null into `FromReflectedMethod`, which ART
+  aborts on unconditionally — uncatchable from C#. Added `AndroidJniSafe`
+  (`Runtime/Core/AndroidJniSafe.cs`), which resolves via raw `AndroidJNI.GetStaticMethodID` (no
+  reflection, no `FromReflectedMethod`) and degrades to a fallback instead of crashing. Routed
+  `SecurityCheck`, `DeviceIdentity`, `GoogleAdsAttribution`, `MotionCollector`, and
+  `ReferralManager`'s early static calls through it. Also deferred `ZeyWinAds.Initialize` until
+  the first scene has loaded (+2 warmup frames) instead of running at `BeforeSceneLoad`, since
+  AdMob's own internal reflection hits the same abort and can only be avoided by timing.
+- Fixed a visual regression introduced by the above timing change: with `Initialize` deferred,
+  Unity's `SurfaceView` could render before the native startup loader's hide/show decision landed,
+  flashing the raw game scene through the loader. The loader was a plain `View` added into the
+  Activity's own content `FrameLayout`, relying on `elevation`/`translationZ`/`bringToFront()` for
+  Z-order — conventions a `SurfaceView` isn't obligated to respect. `ZeyWinAdsStartupOverlay` now
+  hosts the same loader view in its own fullscreen, non-cancelable `Dialog` window instead, which
+  gets an OS-enforced Z-order guarantee over the Activity's window regardless of render timing. The
+  new window also explicitly hides the status/navigation bars to match the app's existing
+  fullscreen mode, since a fresh window doesn't inherit that state on its own.
+
 ## 3.9.62
 
 - Restored `CrashReportingService` (`Runtime/Core/CrashReportingService.cs`) and the `zw_*`
