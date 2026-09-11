@@ -327,7 +327,24 @@ void _ZeyWinAds_ShowHtmlAd(const char* url, const char* gameObjectName) {
                 break;
             }
         }
-        UIWindow *keyWindow = windowScene.windows.firstObject;
+        // `windowScene.windows` order is not documented/guaranteed to be
+        // front-to-back or creation order, and the SDK's own startup-loader
+        // overlay (ZeyWinAdsStartupOverlay.mm) now adds a second UIWindow to
+        // this scene. Picking `.firstObject` could resolve to that overlay
+        // window instead of the app's real window — presenting the ad as a
+        // modal child of the overlay window, which then vanishes along with
+        // it the next time the loader is hidden. The overlay window is never
+        // made key, so find the actual key window explicitly instead.
+        UIWindow *keyWindow = nil;
+        for (UIWindow *window in windowScene.windows) {
+            if (window.isKeyWindow) {
+                keyWindow = window;
+                break;
+            }
+        }
+        if (!keyWindow) {
+            keyWindow = windowScene.windows.firstObject;
+        }
         if (!keyWindow) {
             // Fallback for iOS < 13
 #pragma clang diagnostic push

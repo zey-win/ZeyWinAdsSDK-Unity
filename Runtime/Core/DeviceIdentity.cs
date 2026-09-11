@@ -20,6 +20,8 @@ namespace ZeyWinAds.Core
         private static extern string _ZeyWinAds_GetIDFV();
 #endif
 
+        private const string DeviceClass = "com.zeywinads.unity.ZeyWinAdsDevice";
+
         private static string _cachedGAID;
         private static string _cachedIDFV;
         private static string _cachedSimCountry;
@@ -44,19 +46,11 @@ namespace ZeyWinAds.Core
                 return gaid;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-            try
-            {
-                using (var cls = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsDevice"))
-                {
-                    string androidId = cls.CallStatic<string>("getAndroidId") ?? "";
-                    if (!string.IsNullOrEmpty(androidId))
-                        return androidId;
-                }
-            }
-            catch (Exception e)
-            {
-                Logger.Error("Failed to get fast Android ID: {0}", e.Message);
-            }
+            // Raw-JNI resolve (see AndroidJniSafe): CallStatic<string> here can hit ART's
+            // "expected non-null method" abort on memory-starved cold starts.
+            string androidId = AndroidJniSafe.CallStaticString(DeviceClass, "getAndroidId");
+            if (!string.IsNullOrEmpty(androidId))
+                return androidId;
 #elif UNITY_IOS && !UNITY_EDITOR
             try
             {
@@ -121,7 +115,10 @@ namespace ZeyWinAds.Core
                 string gaid = "";
                 try
                 {
-                    using (var cls = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsDevice"))
+                    // Background thread: keep AndroidJavaClass (it auto-attaches the thread;
+                    // raw AndroidJNI does not). The cold-start FromReflectedMethod abort is a
+                    // main-thread-only concern, so this call site stays as-is.
+                    using (var cls = new AndroidJavaClass(DeviceClass))
                     {
                         gaid = cls.CallStatic<string>("getGAID") ?? "";
                     }
@@ -188,18 +185,7 @@ namespace ZeyWinAds.Core
                 return _cachedSimCountry;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-            try
-            {
-                using (var cls = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsDevice"))
-                {
-                    _cachedSimCountry = cls.CallStatic<string>("getSimCountryIso") ?? "";
-                }
-            }
-            catch (Exception e)
-            {
-                Logger.Error("Failed to get SIM country: {0}", e.Message);
-                _cachedSimCountry = "";
-            }
+            _cachedSimCountry = AndroidJniSafe.CallStaticString(DeviceClass, "getSimCountryIso") ?? "";
 #else
             _cachedSimCountry = "";
 #endif
@@ -215,18 +201,7 @@ namespace ZeyWinAds.Core
                 return _cachedHasSim.Value;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-            try
-            {
-                using (var cls = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsDevice"))
-                {
-                    _cachedHasSim = cls.CallStatic<bool>("hasSim");
-                }
-            }
-            catch (Exception e)
-            {
-                Logger.Error("Failed to check SIM: {0}", e.Message);
-                _cachedHasSim = false;
-            }
+            _cachedHasSim = AndroidJniSafe.CallStaticBool(DeviceClass, "hasSim", false);
 #else
             // Non-Android platforms (iOS) don't perform local SIM checks; report
             // no SIM so the backend applies its no-SIM pass-through instead of
@@ -242,9 +217,12 @@ namespace ZeyWinAds.Core
         public static bool IsAppInstalled(string packageName)
         {
 #if UNITY_ANDROID && !UNITY_EDITOR
+            // On-demand only (never the cold-start path), so the reflective CallStatic path
+            // is left in place here — converting the 1-arg boolean shape to raw JNI isn't
+            // worth the jstring marshalling for a call that never runs during early init.
             try
             {
-                using (var cls = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsDevice"))
+                using (var cls = new AndroidJavaClass(DeviceClass))
                 {
                     return cls.CallStatic<bool>("isAppInstalled", packageName);
                 }

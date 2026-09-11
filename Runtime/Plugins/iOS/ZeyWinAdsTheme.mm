@@ -11,7 +11,21 @@ extern "C" {
             for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
                 if (scene.activationState == UISceneActivationStateForegroundActive &&
                     [scene isKindOfClass:[UIWindowScene class]]) {
-                    keyWindow = ((UIWindowScene *)scene).windows.firstObject;
+                    // Don't just take .firstObject — the SDK's startup-loader
+                    // overlay (ZeyWinAdsStartupOverlay.mm) adds a second
+                    // UIWindow to this scene, and array order isn't
+                    // guaranteed to put the app's real window first. That
+                    // window is never made key, so prefer the actual key
+                    // window explicitly.
+                    for (UIWindow *window in ((UIWindowScene *)scene).windows) {
+                        if (window.isKeyWindow) {
+                            keyWindow = window;
+                            break;
+                        }
+                    }
+                    if (!keyWindow) {
+                        keyWindow = ((UIWindowScene *)scene).windows.firstObject;
+                    }
                     break;
                 }
             }

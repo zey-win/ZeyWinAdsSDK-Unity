@@ -1,7 +1,9 @@
 using System.IO;
 using UnityEditor;
-using UnityEditor.Android;
 using UnityEngine;
+#if UNITY_ANDROID
+using UnityEditor.Android;
+#endif
 
 namespace ZeyWinAds.Editor.QATests
 {
@@ -31,6 +33,14 @@ namespace ZeyWinAds.Editor.QATests
         // Returns null when compliant, otherwise a human-readable error message.
         public static string ValidateAndroidIcons()
         {
+#if !UNITY_ANDROID
+            // AndroidPlatformIconKind ships in the Android editor extension module, which
+            // isn't installed on iOS-only build machines. This check only ever runs for
+            // Android builds anyway (QaTestsPreProcessor gates on BuildTarget.Android, and
+            // LauncherIconTests auto-passes without a staged factory config), so treat it
+            // as vacuously compliant here rather than failing to compile.
+            return null;
+#else
             var factoryConfig = Path.Combine(Directory.GetCurrentDirectory(), "factory/factory-config.json");
             if (!File.Exists(factoryConfig))
                 return null; // not a factory build — nothing to prove
@@ -71,6 +81,7 @@ namespace ZeyWinAds.Editor.QATests
             }
 
             return null;
+#endif
         }
     }
 }

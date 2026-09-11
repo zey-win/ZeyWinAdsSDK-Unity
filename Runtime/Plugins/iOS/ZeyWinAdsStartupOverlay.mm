@@ -414,10 +414,41 @@ static UIImage *ZeyWinAdsMoneyImage(void) {
 
 #pragma mark - Bridge (mirrors ZeyWinAdsStartupOverlay.java)
 
+// Hosts prefersStatusBarHidden for the overlay's dedicated window — see
+// kZeyWinAdsOverlayWindowLevel below for why the overlay gets its own window.
+@interface ZeyWinAdsLoadingOverlayViewController : UIViewController
+@end
+
+@implementation ZeyWinAdsLoadingOverlayViewController
+
+- (BOOL)prefersStatusBarHidden {
+    return YES;
+}
+
+- (BOOL)prefersHomeIndicatorAutoHidden {
+    return YES;
+}
+
+@end
+
 static ZeyWinAdsLoadingOverlayView *_zeyWinAdsOverlayView = nil;
+static UIWindow *_zeyWinAdsOverlayWindow = nil;
 static NSTimer *_zeyWinAdsAutoDismissTimer = nil;
 
-static UIWindow *ZeyWinAdsStartupOverlayKeyWindow(void) {
+// Mirrors ZeyWinAdsStartupOverlay.java's move from a same-window View (relying
+// on elevation/bringToFront, which Unity's SurfaceView on Android isn't
+// obligated to respect once it has a real frame to show) to hosting the
+// loader in its own Dialog window, whose Z-order above the Activity's window
+// is enforced by the OS window manager rather than by same-window drawing
+// order. Unity's own root view here is likewise just a subview of the app's
+// main UIWindow, so adding the overlay as a sibling subview of that same
+// window was racing Unity's Metal/GL view exactly the way the Android View
+// raced the SurfaceView. Giving the overlay its own UIWindow at a level above
+// the app's main window (UIWindowLevelNormal) gets the same OS-enforced,
+// render-timing-independent guarantee as the Android Dialog fix.
+static const UIWindowLevel kZeyWinAdsOverlayWindowLevel = UIWindowLevelAlert + 1.0;
+
+static UIWindowScene *ZeyWinAdsStartupOverlayActiveScene(void) {
     UIWindowScene *windowScene = nil;
     for (UIScene *scene in [UIApplication sharedApplication].connectedScenes) {
         if (scene.activationState == UISceneActivationStateForegroundActive &&
@@ -426,14 +457,23 @@ static UIWindow *ZeyWinAdsStartupOverlayKeyWindow(void) {
             break;
         }
     }
-    UIWindow *keyWindow = windowScene.windows.firstObject;
-    if (!keyWindow) {
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Wdeprecated-declarations"
-        keyWindow = [UIApplication sharedApplication].keyWindow;
-#pragma clang diagnostic pop
-    }
-    return keyWindow;
+    return windowScene;
+}
+
+static CGRect ZeyWinAdsStartupOverlayBounds(UIWindowScene *scene) {
+    return scene ? scene.coordinateSpace.bounds : [UIScreen mainScreen].bounds;
+}
+
+static UIWindow *ZeyWinAdsStartupOverlayCreateWindow(UIWindowScene *scene) {
+    UIWindow *window = scene
+        ? [[UIWindow alloc] initWithWindowScene:scene]
+        : [[UIWindow alloc] initWithFrame:ZeyWinAdsStartupOverlayBounds(nil)];
+    window.frame = ZeyWinAdsStartupOverlayBounds(scene);
+    window.windowLevel = kZeyWinAdsOverlayWindowLevel;
+    window.backgroundColor = [UIColor clearColor];
+    window.rootViewController = [[ZeyWinAdsLoadingOverlayViewController alloc] init];
+    window.userInteractionEnabled = YES;
+    return window;
 }
 
 // Mirrors ZeyWinAdsStartupOverlay.java's `dismissed` flag: once explicitly
@@ -471,29 +511,39 @@ static void ZeyWinAdsStartupOverlayScheduleAutoDismiss(void) {
 }
 
 static void ZeyWinAdsStartupOverlayAttach(void) {
-    UIWindow *window = ZeyWinAdsStartupOverlayKeyWindow();
-    if (!window) {
+    UIWindowScene *scene = ZeyWinAdsStartupOverlayActiveScene();
+    if (!scene && !_zeyWinAdsOverlayWindow) {
+        // No foreground scene yet and no existing overlay window to reuse —
+        // nothing to attach to (mirrors Android bailing when the Activity
+        // isn't available/finishing).
         return;
     }
 
     _zeyWinAdsOverlayEverShown = YES;
 
     if (!_zeyWinAdsOverlayView) {
-        _zeyWinAdsOverlayView = [[ZeyWinAdsLoadingOverlayView alloc] initWithFrame:window.bounds];
+        _zeyWinAdsOverlayView = [[ZeyWinAdsLoadingOverlayView alloc] initWithFrame:ZeyWinAdsStartupOverlayBounds(scene)];
     }
+
+    if (!_zeyWinAdsOverlayWindow) {
+        _zeyWinAdsOverlayWindow = ZeyWinAdsStartupOverlayCreateWindow(scene);
+    }
+
+    UIView *host = _zeyWinAdsOverlayWindow.rootViewController.view;
 
     // Only a genuine fresh attach (first show, or re-parented to a new
     // window) restarts the progress animation — matches Android's
     // onAttachedToWindow-gated restart. A mere resume (e.g. after a native
     // permission dialog) must not visibly reset progress back to 0%.
-    if (_zeyWinAdsOverlayView.superview != window) {
+    if (_zeyWinAdsOverlayView.superview != host) {
         [_zeyWinAdsOverlayView removeFromSuperview];
-        _zeyWinAdsOverlayView.frame = window.bounds;
-        [window addSubview:_zeyWinAdsOverlayView];
+        _zeyWinAdsOverlayView.frame = host.bounds;
+        _zeyWinAdsOverlayView.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [host addSubview:_zeyWinAdsOverlayView];
         [_zeyWinAdsOverlayView startAnimating];
     }
 
-    [window bringSubviewToFront:_zeyWinAdsOverlayView];
+    _zeyWinAdsOverlayWindow.hidden = NO;
 
     ZeyWinAdsStartupOverlayScheduleAutoDismiss();
 }
@@ -507,6 +557,9 @@ static void ZeyWinAdsStartupOverlayHide(void) {
 
     [_zeyWinAdsOverlayView stopAnimating];
     [_zeyWinAdsOverlayView removeFromSuperview];
+
+    _zeyWinAdsOverlayWindow.hidden = YES;
+    _zeyWinAdsOverlayWindow = nil;
 }
 
 static void ZeyWinAdsStartupOverlayShow(void) {
