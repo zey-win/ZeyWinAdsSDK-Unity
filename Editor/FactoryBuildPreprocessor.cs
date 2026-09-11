@@ -3,12 +3,19 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using Unity.Android.Types;
 using UnityEditor;
-using UnityEditor.Android;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
+#if UNITY_ANDROID
+// The Android editor extension module is not installed on iOS-only build
+// machines (the BlackJack ad-hoc CI runner, dev Macs without the Android
+// module). Everything it provides — Unity.Android.Types.DebugSymbolLevel,
+// UnityEditor.Android.UserBuildSettings, UnityEditor.AndroidPlatformIconKind —
+// is used only on the Android branch below, so it all lives behind this guard.
+using Unity.Android.Types;
+using UnityEditor.Android;
+#endif
 
 namespace ZeyWinAds.Editor
 {
@@ -210,7 +217,9 @@ namespace ZeyWinAds.Editor
                 // frames — CI uploads the resulting <product>-<version>-v<code>.symbols.zip via
                 // `firebase crashlytics:symbols:upload`. SymbolTable keeps the package small;
                 // Full would add line-level info at a much larger size.
+#if UNITY_ANDROID
                 UserBuildSettings.DebugSymbols.level = DebugSymbolLevel.SymbolTable;
+#endif
             }
             // iOS symbol/arch settings aren't wired here — Xcode's own build settings (and
             // AdMobBuildPostprocessor's Info.plist writes) cover what's needed for BlackJack today.
@@ -256,9 +265,11 @@ namespace ZeyWinAds.Editor
                     // which is effectively extinct. So Adaptive being auto-derived is what
                     // actually causes the "small icon, white bg" symptom on real round-icon
                     // phones even after Legacy/Round are fixed.
+#if UNITY_ANDROID
                     SetAndroidIcon(AndroidPlatformIconKind.Legacy, icon);
                     SetAndroidIcon(AndroidPlatformIconKind.Round, icon);
                     SetAndroidIcon(AndroidPlatformIconKind.Adaptive, icon);
+#endif
                 }
             }
 
@@ -298,6 +309,7 @@ namespace ZeyWinAds.Editor
             }
         }
 
+#if UNITY_ANDROID
         private static void SetAndroidIcon(PlatformIconKind kind, Texture2D icon)
         {
             var slots = PlayerSettings.GetPlatformIcons(BuildTargetGroup.Android, kind);
@@ -305,6 +317,7 @@ namespace ZeyWinAds.Editor
                 slot.SetTextures(Enumerable.Repeat(icon, slot.maxLayerCount).ToArray());
             PlayerSettings.SetPlatformIcons(BuildTargetGroup.Android, kind, slots);
         }
+#endif
 
         private static void ApplySdkConfig(SdkConfig sdk, string cfgPath)
         {
