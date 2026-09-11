@@ -32,20 +32,8 @@ namespace ZeyWinAds.Core
                 return _isClean.Value;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-            try
-            {
-                using (var cls = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsSecurityCheck"))
-                {
-                    _detectedPackages = cls.CallStatic<string>("getDetectedPackages") ?? "";
-                    _isClean = string.IsNullOrEmpty(_detectedPackages);
-                }
-            }
-            catch (System.Exception e)
-            {
-                Logger.Error("Security check failed: {0}", e.Message);
-                _isClean = true; // Don't block on error
-                _detectedPackages = "";
-            }
+            _detectedPackages = CallStaticStringSafe("getDetectedPackages") ?? "";
+            _isClean = string.IsNullOrEmpty(_detectedPackages);
 #elif UNITY_IOS && !UNITY_EDITOR
             try
             {
@@ -85,20 +73,8 @@ namespace ZeyWinAds.Core
                 return _isRooted.Value;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-            try
-            {
-                using (var cls = new AndroidJavaClass("com.zeywinads.unity.ZeyWinAdsSecurityCheck"))
-                {
-                    _rootIndicators = cls.CallStatic<string>("getRootIndicators") ?? "";
-                    _isRooted = !string.IsNullOrEmpty(_rootIndicators);
-                }
-            }
-            catch (System.Exception e)
-            {
-                Logger.Error("Root check failed: {0}", e.Message);
-                _isRooted = false;
-                _rootIndicators = "";
-            }
+            _rootIndicators = CallStaticStringSafe("getRootIndicators") ?? "";
+            _isRooted = !string.IsNullOrEmpty(_rootIndicators);
 #elif UNITY_IOS && !UNITY_EDITOR
             try
             {
@@ -136,5 +112,81 @@ namespace ZeyWinAds.Core
             _detectedPackages = null;
             _rootIndicators = null;
         }
+
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private const string SecurityCheckClass = "com.zeywinads.unity.ZeyWinAdsSecurityCheck";
+
+        private static readonly jvalue[] NoArgs = new jvalue[0];
+
+        /// <summary>
+        /// Invokes a no-arg <c>static String</c> method on the native security-check
+        /// class through the raw JNI API, returning <c>null</c> on any failure.
+        ///
+        /// This deliberately avoids <see cref="AndroidJavaObject.CallStatic{T}"/> /
+        /// <c>AndroidJNIHelper.GetMethodID</c>. That path resolves the method by walking
+        /// <c>jclass.getMethods()</c> reflectively; when it comes back empty — which it
+        /// does on a memory-starved cold start / very early <c>RuntimeInitializeOnLoad</c>
+        /// on some OEM ROMs, even though the method is present in the class — Unity 6
+        /// forwards a null <c>java.lang.reflect.Method</c> into
+        /// <c>AndroidJNI.FromReflectedMethod</c> and ART aborts the whole process with
+        /// "JNI DETECTED ERROR IN APPLICATION: jlr_method == null" before the first scene.
+        /// That abort is not catchable by the surrounding try/catch. The raw
+        /// <c>GetStaticMethodID</c> path instead returns a null id plus a pending Java
+        /// exception, which we clear and treat as "check unavailable -&gt; assume clean".
+        /// </summary>
+        private static string CallStaticStringSafe(string methodName)
+        {
+            try
+            {
+                using (var cls = new AndroidJavaClass(SecurityCheckClass))
+                {
+                    System.IntPtr rawClass = cls.GetRawClass();
+                    if (rawClass == System.IntPtr.Zero)
+                        return null;
+
+                    System.IntPtr methodId =
+                        AndroidJNI.GetStaticMethodID(rawClass, methodName, "()Ljava/lang/String;");
+                    if (ClearPendingException() || methodId == System.IntPtr.Zero)
+                    {
+                        Logger.Error("SecurityCheck: {0}.{1} could not be resolved in this process", SecurityCheckClass, methodName);
+                        return null;
+                    }
+
+                    string result = AndroidJNI.CallStaticStringMethod(rawClass, methodId, NoArgs);
+                    if (ClearPendingException())
+                        return null;
+
+                    return result;
+                }
+            }
+            catch (System.Exception e)
+            {
+                ClearPendingException();
+                Logger.Error("SecurityCheck: {0} call failed: {1}", methodName, e.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Clears any pending JNI exception. Returns true if one was pending.
+        /// </summary>
+        private static bool ClearPendingException()
+        {
+            try
+            {
+                if (AndroidJNI.ExceptionOccurred() != System.IntPtr.Zero)
+                {
+                    AndroidJNI.ExceptionClear();
+                    return true;
+                }
+            }
+            catch (System.Exception)
+            {
+                // AndroidJNI not available on this thread — nothing we can do.
+            }
+
+            return false;
+        }
+#endif
     }
 }

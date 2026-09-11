@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using UnityEngine;
+using UnityEngine.SceneManagement;
 using ZeyWinAds.Ads;
 using ZeyWinAds.Core;
 using ZeyWinAds.Mediation;
@@ -191,6 +192,49 @@ namespace ZeyWinAds
             }
             _initializeStarted = true;
 
+            // Defer the real init until the first scene has loaded and the engine has
+            // rendered a few frames. InitializeCore reaches Java classes via reflective
+            // method lookups - our own com.zeywinads.unity.* helpers now go through
+            // AndroidJniSafe (raw GetStaticMethodID, immune), but AdMob / Firebase /
+            // CrashGuard reach the native layer through the GMA plugin's own
+            // AndroidJavaObject.CallStatic<T> and Firebase's managed reflection, which we
+            // can't reroute. Running those from [RuntimeInitializeOnLoadMethod
+            // (BeforeSceneLoad)] - before the first scene, while ART is still verifying DEX
+            // and Play Services Dynamite modules aren't loaded - is what triggers the
+            // uncatchable "FromReflectedMethod / jlr_method == null" SIGABRT at
+            // zw_init_stage=admob on cold starts.
+            //
+            // KNOWN TRADE-OFF (reverted back to this on purpose - see git history / session
+            // notes): deferring the WHOLE block, including the eligibility/referral flow that
+            // drives HideStartupLoading()/the WebView lock, pushes that decision out until
+            // after the scene has rendered - so on some devices the game is briefly visible
+            // before the loader/WebView settle. The split version that kept the
+            // eligibility/referral flow synchronous (to fix that) still crashed, so this is
+            // back to the version that tested crash-clean; re-attempt the loader-timing fix
+            // separately once this is confirmed stable again.
+            Core.UnityMainThreadDispatcher.Instance.StartCoroutine(
+                InitializeAfterFirstSceneRoutine(apiKey, preloadSettings));
+        }
+
+        // Frames to spin after the first scene reports loaded before InitializeCore touches
+        // any Java class - gives ART / Play Services Dynamite a moment past the cold-start
+        // crunch.
+        private const int InitializeWarmupFrames = 2;
+
+        private static System.Collections.IEnumerator InitializeAfterFirstSceneRoutine(
+            string apiKey, PreloadSettings preloadSettings)
+        {
+            while (!SceneManager.GetActiveScene().isLoaded)
+                yield return null;
+
+            for (int i = 0; i < InitializeWarmupFrames; i++)
+                yield return null;
+
+            InitializeCore(apiKey, preloadSettings);
+        }
+
+        private static void InitializeCore(string apiKey, PreloadSettings preloadSettings)
+        {
             Core.CrashReportingService.Initialize();
             Core.CrashReportingService.SetInitStage("start");
 
