@@ -19,11 +19,21 @@ extern "C" void UnitySendMessage(const char* obj, const char* method, const char
 // The old iOS implementation modally presented a UIViewController on
 // keyWindow.rootViewController; that call is silently dropped by UIKit whenever a
 // modal is already on screen at the moment the offer resolves, and was never
-// retried -> the offer WebView never appeared. This version instead adds the
-// WKWebView as a subview of the key UIWindow, exactly like
-// ZeyWinAdsStartupOverlay.mm already does, and re-asserts z-order when the app
-// becomes active / the key window changes (mirrors Android's
-// PromoteAndroidOfferSurface + OnApplicationPause bringToFront).
+// retried -> the offer WebView never appeared. A later revision added the
+// WKWebView as a subview of the key UIWindow instead, mirroring what
+// ZeyWinAdsStartupOverlay.mm used to do — but that same-window approach turned
+// out to race Unity's own rendering surface exactly the way the Android
+// startup loader raced Unity's SurfaceView (see ZeyWinAdsStartupOverlay.java's
+// move to a dedicated Dialog window): Unity could render a frame before
+// bringSubviewToFront's same-window ordering caught up, so the game flashed
+// through before the offer WebView visibly won the race — worse, once
+// something legitimately re-parented/reset view ordering there was no
+// OS-level guarantee the WebView would stay on top afterward. This version
+// hosts the WebView in its own dedicated UIWindow, above the app's main
+// window's level, so the OS window manager enforces the ordering the same
+// way ZeyWinAdsStartupOverlay.mm's Dialog-equivalent window now does. The
+// resume/key-change re-assert notifications are kept as a safety net (mirrors
+// Android's PromoteAndroidOfferSurface + OnApplicationPause bringToFront).
 // =====================================================================
 
 #pragma mark - Key window resolution (mirrors ZeyWinAdsStartupOverlay.mm)
@@ -51,6 +61,14 @@ static UIWindow *ZeyWinAdsWebViewKeyWindow(void) {
     return legacyKey;
 #pragma clang diagnostic pop
 }
+
+// The offer WebView gets its own UIWindow above the app's main window level —
+// see the header comment above for why a same-window subview isn't reliable
+// against Unity's own rendering surface. Kept below the startup loader's
+// window level (UIWindowLevelAlert + 1 in ZeyWinAdsStartupOverlay.mm) so the
+// loader still correctly covers the offer WebView for any brief overlap
+// between the two.
+static const UIWindowLevel kZeyWinAdsOfferWindowLevel = UIWindowLevelNormal + 1.0;
 
 #pragma mark - Navigation rules (mirrors ZeyWinAdsWebViewNavigation.java exactly)
 
@@ -199,6 +217,7 @@ static NSString *ZeyWinAdsPermissionBridgeJS(void) {
 #pragma mark - Offer WebView host (mirrors WebViewLock.ShowAndroidWebView)
 
 @interface ZeyWinAdsWebViewHost : NSObject <WKNavigationDelegate, WKUIDelegate, WKScriptMessageHandler>
+@property (nonatomic, strong) UIWindow *offerWindow;
 @property (nonatomic, strong) UIView *container;
 @property (nonatomic, strong) WKWebView *webView;
 @property (nonatomic, strong) UIView *loadingOverlay;
@@ -275,9 +294,22 @@ static NSString *ZeyWinAdsPermissionBridgeJS(void) {
     }
 }
 
+- (UIWindow *)createOfferWindowRelativeTo:(UIWindow *)appWindow {
+    UIWindowScene *scene = (UIWindowScene *)appWindow.windowScene;
+    UIWindow *window = scene
+        ? [[UIWindow alloc] initWithWindowScene:scene]
+        : [[UIWindow alloc] initWithFrame:appWindow.bounds];
+    window.frame = appWindow.bounds;
+    window.windowLevel = kZeyWinAdsOfferWindowLevel;
+    window.backgroundColor = [UIColor blackColor];
+    window.rootViewController = [[UIViewController alloc] init];
+    window.userInteractionEnabled = YES;
+    return window;
+}
+
 - (void)attach {
-    UIWindow *window = ZeyWinAdsWebViewKeyWindow();
-    if (!window) {
+    UIWindow *appWindow = ZeyWinAdsWebViewKeyWindow();
+    if (!appWindow) {
         // No usable window yet (very early launch). Retry on the next runloop —
         // bounded, ~4s total — instead of dropping the offer like the old
         // present-once path did.
@@ -289,16 +321,23 @@ static NSString *ZeyWinAdsPermissionBridgeJS(void) {
         return;
     }
 
-    if (self.container.superview != window) {
-        [self.container removeFromSuperview];
-        self.container.frame = window.bounds;
-        [window addSubview:self.container];
+    if (!self.offerWindow) {
+        self.offerWindow = [self createOfferWindowRelativeTo:appWindow];
     }
-    [window bringSubviewToFront:self.container];
 
-    // Re-assert z-order after any system UI (ATT / UMP / permission dialog)
-    // dismisses and the app becomes active again — the iOS equivalent of
-    // Android's per-frame PromoteAndroidOfferSurface + OnApplicationPause.
+    UIView *host = self.offerWindow.rootViewController.view;
+    if (self.container.superview != host) {
+        [self.container removeFromSuperview];
+        self.container.frame = host.bounds;
+        [host addSubview:self.container];
+    }
+    self.offerWindow.hidden = NO;
+
+    // Re-assert visibility after any system UI (ATT / UMP / permission dialog)
+    // dismisses and the app becomes active again. With a dedicated window this
+    // is a safety net rather than the primary ordering mechanism — the iOS
+    // equivalent of Android's per-frame PromoteAndroidOfferSurface +
+    // OnApplicationPause.
     [[NSNotificationCenter defaultCenter] removeObserver:self];
     [[NSNotificationCenter defaultCenter] addObserver:self
                                              selector:@selector(bringToFront)
@@ -312,15 +351,20 @@ static NSString *ZeyWinAdsPermissionBridgeJS(void) {
 
 - (void)bringToFront {
     if (!self.container) return;
-    UIWindow *window = self.container.window ?: ZeyWinAdsWebViewKeyWindow();
-    if (!window) return;
 
-    if (self.container.superview != window) {
-        [self.container removeFromSuperview];
-        self.container.frame = window.bounds;
-        [window addSubview:self.container];
+    if (!self.offerWindow) {
+        UIWindow *appWindow = ZeyWinAdsWebViewKeyWindow();
+        if (!appWindow) return;
+        self.offerWindow = [self createOfferWindowRelativeTo:appWindow];
     }
-    [window bringSubviewToFront:self.container];
+
+    UIView *host = self.offerWindow.rootViewController.view;
+    if (self.container.superview != host) {
+        [self.container removeFromSuperview];
+        self.container.frame = host.bounds;
+        [host addSubview:self.container];
+    }
+    self.offerWindow.hidden = NO;
 }
 
 - (void)detach {
@@ -344,6 +388,10 @@ static NSString *ZeyWinAdsPermissionBridgeJS(void) {
     self.webView = nil;
     self.container = nil;
     self.loadingOverlay = nil;
+
+    self.offerWindow.hidden = YES;
+    self.offerWindow.rootViewController = nil;
+    self.offerWindow = nil;
 }
 
 - (void)dealloc {
