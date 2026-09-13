@@ -118,6 +118,14 @@ namespace ZeyWinAds.Mediation
 
         public static bool IsAdMobInterstitialReady() => AdMobNetwork.IsInterstitialReady();
 
+        /// <summary>
+        /// True once an AdMob interstitial has successfully loaded at least once since app
+        /// start, independent of IsAdMobInterstitialReady() (which is deliberately false while a
+        /// ZeyWin surface is active). QA-facing — proves the fallback network itself works even
+        /// during a run where a real force offer stays open for the rest of the suite.
+        /// </summary>
+        public static bool WasAdMobInterstitialEverLoaded => AdMobNetwork.WasInterstitialEverLoaded;
+
         public static void ShowAdMobInterstitial(Action onClose)
         {
             if (IsZeyWinSurfaceActive)
@@ -156,6 +164,9 @@ namespace ZeyWinAds.Mediation
 
         public static bool IsAdMobRewardedReady() => AdMobNetwork.IsRewardedReady();
 
+        /// <summary>Same rationale as WasAdMobInterstitialEverLoaded, for Rewarded.</summary>
+        public static bool WasAdMobRewardedEverLoaded => AdMobNetwork.WasRewardedEverLoaded;
+
         public static void ShowAdMobRewarded(Action<int> onReward, Action onClose)
         {
             if (IsZeyWinSurfaceActive)
@@ -178,6 +189,9 @@ namespace ZeyWinAds.Mediation
         }
 
         public static bool IsAdMobBannerReady() => AdMobNetwork.IsBannerReady();
+
+        /// <summary>Same rationale as WasAdMobInterstitialEverLoaded, for Banner.</summary>
+        public static bool WasAdMobBannerEverLoaded => AdMobNetwork.WasBannerEverLoaded;
 
         /// <summary>
         /// Shows the AdMob banner. Returns false if the loaded banner is at a different

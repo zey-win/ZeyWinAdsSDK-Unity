@@ -9,8 +9,16 @@ namespace ZeyWinAds.Tests.Runtime
     // On-device PlayMode checks that the AdMob fallback network — not just ZeyWin's own network —
     // actually loads ads. AdMediator.IsInterstitialReady()/IsRewardedReady()/IsBannerReady() (used
     // by PreloadZeyWinAds.cs) are true if EITHER network has an ad, so they can't tell you the
-    // fallback itself works. These tests poll AdMediator.IsAdMob*Ready(), which check
-    // AdMobNetwork only.
+    // fallback itself works.
+    //
+    // Checked via AdMediator.WasAdMob*EverLoaded, not AdMediator.IsAdMob*Ready(): the latter is
+    // deliberately false whenever a ZeyWin surface is active (so the game never shows an AdMob ad
+    // on top of one) — correct for "can I show one right now", wrong for "did the fallback network
+    // actually work". A real force offer opened by OfferAndLoadingScreen.ForceOfferOpens stays
+    // open for the rest of the suite, so IsAdMob*Ready() reads false for the rest of this run even
+    // when AdMob loaded fine before the offer opened. WasAdMob*EverLoaded is set once, at the
+    // SDK's own load-success sites in AdMobNetwork, and never reset — it can't be affected by
+    // whatever surface is active when this fixture happens to check it.
     //
     // All three are polled together in ONE shared coroutine in [UnityOneTimeSetUp], not as three
     // separate [UnityTest] coroutines — see PreloadZeyWinAds.cs's header comment for why: NUnit
@@ -56,11 +64,9 @@ namespace ZeyWinAds.Tests.Runtime
             var budget = new QaBudget(BudgetSeconds);
             while (true)
             {
-                // Latched (|=), not sampled — see PreloadZeyWinAds.cs: "loaded within budget"
-                // means "was ready at some point", not "is still unconsumed at the last check".
-                _interstitialReady |= AdMediator.IsAdMobInterstitialReady();
-                _rewardedReady |= AdMediator.IsAdMobRewardedReady();
-                _bannerReady |= AdMediator.IsAdMobBannerReady();
+                _interstitialReady = AdMediator.WasAdMobInterstitialEverLoaded;
+                _rewardedReady = AdMediator.WasAdMobRewardedEverLoaded;
+                _bannerReady = AdMediator.WasAdMobBannerEverLoaded;
 
                 if ((_interstitialReady && _rewardedReady && _bannerReady) || budget.Expired)
                 {

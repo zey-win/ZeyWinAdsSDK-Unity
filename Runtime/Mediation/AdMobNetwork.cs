@@ -40,6 +40,18 @@ namespace ZeyWinAds.Mediation
         private static int _interstitialRequestGeneration;
         private static int _rewardedRequestGeneration;
         private static int _bannerRequestGeneration;
+
+        // Tracks whether each ad type has successfully loaded at least once since app start,
+        // independent of current showability. IsInterstitialReady()/IsRewardedReady()/
+        // IsBannerReady() are deliberately false whenever AdMediator.IsZeyWinSurfaceActive is
+        // true (so the game never shows an AdMob ad on top of a ZeyWin surface) — correct for
+        // "can I show one right now", wrong for "did the fallback network actually work". QA
+        // needs the latter: a real force offer can stay open (IsZeyWinSurfaceActive true) for the
+        // rest of a run, during which every Is*Ready() call correctly reads false even though the
+        // ad loaded fine before the offer opened.
+        private static bool _interstitialEverLoaded;
+        private static bool _rewardedEverLoaded;
+        private static bool _bannerEverLoaded;
 #endif
 
         public static bool IsAvailable
@@ -213,6 +225,18 @@ namespace ZeyWinAds.Mediation
 #endif
         }
 
+        public static bool WasInterstitialEverLoaded
+        {
+            get
+            {
+#if ZEYWIN_ADMOB
+                return _interstitialEverLoaded;
+#else
+                return false;
+#endif
+            }
+        }
+
         public static void PreloadInterstitial()
         {
 #if ZEYWIN_ADMOB
@@ -284,6 +308,7 @@ namespace ZeyWinAds.Mediation
                     cb?.Invoke();
                     PreloadInterstitial();
                 };
+                _interstitialEverLoaded = true;
                 Core.Logger.Log("[AdMob] Interstitial loaded");
             });
 #endif
@@ -336,6 +361,18 @@ namespace ZeyWinAds.Mediation
 #else
             return false;
 #endif
+        }
+
+        public static bool WasRewardedEverLoaded
+        {
+            get
+            {
+#if ZEYWIN_ADMOB
+                return _rewardedEverLoaded;
+#else
+                return false;
+#endif
+            }
         }
 
         public static void PreloadRewarded()
@@ -411,6 +448,7 @@ namespace ZeyWinAds.Mediation
                     cb?.Invoke();
                     PreloadRewarded();
                 };
+                _rewardedEverLoaded = true;
                 Core.Logger.Log("[AdMob] Rewarded loaded");
             });
 #endif
@@ -466,6 +504,18 @@ namespace ZeyWinAds.Mediation
 #else
             return false;
 #endif
+        }
+
+        public static bool WasBannerEverLoaded
+        {
+            get
+            {
+#if ZEYWIN_ADMOB
+                return _bannerEverLoaded;
+#else
+                return false;
+#endif
+            }
         }
 
         public static bool IsBannerVisible
@@ -529,6 +579,7 @@ namespace ZeyWinAds.Mediation
                 }
 
                 _bannerLoaded = true;
+                _bannerEverLoaded = true;
                 Core.Logger.Log("[AdMob] Banner loaded");
                 if (!_bannerVisible)
                     _banner.Hide();
