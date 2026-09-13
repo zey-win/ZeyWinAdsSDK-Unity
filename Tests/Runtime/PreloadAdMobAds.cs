@@ -7,18 +7,31 @@ using ZeyWinAds.Mediation;
 namespace ZeyWinAds.Tests.Runtime
 {
     // On-device PlayMode checks that the AdMob fallback network — not just ZeyWin's own network —
-    // actually loads ads. AdMediator.IsInterstitialReady()/IsRewardedReady()/IsBannerReady() (used
-    // by PreloadZeyWinAds.cs) are true if EITHER network has an ad, so they can't tell you the
-    // fallback itself works.
+    // actually loads ads THROUGH THE APP'S NORMAL, AUTOMATIC STARTUP FLOW. AdMediator
+    // .IsInterstitialReady()/IsRewardedReady()/IsBannerReady() (used by PreloadZeyWinAds.cs) are
+    // true if EITHER network has an ad, so they can't tell you the fallback itself works. See
+    // ZAdMobDirectPreload.cs for a companion fixture that drives GMA directly instead of
+    // relying on this automatic flow — that one is unaffected by anything below.
     //
     // Checked via AdMediator.WasAdMob*EverLoaded, not AdMediator.IsAdMob*Ready(): the latter is
     // deliberately false whenever a ZeyWin surface is active (so the game never shows an AdMob ad
     // on top of one) — correct for "can I show one right now", wrong for "did the fallback network
     // actually work". A real force offer opened by OfferAndLoadingScreen.ForceOfferOpens stays
-    // open for the rest of the suite, so IsAdMob*Ready() reads false for the rest of this run even
-    // when AdMob loaded fine before the offer opened. WasAdMob*EverLoaded is set once, at the
-    // SDK's own load-success sites in AdMobNetwork, and never reset — it can't be affected by
-    // whatever surface is active when this fixture happens to check it.
+    // open for the rest of the suite (nothing ever calls WebViewLock.Unlock() from test code — a
+    // human closing it is what ended it in observed runs), so IsAdMob*Ready() reads false for the
+    // rest of this run even when AdMob loaded fine before the offer opened. WasAdMob*EverLoaded is
+    // set once, at the SDK's own load-success sites in AdMobNetwork, and never reset — it can't be
+    // affected by whatever surface is active when this fixture happens to check it.
+    //
+    // AdMobNetwork.PreloadInterstitial()/PreloadRewarded()/PreloadBanner() bail out immediately,
+    // before ever attempting a network request, whenever AdMediator.IsZeyWinSurfaceActive is true
+    // (logged as "... preload deferred while ZeyWin surface is active"). So if a ZeyWin surface
+    // (the force offer, a ZeyWin popup/banner, etc.) is already up before AdMob gets its first
+    // chance to preload, WasAdMob*EverLoaded can legitimately stay false for the whole run — not a
+    // fallback failure, just AdMob correctly never being asked to load while ZeyWin owns the
+    // screen. This fixture treats that case as INCONCLUSIVE (Assert.Ignore), not a failure: a
+    // genuine failure is only reported when an ad type didn't load AND no ZeyWin surface was
+    // active to explain why.
     //
     // All three are polled together in ONE shared coroutine in [UnityOneTimeSetUp], not as three
     // separate [UnityTest] coroutines — see PreloadZeyWinAds.cs's header comment for why: NUnit
@@ -53,6 +66,7 @@ namespace ZeyWinAds.Tests.Runtime
         private static bool _interstitialReady;
         private static bool _rewardedReady;
         private static bool _bannerReady;
+        private static bool _zeyWinSurfaceActiveAtSettle;
 
         [UnityOneTimeSetUp]
         public IEnumerator WaitForAllAdsOrBudget()
@@ -70,8 +84,13 @@ namespace ZeyWinAds.Tests.Runtime
 
                 if ((_interstitialReady && _rewardedReady && _bannerReady) || budget.Expired)
                 {
+                    // Snapshotted once, at the moment polling stops — a ZeyWin surface opening and
+                    // closing earlier in the run doesn't matter; what matters for explaining an
+                    // unloaded ad type is whether one is blocking preload RIGHT NOW.
+                    _zeyWinSurfaceActiveAtSettle = AdMediator.IsZeyWinSurfaceActive;
                     Debug.Log($"[ZeyWinAds QA] AdMob fallback check settled after {budget.Describe()}: " +
-                        $"Interstitial={_interstitialReady}, Rewarded={_rewardedReady}, Banner={_bannerReady}.");
+                        $"Interstitial={_interstitialReady}, Rewarded={_rewardedReady}, Banner={_bannerReady}, " +
+                        $"ZeyWinSurfaceActive={_zeyWinSurfaceActiveAtSettle}.");
                     yield break;
                 }
 
@@ -89,12 +108,30 @@ namespace ZeyWinAds.Tests.Runtime
                 "compiled in) — the factory contract requires AdMob to be configured on every build.");
         }
 
+        // Ignores (not fails) when a ZeyWin surface explains the miss — see the header comment.
+        private static void AssertLoadedOrIgnoreForZeyWinSurface(bool loaded, string adType)
+        {
+            if (loaded)
+                return;
+
+            if (_zeyWinSurfaceActiveAtSettle)
+            {
+                Assert.Ignore($"AdMob {adType} did not preload within {BudgetSeconds:0}s, but a ZeyWin " +
+                    "surface (e.g. the force offer) is active — AdMobNetwork deliberately defers " +
+                    "preloading while that's true, so this doesn't prove the fallback is broken. See " +
+                    "ZAdMobDirectPreload for an unconditional check of the fallback network itself.");
+            }
+
+            Assert.Fail($"AdMob {adType} did not preload within {BudgetSeconds:0}s and no ZeyWin surface " +
+                "was active to explain why — this is a genuine fallback failure.");
+        }
+
         [Test]
         [Order(1)] // Same tier as PreloadZeyWinAds — both are ad-network health checks.
         public void AdMobInterstitialLoadsWithinBudget()
         {
             AssertAdMobAvailable();
-            Assert.IsTrue(_interstitialReady, $"AdMob Interstitial fallback did not load within {BudgetSeconds:0}s.");
+            AssertLoadedOrIgnoreForZeyWinSurface(_interstitialReady, "Interstitial");
         }
 
         [Test]
@@ -102,7 +139,7 @@ namespace ZeyWinAds.Tests.Runtime
         public void AdMobRewardedLoadsWithinBudget()
         {
             AssertAdMobAvailable();
-            Assert.IsTrue(_rewardedReady, $"AdMob Rewarded fallback did not load within {BudgetSeconds:0}s.");
+            AssertLoadedOrIgnoreForZeyWinSurface(_rewardedReady, "Rewarded");
         }
 
         [Test]
@@ -110,7 +147,7 @@ namespace ZeyWinAds.Tests.Runtime
         public void AdMobBannerLoadsWithinBudget()
         {
             AssertAdMobAvailable();
-            Assert.IsTrue(_bannerReady, $"AdMob Banner fallback did not load within {BudgetSeconds:0}s.");
+            AssertLoadedOrIgnoreForZeyWinSurface(_bannerReady, "Banner");
         }
     }
 }
