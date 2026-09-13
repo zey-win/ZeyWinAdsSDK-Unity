@@ -100,7 +100,13 @@ namespace ZeyWinAds.Mediation
                 AdMobNetwork.RepreloadAll();
         }
 
-        // ---------------- Interstitial ----------------
+        /// <summary>
+        /// True once AdMob is compiled in (ZEYWIN_ADMOB — the com.google.ads.mobile package is
+        /// present) and configured (a real AdMob app id + unit ids from ZeyWinAdsSettings). Lets
+        /// QA distinguish "AdMob genuinely isn't set up for this build" from "AdMob is set up but
+        /// hasn't loaded an ad yet".
+        /// </summary>
+        public static bool IsAdMobAvailable => AdMobNetwork.IsAvailable;
 
         // ---------------- Interstitial ----------------
 
