@@ -135,12 +135,23 @@ namespace ZeyWinAds.Mediation
             AdAudioController.ApplyAdMobVolume("admob_initialize");
             MobileAds.Initialize(status =>
             {
-                _initialized = true;
-                Core.Logger.Log("[AdMob] Initialized");
+                // GMA's native callback isn't guaranteed to run on Unity's main thread.
+                // PreloadInterstitial() -> CanStartPreload() reads Time.realtimeSinceStartup,
+                // which throws off-thread ("get_realtimeSinceStartup can only be called from the
+                // main thread") — and because all three preloads are called sequentially in this
+                // one callback, that exception silently aborts the rest of it too, so Rewarded and
+                // Banner never even get a chance to preload. Marshal onto the main thread first,
+                // same pattern used elsewhere in the SDK for exactly this class of problem
+                // (DeviceIdentity, WebViewLock, FirebaseMessagingService, HtmlAdView).
+                UnityMainThreadDispatcher.Instance.Enqueue(() =>
+                {
+                    _initialized = true;
+                    Core.Logger.Log("[AdMob] Initialized");
 
-                PreloadInterstitial();
-                PreloadRewarded();
-                PreloadBanner();
+                    PreloadInterstitial();
+                    PreloadRewarded();
+                    PreloadBanner();
+                });
             });
         }
 
