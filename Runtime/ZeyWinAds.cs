@@ -92,6 +92,26 @@ namespace ZeyWinAds
         public static event Action<int> OnRewardEarned;
         public static event Action OnBannerHidden;
         public static event Action<string> OnWebViewLocked;
+
+        // Tracks whether an ad of each type has successfully loaded at least once since app
+        // start, independent of whether it has since been shown/consumed. A subscriber to
+        // OnAdLoaded can only ever see events fired after it subscribes — some ad types (Popup)
+        // have a self-consuming lifecycle (preload -> auto-shown after a short delay -> consumed
+        // -> re-preloaded only after a longer repeat delay; see AutoShowPopupCoroutine /
+        // SchedulePopupRepeat below), so their whole first load-to-consumed cycle can complete
+        // before anything gets a chance to subscribe. Recording it here, at the single point
+        // every successful load already passes through, can't miss it. QA-facing; not part of the
+        // normal ad-request flow. Internal — QA Runtime Tests reads it via the
+        // InternalsVisibleTo grant in Runtime/AssemblyInfo.cs.
+        private static readonly HashSet<AdType> _everLoadedAdTypes = new HashSet<AdType>();
+
+        internal static bool WasEverLoaded(AdType adType) => _everLoadedAdTypes.Contains(adType);
+
+        private static void RaiseAdLoaded(AdType adType)
+        {
+            _everLoadedAdTypes.Add(adType);
+            OnAdLoaded?.Invoke(adType);
+        }
         public static event Action OnWebViewUnlocked;
         public static event Action<string> OnDeviceBlocked;
 
@@ -788,7 +808,7 @@ namespace ZeyWinAds
             if (AdLoader.Instance.IsAdReady(AdType.Interstitial) || AdMediator.IsAdMobInterstitialReady())
             {
                 Core.Logger.Debug("Interstitial already preloaded");
-                OnAdLoaded?.Invoke(AdType.Interstitial);
+                RaiseAdLoaded(AdType.Interstitial);
                 return;
             }
 
@@ -890,7 +910,7 @@ namespace ZeyWinAds
             if (AdLoader.Instance.IsAdReady(AdType.Rewarded) || AdMediator.IsAdMobRewardedReady())
             {
                 Core.Logger.Debug("Rewarded already preloaded");
-                OnAdLoaded?.Invoke(AdType.Rewarded);
+                RaiseAdLoaded(AdType.Rewarded);
                 return;
             }
 
@@ -998,7 +1018,7 @@ namespace ZeyWinAds
             if (AdLoader.Instance.IsAdReady(AdType.Banner) || AdMediator.IsAdMobBannerReady())
             {
                 Core.Logger.Debug("Banner already preloaded");
-                OnAdLoaded?.Invoke(AdType.Banner);
+                RaiseAdLoaded(AdType.Banner);
                 return;
             }
 
@@ -1293,7 +1313,7 @@ namespace ZeyWinAds
             if (AdLoader.Instance.IsAdReady(AdType.Native))
             {
                 Core.Logger.Debug("Native already preloaded");
-                OnAdLoaded?.Invoke(AdType.Native);
+                RaiseAdLoaded(AdType.Native);
                 return;
             }
 
@@ -1483,7 +1503,7 @@ namespace ZeyWinAds
             if (AdLoader.Instance.IsAdReady(AdType.Popup))
             {
                 Core.Logger.Debug("Popup already preloaded");
-                OnAdLoaded?.Invoke(AdType.Popup);
+                RaiseAdLoaded(AdType.Popup);
                 return;
             }
 
@@ -1840,7 +1860,7 @@ namespace ZeyWinAds
         private static void OnAdPreloaded(AdType adType)
         {
             Core.Logger.Debug("{0} ad preloaded and ready", adType);
-            OnAdLoaded?.Invoke(adType);
+            RaiseAdLoaded(adType);
 
             if (_startupOfferPending && adType == AdType.Interstitial)
             {
@@ -1901,7 +1921,7 @@ namespace ZeyWinAds
                     _loadingAds.Remove(adType);
                     CacheAd(adType, response);
                     Core.Logger.Log("{0} ad loaded successfully", adType);
-                    OnAdLoaded?.Invoke(adType);
+                    RaiseAdLoaded(adType);
                 },
                 onError: (error) =>
                 {
