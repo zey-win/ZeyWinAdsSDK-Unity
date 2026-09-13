@@ -29,6 +29,12 @@ namespace ZeyWinAds.Tests.Runtime
     // reflection (see OfferStore below) — the same approach the rest of this suite uses for SDK
     // internals — and each row snapshots + restores the 4 offer-URL PlayerPrefs keys so a real
     // device's sticky URL is left untouched.
+    //
+    // NUnit's [Order] attribute only sequences tests within their own fixture — it can't be
+    // applied to a class in this Unity Test Framework version (CS0592). Cross-fixture order (this
+    // fixture before PreloadZeyWinAds/PreloadAdMobAds, before PushNotifications, before the
+    // WebView fixtures) instead falls back to NUnit's default: alphabetical by fixture name. See
+    // PreloadZeyWinAds.cs for the naming rule this depends on.
     public class OfferAndLoadingScreen : QaFixture
     {
         private const float LoaderStartupTimeoutSeconds = 10f;
@@ -60,8 +66,8 @@ namespace ZeyWinAds.Tests.Runtime
         // QaLoadingOverlayRecorder — which starts watching at
         // RuntimeInitializeOnLoadMethod(BeforeSceneLoad) — rather than on live state here.
         [UnityTest]
-        [Order(0)] // Runs before AdPreload (Order(1)+), so the ad budget starts fresh only once
-                   // the loader check is already done.
+        [Order(0)] // Runs before PreloadZeyWinAds / PreloadAdMobAds (Order(1)+), so the ad budget
+                   // starts fresh only once the loader check is already done.
         public IEnumerator OverlayAppearsAndDismissesWithinBudget()
         {
             // Phase 1: it must have appeared within LoaderStartupTimeoutSeconds. (The recorder has

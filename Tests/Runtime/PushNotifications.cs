@@ -25,12 +25,16 @@ namespace ZeyWinAds.Tests.Runtime
     // is what made this test un-runnable unattended. "Requested" is read from the durable
     // PlayerPrefs marker AndroidRuntimePermissions sets right before it fires the request.
     //
-    // Runs after AdPreload (Order(1)) — see that file's comment for why fixtures in this suite
-    // chain their Order values instead of running unordered.
+    // Runs after PreloadZeyWinAds / PreloadAdMobAds (Order(1)) — see that file's comment for why
+    // fixtures in this suite chain their Order values instead of running unordered.
     //
     // `global::ZeyWinAds.ZeyWinAds.*` (not just `ZeyWinAds.*`) is required for the same reason
-    // documented in AdPreload.cs: this file's own namespace (ZeyWinAds.Tests.Runtime) is nested
-    // under the ZeyWinAds namespace, making a bare `ZeyWinAds` reference ambiguous.
+    // documented in PreloadZeyWinAds.cs: this file's own namespace (ZeyWinAds.Tests.Runtime) is
+    // nested under the ZeyWinAds namespace, making a bare `ZeyWinAds` reference ambiguous.
+    // Cross-fixture order (this fixture after PreloadZeyWinAds/PreloadAdMobAds, before the
+    // WebView fixtures) relies on alphabetical fixture-name order — [Order] on a class doesn't
+    // compile in this Unity Test Framework version (CS0592), only on methods. See
+    // PreloadZeyWinAds.cs for the naming rule.
     [TestFixture]
     public class PushNotifications : QaFixture
     {
