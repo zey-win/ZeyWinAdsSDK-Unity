@@ -35,7 +35,8 @@ namespace ZeyWinAds.Tests.Runtime
     // three (the method-level [Order] below is intent only). Renaming any fixture in this suite
     // must keep the alphabetical chain intact: DeviceIdentity, OfferAndLoadingScreen,
     // PreloadAdMobAds / PreloadZeyWinAds, PushNotifications, WebViewCapabilities,
-    // WebViewOrientation, WebViewSafeArea.
+    // WebViewOrientation, WebViewSafeArea, ZAdMobDirectPreload (deliberately last — see
+    // that file's header for why).
     [TestFixture]
     public class WebViewSafeArea : WebViewFixture
     {

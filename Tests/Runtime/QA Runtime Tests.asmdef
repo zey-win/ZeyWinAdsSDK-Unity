@@ -15,6 +15,12 @@
     "defineConstraints": [
         "UNITY_INCLUDE_TESTS"
     ],
-    "versionDefines": [],
+    "versionDefines": [
+        {
+            "name": "com.google.ads.mobile",
+            "expression": "1.0.0",
+            "define": "ZEYWIN_ADMOB"
+        }
+    ],
     "noEngineReferences": false
 }
