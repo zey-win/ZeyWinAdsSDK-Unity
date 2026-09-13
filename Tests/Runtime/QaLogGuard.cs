@@ -85,6 +85,7 @@ namespace ZeyWinAds.Tests.Runtime
         {
             QaTestRun.InProgress = false;
             Uninstall();
+            QaGameSceneLoader.LoadGameSceneIfNeeded();
         }
         public void TestStarted(ITest test) { }
         public void TestFinished(ITestResult result) { }
