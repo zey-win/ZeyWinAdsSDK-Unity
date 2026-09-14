@@ -18,17 +18,12 @@ public class ZeyWinAdsSecurityCheck {
         "com.topjohnwu.magisk",
         "com.kingroot.kinguser",
         "com.kingo.root",
-        "com.koushikdutta.superuser",
-        "com.noshufou.android.su"
     };
 
     private static final String[] ROOT_BINARIES = {
         "/system/bin/su",
         "/system/xbin/su",
         "/sbin/su",
-        "/system/app/Superuser.apk",
-        "/system/app/SuperSU.apk",
-        "/system/framework/XposedBridge.jar"
     };
 
     // Curated from real-world detection telemetry (2026-09) to the packages that
