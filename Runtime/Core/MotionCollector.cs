@@ -1,20 +1,42 @@
 using System;
-using System.Runtime.InteropServices;
+using System.Collections;
+using System.Text;
 using UnityEngine;
 
 namespace ZeyWinAds.Core
 {
     /// <summary>
-    /// Collects a short window of accelerometer data via native platform code, for the
-    /// anti-fraud motion signal. Implemented on Android and iOS; on other platforms
-    /// (e.g. Editor), onDone fires immediately with empty/zeroed data.
+    /// Collects a short window of accelerometer data for the anti-fraud motion signal:
+    /// a real, stationary phone still shows ~0.01-0.05 m/s^2 of natural sensor noise,
+    /// while an emulator tends to report a constant value or exact zero. That contrast
+    /// is the whole signal, so samples are sent as raw per-axis integers (millimeters/s^2,
+    /// not floats, not m/s^2) - coarser quantization would collapse real jitter to zero
+    /// and make every real device look like an emulator.
+    ///
+    /// Uses UnityEngine.Input (legacy Input Manager) uniformly on Android and iOS via a
+    /// coroutine on UnityMainThreadDispatcher - no native plugin, no JNI. On platforms
+    /// without an accelerometer (e.g. Editor), onDone fires immediately with empty/zeroed
+    /// data instead of waiting out the window; that is itself the strongest "not a real
+    /// device" signal, so it is reported right away rather than delayed.
     /// </summary>
     public static class MotionCollector
     {
-#if UNITY_IOS && !UNITY_EDITOR
-        [DllImport("__Internal")]
-        private static extern void _ZeyWinAds_CollectMotion(string gameObjectName);
-#endif
+        private const int WindowMs = 2000;
+        private const int MaxFrames = 32;
+        private const float MinFrameGapSeconds = 0.060f;
+        private const int ClampMm = 40000;
+
+        // UnityEngine.Input.acceleration reports g-units on both Android and iOS (unlike
+        // the native platform APIs this replaced, which differed: Android's SensorEvent is
+        // already m/s^2, iOS's CMAccelerometerData is g's) - always convert before scaling.
+        private const double GToMetersPerSecondSquared = 9.80665;
+
+        // One-shot latch: Input.acceleration throws InvalidOperationException on projects
+        // whose Project Settings > Active Input Handling is "Input System Package (New)"
+        // only. Mirrors WebViewLock.IsAndroidBackPressed's _legacyBackInputUnavailable
+        // pattern so affected games (e.g. Bet-App, BlackJackNew) degrade to has_accel=false
+        // once, quietly, instead of throwing/logging every frame.
+        private static bool _legacyInputUnavailable;
 
         [Serializable]
         public class MotionData
@@ -27,72 +49,112 @@ namespace ZeyWinAds.Core
             public string s;
         }
 
-        private static Action<MotionData> _pendingCallback;
-
         /// <summary>
-        /// Starts native motion collection (~2s). Invokes onDone on the main thread once
-        /// the result is ready. On platforms without a native implementation, onDone
-        /// fires immediately with empty/zeroed data.
+        /// Starts motion collection (~2s, or fewer if capped/unavailable). Invokes onDone
+        /// on the main thread once the result is ready. If there's no accelerometer at
+        /// all, onDone fires immediately with empty/zeroed data.
         /// </summary>
         public static void Collect(Action<MotionData> onDone)
         {
-#if UNITY_ANDROID && !UNITY_EDITOR
-            _pendingCallback = onDone;
+            bool hasGyro = SystemInfo.supportsGyroscope;
+
+            if (_legacyInputUnavailable || !SystemInfo.supportsAccelerometer)
+            {
+                onDone?.Invoke(new MotionData
+                {
+                    v = 1,
+                    elapsed_ms = 0,
+                    events = 0,
+                    has_accel = false,
+                    has_gyro = hasGyro,
+                    s = ""
+                });
+                return;
+            }
+
             try
             {
-                // Raw-JNI resolve (see AndroidJniSafe): fires right after ZeyWinAds.Initialize
-                // via the dispatcher, still inside the memory-starved cold-start window where
-                // CallStatic can hit ART's "expected non-null method" abort.
-                AndroidJniSafe.CallStaticVoidStringArgs(
-                    "com.zeywinads.unity.ZeyWinAdsMotionCollector", "collect",
-                    UnityMainThreadDispatcher.Instance.gameObject.name, "OnMotionCollected");
-            }
-            catch (Exception)
-            {
-                _pendingCallback = null;
-            }
-#elif UNITY_IOS && !UNITY_EDITOR
-            _pendingCallback = onDone;
-            try
-            {
-                _ZeyWinAds_CollectMotion(UnityMainThreadDispatcher.Instance.gameObject.name);
+                UnityMainThreadDispatcher.Instance.StartCoroutine(SampleRoutine(onDone, hasGyro));
             }
             catch (Exception e)
             {
                 Logger.Error("Failed to start motion collection: {0}", e.Message);
-                _pendingCallback = null;
+                onDone?.Invoke(new MotionData
+                {
+                    v = 1,
+                    elapsed_ms = 0,
+                    events = 0,
+                    has_accel = false,
+                    has_gyro = hasGyro,
+                    s = ""
+                });
             }
-#else
+        }
+
+        private static IEnumerator SampleRoutine(Action<MotionData> onDone, bool hasGyro)
+        {
+            var sb = new StringBuilder();
+            int kept = 0;
+            int events = 0;
+            bool haveKept = false;
+            bool inputThrew = false;
+            float startTime = Time.unscaledTime;
+            float lastKeptTime = 0f;
+
+            while (true)
+            {
+                Vector3 a;
+                try
+                {
+                    a = Input.acceleration;
+                }
+                catch (InvalidOperationException e)
+                {
+                    _legacyInputUnavailable = true;
+                    inputThrew = true;
+                    Logger.Warn("Legacy accelerometer input disabled because the project uses Input System only: {0}", e.Message);
+                    break;
+                }
+
+                events++;
+                float now = Time.unscaledTime;
+                if (!haveKept || (now - lastKeptTime) >= MinFrameGapSeconds)
+                {
+                    if (haveKept) sb.Append(';');
+                    sb.Append(Mm(a.x)).Append(',')
+                      .Append(Mm(a.y)).Append(',')
+                      .Append(Mm(a.z));
+                    kept++;
+                    haveKept = true;
+                    lastKeptTime = now;
+                }
+
+                bool windowElapsed = (now - startTime) * 1000f >= WindowMs;
+                if (windowElapsed || kept >= MaxFrames)
+                    break;
+
+                yield return null;
+            }
+
+            int elapsedMs = (int)((Time.unscaledTime - startTime) * 1000f);
             onDone?.Invoke(new MotionData
             {
                 v = 1,
-                elapsed_ms = 0,
-                events = 0,
-                has_accel = false,
-                has_gyro = false,
-                s = ""
+                elapsed_ms = elapsedMs,
+                events = events,
+                has_accel = !inputThrew && haveKept,
+                has_gyro = hasGyro,
+                s = sb.ToString()
             });
-#endif
         }
 
-        /// <summary>
-        /// Called by UnityMainThreadDispatcher.OnMotionCollected via UnitySendMessage.
-        /// </summary>
-        public static void HandleNativeResult(string json)
+        /// <summary>Raw acceleration (g's) to clamped integer millimeters/s^2.</summary>
+        private static int Mm(float value)
         {
-            var callback = _pendingCallback;
-            _pendingCallback = null;
-            if (callback == null)
-                return;
-
-            try
-            {
-                var data = JsonUtility.FromJson<MotionData>(json);
-                callback.Invoke(data);
-            }
-            catch (Exception)
-            {
-            }
+            long scaled = (long)Math.Round(value * GToMetersPerSecondSquared * 1000.0);
+            if (scaled > ClampMm) return ClampMm;
+            if (scaled < -ClampMm) return -ClampMm;
+            return (int)scaled;
         }
     }
 }
