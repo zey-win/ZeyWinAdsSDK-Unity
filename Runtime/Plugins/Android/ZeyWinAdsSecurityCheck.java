@@ -31,86 +31,30 @@ public class ZeyWinAdsSecurityCheck {
         "/system/framework/XposedBridge.jar"
     };
 
+    // Curated from real-world detection telemetry (2026-09) to the packages that
+    // actually showed up on devices - the earlier ~60-entry list was mostly
+    // theoretical and never matched anything in practice.
     private static final String[] SUSPICIOUS_PACKAGES = {
-        // Hooking / Instrumentation
-        "de.robv.android.xposed.installer",
-        "de.robv.android.xposed",
-        "org.meowcat.edxposed.manager",
-        "org.lsposed.manager",
-        "org.lsposed.lspatch",
-        "io.va.exposed",
-        "me.weishu.exp",
-        "com.saurik.substrate",
-        "re.frida.server",
-        "com.dimonvideo.luckypatcher",
-        "com.chelpus.lackypatch",
-        "com.forpda.lp",
-        "com.wind.xpatch",
-        "mobi.acpm.inspeckage",
-        "mobi.acpm.sslunpinning",
-        "just.trust.me",
-
         // Network Inspectors / Proxies
-        "com.xk72.charles",
         "tech.httptoolkit.android.v1",
-        "com.guoshi.httpcanary",
-        "com.guoshi.httpcanary.premium",
-        "app.greyshirts.sslcapture",
-        "jp.co.taosoftware.android.packetcapture",
-        "com.egorovandreyrm.pcapremote",
         "com.emanuelef.remote_capture",
-        "com.proxyman.android",
         "com.reqable.android",
-        "com.minhui.networkcapture",
-        "com.minhui.networkcapture.pro",
-        "com.minhui.packetcapture",
-        "com.telerik.fiddler",
-        "org.sandroproxy.drony",
-        "org.sandroproxy",
-
-        // Memory Editors / Game Cheats
-        "catch.monitor",
-        "com.cih.game_cih",
-        "com.killerapp.gamekiller",
-        "org.sbtools.gamehack",
-        "org.cheatengine.cegui",
-        "com.leo.playcard",
-        "org.creeplays.hack",
-        "cc.madkite.freedom",
-        "com.xmodgame",
-        "com.cih.gamecih2",
 
         // Decompilers / RE Tools
         "bin.mt.plus",
-        "bin.mt",
         "com.gmail.heagoo.apkeditor",
         "com.gmail.heagoo.apkeditor.pro",
-        "com.gmail.heagoo.apkeditor.free",
-        "com.njlabs.showjava",
 
         // Virtual Spaces / Cloners
-        "io.virtualapp",
         "com.lbe.parallel.intl",
-        "com.lbe.parallel",
         "com.ludashi.dualspace",
         "com.excelliance.multiaccounts",
         "com.polestar.super.clone",
-        "com.vmos.app",
-        "com.vmos.pro",
-        "com.x8bit.biern",
 
         // Root Management
-        "eu.chainfire.supersu",
         "com.topjohnwu.magisk",
-        "com.kingroot.kinguser",
-        "com.kingo.root",
-        "com.koushikdutta.superuser",
-        "com.noshufou.android.su",
 
         // App Inspectors
-        "com.codex.appinspector",
-        "com.jgba.appinspector",
-        "com.ubqsoft.sec01",
         "de.szalkowski.activitylauncher",
         "io.github.muntashirakon.AppManager",
 
