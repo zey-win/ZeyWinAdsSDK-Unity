@@ -15,15 +15,11 @@ namespace ZeyWinAds.Core
 #if UNITY_IOS && !UNITY_EDITOR
         [DllImport("__Internal")]
         private static extern string _ZeyWinAds_GetIDFA();
-
-        [DllImport("__Internal")]
-        private static extern string _ZeyWinAds_GetIDFV();
 #endif
 
         private const string DeviceClass = "com.zeywinads.unity.ZeyWinAdsDevice";
 
         private static string _cachedGAID;
-        private static string _cachedIDFV;
         private static string _cachedSimCountry;
         private static bool? _cachedHasSim;
 
@@ -46,23 +42,27 @@ namespace ZeyWinAds.Core
                 return gaid;
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-            // Raw-JNI resolve (see AndroidJniSafe): CallStatic<string> here can hit ART's
-            // "expected non-null method" abort on memory-starved cold starts.
-            string androidId = AndroidJniSafe.CallStaticString(DeviceClass, "getAndroidId");
-            if (!string.IsNullOrEmpty(androidId))
-                return androidId;
+            // MD5(ANDROID_ID) via Unity's own engine - no native call, no JNI.
+            // Keep the "aid_" prefix so backend logic distinguishing this fallback
+            // from a real GAID keeps working; the value itself is now hashed,
+            // not raw ANDROID_ID (see CLAUDE.md).
+            string uid = SystemInfo.deviceUniqueIdentifier;
+            if (!string.IsNullOrEmpty(uid) && uid != SystemInfo.unsupportedIdentifier)
+            {
+                Logger.Log("GetFastDeviceId: resolved Android fallback id 'aid_{0}' (SystemInfo.deviceUniqueIdentifier)", uid);
+                return "aid_" + uid;
+            }
+            Logger.Warn("GetFastDeviceId: SystemInfo.deviceUniqueIdentifier unavailable (value='{0}'), falling back to random UUID", uid);
 #elif UNITY_IOS && !UNITY_EDITOR
-            try
+            // identifierForVendor via Unity's own engine - same value _ZeyWinAds_GetIDFV
+            // used to return natively, no prefix (matches prior behavior exactly).
+            string uid = SystemInfo.deviceUniqueIdentifier;
+            if (!string.IsNullOrEmpty(uid) && uid != SystemInfo.unsupportedIdentifier)
             {
-                if (_cachedIDFV == null)
-                    _cachedIDFV = _ZeyWinAds_GetIDFV() ?? "";
-                if (!string.IsNullOrEmpty(_cachedIDFV))
-                    return _cachedIDFV;
+                Logger.Log("GetFastDeviceId: resolved iOS fallback id '{0}' (SystemInfo.deviceUniqueIdentifier / IDFV)", uid);
+                return uid;
             }
-            catch (Exception e)
-            {
-                Logger.Error("Failed to get IDFV: {0}", e.Message);
-            }
+            Logger.Warn("GetFastDeviceId: SystemInfo.deviceUniqueIdentifier unavailable (value='{0}'), falling back to random UUID", uid);
 #endif
 
             return GetOrCreateFallbackId();
@@ -121,6 +121,28 @@ namespace ZeyWinAds.Core
                     using (var cls = new AndroidJavaClass(DeviceClass))
                     {
                         gaid = cls.CallStatic<string>("getGAID") ?? "";
+                    }
+
+                    if (!string.IsNullOrEmpty(gaid))
+                    {
+                        Logger.Log("GetGAID: resolved real GAID '{0}'", gaid);
+                    }
+                    else
+                    {
+                        // getGAID() is GAID-only now (no embedded native fallback) - fall
+                        // back to the same hashed Android ID GetFastDeviceId() uses, so both
+                        // paths agree on one value instead of Java and C# each computing
+                        // their own fallback.
+                        string uid = SystemInfo.deviceUniqueIdentifier;
+                        if (!string.IsNullOrEmpty(uid) && uid != SystemInfo.unsupportedIdentifier)
+                        {
+                            gaid = "aid_" + uid;
+                            Logger.Log("GetGAID: GAID unavailable, resolved fallback id 'aid_{0}' (SystemInfo.deviceUniqueIdentifier)", uid);
+                        }
+                        else
+                        {
+                            Logger.Warn("GetGAID: GAID and SystemInfo.deviceUniqueIdentifier both unavailable (value='{0}')", uid);
+                        }
                     }
                 }
                 catch (Exception e)
@@ -243,7 +265,6 @@ namespace ZeyWinAds.Core
         public static void ClearCache()
         {
             _cachedGAID = null;
-            _cachedIDFV = null;
             _cachedSimCountry = null;
             _cachedHasSim = null;
         }

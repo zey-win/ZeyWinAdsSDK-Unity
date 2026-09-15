@@ -1,5 +1,4 @@
 #import <Foundation/Foundation.h>
-#import <UIKit/UIKit.h>
 
 #if __has_include(<AdSupport/AdSupport.h>)
 #import <AdSupport/AdSupport.h>
@@ -32,11 +31,5 @@ extern "C" {
 #else
         return strdup("");
 #endif
-    }
-
-    const char* _ZeyWinAds_GetIDFV(void) {
-        NSUUID *idfv = [[UIDevice currentDevice] identifierForVendor];
-        NSString *idfvString = [idfv UUIDString];
-        return ZeyWinAds_CStringCopy(idfvString ?: @"");
     }
 }
