@@ -3,7 +3,6 @@ package com.zeywinads.unity;
 import android.content.Context;
 import android.content.pm.PackageManager;
 import android.os.Build;
-import android.provider.Settings;
 import android.telephony.SubscriptionInfo;
 import android.telephony.SubscriptionManager;
 import android.telephony.TelephonyManager;
@@ -20,8 +19,9 @@ import java.util.List;
 public class ZeyWinAdsDevice {
 
     /**
-     * Gets the Google Advertising ID (GAID).
-     * Falls back to Android ID if GAID is unavailable or ad tracking is limited.
+     * Gets the Google Advertising ID (GAID). Returns "" if unavailable or ad
+     * tracking is limited - callers fall back to SystemInfo.deviceUniqueIdentifier
+     * in C# (DeviceIdentity.cs) instead of this method embedding its own fallback.
      * MUST be called from a background thread — blocks until result is available.
      */
     public static String getGAID() {
@@ -35,37 +35,7 @@ public class ZeyWinAdsDevice {
                 }
             }
         } catch (Exception e) {
-            // GAID unavailable, fall through to Android ID
-        }
-
-        // Fallback: Android ID (persistent per device, reset on factory reset)
-        try {
-            Context context = UnityPlayer.currentActivity.getApplicationContext();
-            String androidId = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
-            if (androidId != null && !androidId.isEmpty()) {
-                return "aid_" + androidId;
-            }
-        } catch (Exception e) {
-            // Android ID fallback failed.
-        }
-
-        return "";
-    }
-
-    /**
-     * Gets Android ID synchronously for fast startup referral matching.
-     * This avoids waiting for Google Play Services when the server can match the
-     * same fallback ID format used by getGAID().
-     */
-    public static String getAndroidId() {
-        try {
-            Context context = UnityPlayer.currentActivity.getApplicationContext();
-            String androidId = Settings.Secure.getString(context.getContentResolver(), Settings.Secure.ANDROID_ID);
-            if (androidId != null && !androidId.isEmpty()) {
-                return "aid_" + androidId;
-            }
-        } catch (Exception e) {
-            // Android ID fallback failed.
+            // GAID unavailable.
         }
 
         return "";

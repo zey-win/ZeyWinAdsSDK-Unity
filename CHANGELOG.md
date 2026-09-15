@@ -2,6 +2,25 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.65
+
+- Replaced native Android ID reads (`ZeyWinAdsDevice.getAndroidId()`, and an
+  embedded copy inside `getGAID()`) and the native iOS IDFV read
+  (`_ZeyWinAds_GetIDFV`) with `SystemInfo.deviceUniqueIdentifier`. No native
+  call, no JNI, on either platform for this value.
+  - Android: `SystemInfo.deviceUniqueIdentifier` is `MD5(ANDROID_ID)`, not the
+    raw value the native code returned. The `"aid_"` prefix convention is
+    kept so backend logic distinguishing this fallback from a real GAID keeps
+    working, but the value after the prefix changes for any existing install
+    that hits this fallback path.
+  - iOS: `SystemInfo.deviceUniqueIdentifier` is literally `identifierForVendor`
+    — the exact same value the native code returned. Zero value change.
+  - `getGAID()` (Java) is GAID-only now; `DeviceIdentity.GetGAID()` computes
+    the same `"aid_"`-prefixed fallback itself in C# when Java returns empty,
+    so `GetFastDeviceId()` and `GetGAID()` agree on one fallback value.
+  - Hardware-verified: fallback id logged and confirmed correct on a real
+    device.
+
 ## 3.9.64
 
 - Replaced native accelerometer sampling for the anti-fraud motion signal with
