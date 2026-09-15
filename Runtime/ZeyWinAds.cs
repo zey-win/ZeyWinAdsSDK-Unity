@@ -92,6 +92,26 @@ namespace ZeyWinAds
         public static event Action<int> OnRewardEarned;
         public static event Action OnBannerHidden;
         public static event Action<string> OnWebViewLocked;
+
+        // Tracks whether an ad of each type has successfully loaded at least once since app
+        // start, independent of whether it has since been shown/consumed. A subscriber to
+        // OnAdLoaded can only ever see events fired after it subscribes — some ad types (Popup)
+        // have a self-consuming lifecycle (preload -> auto-shown after a short delay -> consumed
+        // -> re-preloaded only after a longer repeat delay; see AutoShowPopupCoroutine /
+        // SchedulePopupRepeat below), so their whole first load-to-consumed cycle can complete
+        // before anything gets a chance to subscribe. Recording it here, at the single point
+        // every successful load already passes through, can't miss it. QA-facing; not part of the
+        // normal ad-request flow. Internal — QA Runtime Tests reads it via the
+        // InternalsVisibleTo grant in Runtime/AssemblyInfo.cs.
+        private static readonly HashSet<AdType> _everLoadedAdTypes = new HashSet<AdType>();
+
+        internal static bool WasEverLoaded(AdType adType) => _everLoadedAdTypes.Contains(adType);
+
+        private static void RaiseAdLoaded(AdType adType)
+        {
+            _everLoadedAdTypes.Add(adType);
+            OnAdLoaded?.Invoke(adType);
+        }
         public static event Action OnWebViewUnlocked;
         public static event Action<string> OnDeviceBlocked;
 
@@ -284,10 +304,11 @@ namespace ZeyWinAds
                 WarmStartupInterstitial(preloadSettings);
             }
 
-            // CrashGuard is an optional sibling package auto-installed via CrashGuardBootstrap.
-            // Soft-call via reflection so ZeyWinAds compiles even if the user removed it.
-            Core.CrashReportingService.SetInitStage("crashguard");
-            TryStartCrashGuard();
+            // CrashGuard disabled: collects/sends a full device fingerprint + behavioral
+            // events (screen views, payment funnel) to ggate.zeywin.com beyond what's
+            // disclosed as "crash reporting" - see ZeyWinAdsSDK-Unity CLAUDE.md.
+            // Core.CrashReportingService.SetInitStage("crashguard");
+            // TryStartCrashGuard();
 
             Core.CrashReportingService.SetInitStage("att");
 
@@ -384,6 +405,8 @@ namespace ZeyWinAds
         private static void HandleStartupReferralCheckCompleted(bool lockedWebView)
         {
             _startupReferralCheckPending = false;
+            Core.Logger.Log("[BlackScreenQA] Referral check completed at t={0:0.00}s: lockedWebView={1}.",
+                Time.realtimeSinceStartup, lockedWebView);
 
             if (lockedWebView || WebViewLock.IsLocked)
                 return;
@@ -392,6 +415,8 @@ namespace ZeyWinAds
             {
                 string reason = _startupFallbackReason;
                 _startupFallbackReason = null;
+                Core.Logger.Log("[BlackScreenQA] Referral check finished — now showing the Google fallback that was deferred (reason={0}). t={1:0.00}s.",
+                    reason, Time.realtimeSinceStartup);
                 HideStartupLoading();
                 ShowGoogleFallback(reason);
             }
@@ -399,8 +424,14 @@ namespace ZeyWinAds
 
         private static void StartStartupEligibilityAudit(bool hasSim, string simCountry, string detectedPackages, bool deviceClean)
         {
+            float auditStartedAt = Time.realtimeSinceStartup;
+            Core.Logger.Log("[BlackScreenQA] Eligibility audit started (proxy -> geo -> device-report) at t={0:0.00}s since app start.", auditStartedAt);
+
             Core.ProxyConfig.Resolve(() =>
             {
+                Core.Logger.Log("[BlackScreenQA] ProxyConfig resolved at t={0:0.00}s (+{1:0.00}s).",
+                    Time.realtimeSinceStartup, Time.realtimeSinceStartup - auditStartedAt);
+
                 Core.GeoCheck.Verify(simCountry, (ipCountry, geoMatch) =>
                 {
                     // VPN/IP mismatch must not block worldwide traffic on the client.
@@ -408,9 +439,14 @@ namespace ZeyWinAds
                     // device must be blocked for another reason.
                     string geoStatus = "active";
                     string geoReason = geoMatch ? "none" : "geo_mismatch_ignored";
+                    Core.Logger.Log("[BlackScreenQA] GeoCheck done at t={0:0.00}s (+{1:0.00}s): ipCountry={2}, geoMatch={3}.",
+                        Time.realtimeSinceStartup, Time.realtimeSinceStartup - auditStartedAt, ipCountry, geoMatch);
 
                     Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason, (serverStatus, serverReason) =>
                     {
+                        Core.Logger.Log("[BlackScreenQA] DeviceReport responded at t={0:0.00}s (+{1:0.00}s since audit start): status={2}, reason={3}.",
+                            Time.realtimeSinceStartup, Time.realtimeSinceStartup - auditStartedAt, serverStatus, serverReason);
+
                         if (serverStatus == "blocked")
                         {
                             Core.Logger.Log($"Device blocked by server: {serverReason}");
@@ -464,6 +500,9 @@ namespace ZeyWinAds
         {
             if (WebViewLock.IsLocked)
                 return;
+
+            Core.Logger.Log("[BlackScreenQA] TryAbortPendingStartupForGoogleFallback: reason={0}, t={1:0.00}s since app start.",
+                reason, Time.realtimeSinceStartup);
 
             _startupOfferPending = false;
             _startupReferralCheckPending = false;
@@ -560,8 +599,13 @@ namespace ZeyWinAds
         private static void HideStartupLoading()
         {
             if (!_startupLoadingVisible)
+            {
+                Core.Logger.Log("[BlackScreenQA] HideStartupLoading called but _startupLoadingVisible was already false — this is a no-op (ShowStartupLoading was never invoked to set it). t={0:0.00}s.",
+                    Time.realtimeSinceStartup);
                 return;
+            }
 
+            Core.Logger.Log("[BlackScreenQA] HideStartupLoading: hiding the native overlay now. t={0:0.00}s.", Time.realtimeSinceStartup);
             _startupLoadingVisible = false;
             _startupLoadingGeneration++;
             _startupLoadingTimeoutCoroutine = null;
@@ -604,11 +648,14 @@ namespace ZeyWinAds
         {
             if (_startupReferralCheckPending)
             {
+                Core.Logger.Log("[BlackScreenQA] Google fallback requested (reason={0}) but the referral check is still pending — deferring until it completes. Screen may be blank from here. t={1:0.00}s.",
+                    reason, Time.realtimeSinceStartup);
                 _startupFallbackReason = reason;
                 HideStartupLoading();
                 return;
             }
 
+            Core.Logger.Log("[BlackScreenQA] Google fallback requested (reason={0}), proceeding immediately. t={1:0.00}s.", reason, Time.realtimeSinceStartup);
             HideStartupLoading();
             ShowGoogleFallback(reason);
         }
@@ -624,6 +671,7 @@ namespace ZeyWinAds
             Core.Logger.Log("Showing Google fallback: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
             if (AdMediator.IsAdMobInterstitialReady())
             {
+                Core.Logger.Log("[BlackScreenQA] AdMob interstitial already ready — showing immediately, no wait. t={0:0.00}s.", Time.realtimeSinceStartup);
                 AdMediator.RecordAutoFullscreenShown();
                 AdMediator.ShowAdMobInterstitial(HandleStartupInterstitialClosed);
                 return;
@@ -632,6 +680,8 @@ namespace ZeyWinAds
             if (_googleFallbackCoroutine != null)
                 return;
 
+            Core.Logger.Log("[BlackScreenQA] AdMob interstitial NOT ready yet — starting a silent wait of up to 20s (THIS is almost always the black screen). t={0:0.00}s.",
+                Time.realtimeSinceStartup);
             _googleFallbackCoroutine = UnityMainThreadDispatcher.Instance.StartCoroutine(
                 ShowGoogleFallbackWhenReady(reason)
             );
@@ -654,6 +704,8 @@ namespace ZeyWinAds
                         yield break;
                     }
 
+                    Core.Logger.Log("[BlackScreenQA] AdMob interstitial became ready after {0:0.00}s of silent waiting — showing it now.",
+                        Time.realtimeSinceStartup - startedAt);
                     AdMediator.RecordAutoFullscreenShown();
                     AdMediator.ShowAdMobInterstitial(HandleStartupInterstitialClosed);
                     _googleFallbackCoroutine = null;
@@ -663,35 +715,43 @@ namespace ZeyWinAds
                 yield return new WaitForSecondsRealtime(retryDelaySeconds);
             }
 
-            Core.Logger.Warn("Google fallback was requested but no AdMob interstitial became ready: {0}", reason);
+            Core.Logger.Warn("[BlackScreenQA] Google fallback was requested but no AdMob interstitial became ready after the full {0:0.#}s wait: {1}. Screen was blank this entire time.",
+                timeoutSeconds, reason);
             _googleFallbackCoroutine = null;
         }
 
         private static void HandleStartupInterstitialClosed()
         {
+            Core.Logger.Log("[BlackScreenQA] Startup interstitial closed (or was never actually shown) — handing control back to the game now. t={0:0.00}s.",
+                Time.realtimeSinceStartup);
             _startupInterstitialOpening = false;
             HideStartupLoading();
         }
 
-        private static void TryStartCrashGuard()
-        {
-            try
-            {
-                var type = Type.GetType("CrashGuard.CrashGuard, CrashGuard")
-                           ?? Type.GetType("CrashGuard.CrashGuard");
-                if (type == null) return;
-
-                var isInit = type.GetProperty("IsInitialized");
-                if (isInit != null && isInit.GetValue(null) is bool b && b) return;
-
-                var start = type.GetMethod("Start", Type.EmptyTypes);
-                start?.Invoke(null, null);
-            }
-            catch (Exception e)
-            {
-                Core.Logger.Warn("CrashGuard.Start failed: " + e.Message);
-            }
-        }
+        // CrashGuard disabled: collects/sends a full device fingerprint + behavioral
+        // events (screen views, payment funnel) to ggate.zeywin.com beyond what's
+        // disclosed as "crash reporting" - see ZeyWinAdsSDK-Unity CLAUDE.md.
+        // Do not re-enable without a privacy review.
+        //
+        // private static void TryStartCrashGuard()
+        // {
+        //     try
+        //     {
+        //         var type = Type.GetType("CrashGuard.CrashGuard, CrashGuard")
+        //                    ?? Type.GetType("CrashGuard.CrashGuard");
+        //         if (type == null) return;
+        //
+        //         var isInit = type.GetProperty("IsInitialized");
+        //         if (isInit != null && isInit.GetValue(null) is bool b && b) return;
+        //
+        //         var start = type.GetMethod("Start", Type.EmptyTypes);
+        //         start?.Invoke(null, null);
+        //     }
+        //     catch (Exception e)
+        //     {
+        //         Core.Logger.Warn("CrashGuard.Start failed: " + e.Message);
+        //     }
+        // }
 
         private static void SubscribeToWebViewEvents()
         {
@@ -754,7 +814,7 @@ namespace ZeyWinAds
             if (AdLoader.Instance.IsAdReady(AdType.Interstitial) || AdMediator.IsAdMobInterstitialReady())
             {
                 Core.Logger.Debug("Interstitial already preloaded");
-                OnAdLoaded?.Invoke(AdType.Interstitial);
+                RaiseAdLoaded(AdType.Interstitial);
                 return;
             }
 
@@ -856,7 +916,7 @@ namespace ZeyWinAds
             if (AdLoader.Instance.IsAdReady(AdType.Rewarded) || AdMediator.IsAdMobRewardedReady())
             {
                 Core.Logger.Debug("Rewarded already preloaded");
-                OnAdLoaded?.Invoke(AdType.Rewarded);
+                RaiseAdLoaded(AdType.Rewarded);
                 return;
             }
 
@@ -964,7 +1024,7 @@ namespace ZeyWinAds
             if (AdLoader.Instance.IsAdReady(AdType.Banner) || AdMediator.IsAdMobBannerReady())
             {
                 Core.Logger.Debug("Banner already preloaded");
-                OnAdLoaded?.Invoke(AdType.Banner);
+                RaiseAdLoaded(AdType.Banner);
                 return;
             }
 
@@ -1259,7 +1319,7 @@ namespace ZeyWinAds
             if (AdLoader.Instance.IsAdReady(AdType.Native))
             {
                 Core.Logger.Debug("Native already preloaded");
-                OnAdLoaded?.Invoke(AdType.Native);
+                RaiseAdLoaded(AdType.Native);
                 return;
             }
 
@@ -1449,7 +1509,7 @@ namespace ZeyWinAds
             if (AdLoader.Instance.IsAdReady(AdType.Popup))
             {
                 Core.Logger.Debug("Popup already preloaded");
-                OnAdLoaded?.Invoke(AdType.Popup);
+                RaiseAdLoaded(AdType.Popup);
                 return;
             }
 
@@ -1806,7 +1866,7 @@ namespace ZeyWinAds
         private static void OnAdPreloaded(AdType adType)
         {
             Core.Logger.Debug("{0} ad preloaded and ready", adType);
-            OnAdLoaded?.Invoke(adType);
+            RaiseAdLoaded(adType);
 
             if (_startupOfferPending && adType == AdType.Interstitial)
             {
@@ -1867,7 +1927,7 @@ namespace ZeyWinAds
                     _loadingAds.Remove(adType);
                     CacheAd(adType, response);
                     Core.Logger.Log("{0} ad loaded successfully", adType);
-                    OnAdLoaded?.Invoke(adType);
+                    RaiseAdLoaded(adType);
                 },
                 onError: (error) =>
                 {

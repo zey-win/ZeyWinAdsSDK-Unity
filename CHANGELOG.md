@@ -2,6 +2,23 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.64
+
+- Replaced native accelerometer sampling for the anti-fraud motion signal with
+  `UnityEngine.Input.acceleration`, uniformly on Android and iOS. Removes the
+  native Android (`ZeyWinAdsMotionCollector.java`, `SensorManager`) and iOS
+  (`ZeyWinAdsMotion.mm`, `CMMotionManager`) plugins entirely, eliminating a JNI
+  call site that was previously flagged for the cold-start `SIGABRT` risk.
+  Output shape and sampling constants (2000ms window, 32-frame cap, 60ms
+  min-gap, mm/s² clamp to ±40000) are unchanged; `MotionCollector.Collect`'s
+  public API is untouched. Projects whose `Active Input Handling` is set to
+  "Input System Package (New)" only (currently: Bet-App, BlackJackNew) degrade
+  safely to `has_accel=false` instead of throwing.
+- Consolidated three duplicated native `Build.VERSION.SDK_INT` reflection
+  reads (`AndroidRuntimePermissions.cs`, `WebViewLock.cs`, `HtmlAdView.cs`)
+  into a single `DeviceInfo.GetAndroidApiLevel()`, which parses the API level
+  out of `SystemInfo.operatingSystem` instead of a native call.
+
 ## 3.9.63
 
 - Fixed the cold-start `SIGABRT` (`JNI DETECTED ERROR IN APPLICATION: jlr_method == null`) seen on

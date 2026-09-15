@@ -74,10 +74,5 @@ namespace ZeyWinAds.Core
             DeviceIdentity.OnATTStatusReceived(status);
             AppTrackingTransparency.HandleNativeStatus(status);
         }
-
-        public void OnMotionCollected(string json)
-        {
-            MotionCollector.HandleNativeResult(json);
-        }
     }
 }

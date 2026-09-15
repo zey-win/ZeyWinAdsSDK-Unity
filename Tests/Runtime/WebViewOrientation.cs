@@ -27,7 +27,12 @@ namespace ZeyWinAds.Tests.Runtime
     // and does not go Inconclusive.
     //
     // Class name "WebViewOrientation..." sorts after "WebViewCapabilities..." — NUnit runs fixtures
-    // in name order, so this is kept after the capability suite (the [Order] is intent only).
+    // in name order (a class-level [Order] attribute doesn't compile in this Unity Test Framework
+    // version — CS0592, method declarations only), so this is kept after the capability suite (the
+    // method-level [Order] below is intent only). Renaming any fixture in this suite must keep the
+    // alphabetical chain intact: DeviceIdentity, OfferAndLoadingScreen, PreloadAdMobAds,
+    // PreloadZeyWinAds, PushNotifications, WebViewCapabilities, WebViewOrientation,
+    // WebViewSafeArea, ZAdMobDirectPreload (deliberately last — see that file's header for why).
     [TestFixture]
     public class WebViewOrientation : WebViewFixture
     {

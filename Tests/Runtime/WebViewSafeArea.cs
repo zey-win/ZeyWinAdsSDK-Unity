@@ -30,8 +30,13 @@ namespace ZeyWinAds.Tests.Runtime
     // => FAIL, not Inconclusive.
     //
     // Class name "WebViewSafeArea..." sorts after "WebViewOrientation..." / "WebViewCapabilities..."
-    // — NUnit runs fixtures in name order, so this runs last of the three (the [Order] is intent
-    // only).
+    // — NUnit runs fixtures in name order (a class-level [Order] attribute doesn't compile in this
+    // Unity Test Framework version — CS0592, method declarations only), so this runs last of the
+    // three (the method-level [Order] below is intent only). Renaming any fixture in this suite
+    // must keep the alphabetical chain intact: DeviceIdentity, OfferAndLoadingScreen,
+    // PreloadAdMobAds / PreloadZeyWinAds, PushNotifications, WebViewCapabilities,
+    // WebViewOrientation, WebViewSafeArea, ZAdMobDirectPreload (deliberately last — see
+    // that file's header for why).
     [TestFixture]
     public class WebViewSafeArea : WebViewFixture
     {

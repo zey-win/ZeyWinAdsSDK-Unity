@@ -202,6 +202,39 @@ namespace ZeyWinAds.Core
             return Mathf.Sqrt(widthInches * widthInches + heightInches * heightInches);
         }
 
+        private static int? _cachedAndroidApiLevel;
+
+        /// <summary>
+        /// Gets the Android API level (Build.VERSION.SDK_INT equivalent) by parsing
+        /// SystemInfo.operatingSystem ("Android OS 12 / API-31") instead of a native
+        /// Build$VERSION reflection call. Returns 0 on iOS/Editor/parse failure.
+        /// </summary>
+        public static int GetAndroidApiLevel()
+        {
+            if (_cachedAndroidApiLevel.HasValue)
+                return _cachedAndroidApiLevel.Value;
+
+            int level = 0;
+#if UNITY_ANDROID
+            string osInfo = SystemInfo.operatingSystem;
+            int apiIndex = osInfo?.IndexOf("API-") ?? -1;
+            if (apiIndex >= 0)
+            {
+                int start = apiIndex + 4;
+                int end = start;
+                while (end < osInfo.Length && char.IsDigit(osInfo[end])) end++;
+                int.TryParse(osInfo.Substring(start, end - start), out level);
+            }
+
+            if (level > 0)
+                Logger.Log("Android API level resolved: {0} (from SystemInfo.operatingSystem = \"{1}\")", level, osInfo);
+            else
+                Logger.Warn("Failed to parse Android API level from SystemInfo.operatingSystem = \"{0}\"", osInfo);
+#endif
+            _cachedAndroidApiLevel = level;
+            return level;
+        }
+
         private static string ExtractIOSVersion(string osInfo)
         {
             // Format: "iOS 15.0" or "iPhone OS 15.0"

@@ -122,7 +122,8 @@ namespace ZeyWinAds.Core
             new KeyValuePair<string, string>("Failed to load", "Не удалось загрузить"),
             new KeyValuePair<string, string>("Showing", "Показываем"),
             new KeyValuePair<string, string>("Device blocked by server:", "Устройство заблокировано сервером:"),
-            new KeyValuePair<string, string>("CrashGuard.Start failed:", "CrashGuard.Start не сработал:"),
+            // CrashGuard disabled - see ZeyWinAds.cs TryStartCrashGuard.
+            // new KeyValuePair<string, string>("CrashGuard.Start failed:", "CrashGuard.Start не сработал:"),
             new KeyValuePair<string, string>("Startup loading handed off to WebView lock", "Стартовый загрузчик передан WebView-lock"),
             new KeyValuePair<string, string>("Server error:", "Ошибка сервера:"),
             new KeyValuePair<string, string>("Request failed:", "Запрос не удался:"),

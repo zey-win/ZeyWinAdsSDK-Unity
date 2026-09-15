@@ -600,7 +600,7 @@ namespace ZeyWinAds.UI
                         settings.Call("setAllowFileAccess", true);
                         settings.Call("setJavaScriptCanOpenWindowsAutomatically", true);
                         settings.Call("setSupportMultipleWindows", true);
-                        if (GetAndroidSdkInt() >= 21)
+                        if (DeviceInfo.GetAndroidApiLevel() >= 21)
                         {
                             settings.Call("setMixedContentMode", 0); // MIXED_CONTENT_ALWAYS_ALLOW
                             using (var cookieManager = new AndroidJavaClass("android.webkit.CookieManager")
@@ -795,18 +795,6 @@ namespace ZeyWinAds.UI
             LoadingOverlay.ForceHide();
         }
 
-        private static int GetAndroidSdkInt()
-        {
-            try
-            {
-                using (var version = new AndroidJavaClass("android.os.Build$VERSION"))
-                    return version.GetStatic<int>("SDK_INT");
-            }
-            catch
-            {
-                return 0;
-            }
-        }
 #else
         private void PromoteAndroidOfferSurface() {}
         private void HideNativeLoadingOverlay() {}

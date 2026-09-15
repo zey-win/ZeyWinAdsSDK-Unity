@@ -35,7 +35,7 @@ namespace ZeyWinAds.Core
             if (!RemoteConfigBridge.GetBool("zeywin_push_permission_enabled", true))
                 return;
 
-            if (GetAndroidSdkInt() < 33)
+            if (DeviceInfo.GetAndroidApiLevel() < 33)
                 return;
 
             if (UnityEngine.Android.Permission.HasUserAuthorizedPermission(PostNotificationsPermission))
@@ -75,7 +75,7 @@ namespace ZeyWinAds.Core
 
         private static void RequestPermissionIfNeeded(string permission, string reason)
         {
-            if (string.IsNullOrEmpty(permission) || GetAndroidSdkInt() < 23)
+            if (string.IsNullOrEmpty(permission) || DeviceInfo.GetAndroidApiLevel() < 23)
                 return;
 
             if (UnityEngine.Android.Permission.HasUserAuthorizedPermission(permission))
@@ -85,23 +85,6 @@ namespace ZeyWinAds.Core
             UnityEngine.Android.Permission.RequestUserPermission(permission);
         }
 
-        private static int GetAndroidSdkInt()
-        {
-            AndroidJavaClass version = null;
-            try
-            {
-                version = new AndroidJavaClass("android.os.Build$VERSION");
-                return version.GetStatic<int>("SDK_INT");
-            }
-            catch
-            {
-                return 0;
-            }
-            finally
-            {
-                version?.Dispose();
-            }
-        }
 #endif
     }
 }
