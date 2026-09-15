@@ -95,7 +95,9 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: Library
-          key: Library-Android
+          key: Library-Android-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json') }}
+          restore-keys: |
+            Library-Android-
 
       - uses: game-ci/unity-builder@v4
         env:
