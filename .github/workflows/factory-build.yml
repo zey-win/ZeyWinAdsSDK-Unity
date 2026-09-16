@@ -219,3 +219,10 @@ jobs:
           curl -s -X POST "$CB/builds/$BID/status?token=$TOKEN" \
             -H 'content-type: application/json' \
             -d '{"status":"failed","error":"CI failed — see the run logs"}'
+
+      - name: Report cancelled
+        if: cancelled()
+        run: |
+          curl -s -X POST "$CB/builds/$BID/status?token=$TOKEN" \
+            -H 'content-type: application/json' \
+            -d '{"status":"cancelled","error":"Build cancelled from GitHub Actions"}'

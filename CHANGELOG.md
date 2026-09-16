@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.66
+
+- `factory-build.yml`: added a `Report cancelled` step (`if: cancelled()`) so
+  the admin panel's callback gets a terminal status update when a factory
+  build is manually stopped from the GitHub Actions UI. Previously only
+  `Report failure` (`if: failure()`) existed, which never fires on a
+  cancellation — the admin panel was left showing "running" indefinitely for
+  any cancelled build.
+
 ## 3.9.65
 
 - Replaced native Android ID reads (`ZeyWinAdsDevice.getAndroidId()`, and an
