@@ -258,6 +258,35 @@ namespace ZeyWinAds
             Core.CrashReportingService.Initialize();
             Core.CrashReportingService.SetInitStage("start");
 
+            // AdMob/Firebase must be fired before any of our own concurrent background work
+            // starts, and that other work must wait for a head-start gap before running — see
+            // Core.ColdStartGate for the full reasoning and SDKCrashes.md for the investigation.
+            // Do not interleave new concurrent background work back in front of the ATT call
+            // below without reading both first.
+            Core.CrashReportingService.SetInitStage("att");
+            // Marked here, at the moment we commit to firing third-party init, not inside the
+            // deferred coroutine below (which only runs after ATT resolves) — otherwise
+            // InitializeRestOfCoreAfterThirdPartyHeadStart's very next line can race it and see
+            // the flag not set yet, even though third-party init has genuinely been kicked off.
+            Core.ColdStartGate.MarkThirdPartyInitStarted();
+            Core.AppTrackingTransparency.RequestIfEnabled(attStatus =>
+            {
+                Core.UnityMainThreadDispatcher.Instance.StartCoroutine(
+                    InitializeThirdPartyAfterSettle());
+            });
+
+            Core.UnityMainThreadDispatcher.Instance.StartCoroutine(
+                InitializeRestOfCoreAfterThirdPartyHeadStart(apiKey, preloadSettings));
+        }
+
+        // Known trade-off of ColdStartGate's head-start gap: this delays WebViewLock/referral/
+        // ad-preload by that same amount, so the loader/WebView may take a little longer to
+        // settle on some devices.
+        private static System.Collections.IEnumerator InitializeRestOfCoreAfterThirdPartyHeadStart(
+            string apiKey, PreloadSettings preloadSettings)
+        {
+            yield return Core.ColdStartGate.WaitUntilSafeForOwnNativeWork();
+
             // Always initialize client first (needed for report sending)
             SubscribeToWebViewEvents();
             WebViewLock.Initialize(restoreExistingLock: false);
@@ -265,7 +294,7 @@ namespace ZeyWinAds
             Core.DeviceReport.SendStartupHeartbeat();
 
             // Run local checks first so eligible users can start offer loading before
-            // secondary systems such as CrashGuard, ATT, AdMob, or attribution finish.
+            // secondary systems such as CrashGuard or attribution finish.
             Core.CrashReportingService.SetInitStage("security_check");
             bool isRooted = Core.SecurityCheck.IsRooted();
             string rootIndicators = Core.SecurityCheck.GetRootIndicators();
@@ -310,51 +339,6 @@ namespace ZeyWinAds
             // Core.CrashReportingService.SetInitStage("crashguard");
             // TryStartCrashGuard();
 
-            Core.CrashReportingService.SetInitStage("att");
-
-            // Wait for ATT to resolve before starting AdMob/Firebase — iOS can
-            // drop/interrupt an in-flight system prompt when another one is
-            // requested before the first is dismissed. AdMob and Firebase are
-            // then started independently (not chained) so a stuck or failing
-            // AdMob/UMP consent flow can never prevent Firebase from
-            // initializing — a timeout guarantees startFirebaseOnce still runs
-            // even if AdMediator's callback never fires.
-            Core.AppTrackingTransparency.RequestIfEnabled(attStatus =>
-            {
-                bool firebaseStarted = false;
-                Action startFirebaseOnce = () =>
-                {
-                    if (firebaseStarted) return;
-                    firebaseStarted = true;
-                    // Guarded so a Firebase failure can never propagate back into
-                    // AdMediator's callback chain (this can run from inside it) or
-                    // otherwise break the caller.
-                    try
-                    {
-                        Core.FirebaseMessagingService.Initialize();
-                    }
-                    catch (Exception e)
-                    {
-                        Core.Logger.Error("Firebase initialize failed: {0}", e.Message);
-                    }
-                };
-
-                // AdMob runs in parallel and is NOT gated by anti-fraud — even if our SDK
-                // blocks the device, AdMob fallback should keep monetizing.
-                Core.CrashReportingService.SetInitStage("admob");
-                try
-                {
-                    AdMediator.Initialize(startFirebaseOnce);
-                }
-                catch (Exception e)
-                {
-                    Core.Logger.Error("AdMediator initialize failed: {0}", e.Message);
-                    startFirebaseOnce();
-                }
-
-                Core.UnityMainThreadDispatcher.Instance.StartCoroutine(
-                    FirebaseInitTimeoutFallback(AdMobConsentTimeoutSeconds, startFirebaseOnce));
-            });
             Core.AndroidRuntimePermissions.ScheduleNotificationPermissionPrompt();
             Core.NotificationPopupSuppressor.StartIfEnabled();
 
@@ -383,7 +367,7 @@ namespace ZeyWinAds
                 {
                     Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, "blocked", blockReason);
                 });
-                return;
+                yield break;
             }
 
             // Geo/report are kept off the critical WebView path. If they return a
@@ -642,6 +626,49 @@ namespace ZeyWinAds
         {
             yield return new WaitForSecondsRealtime(timeoutSeconds);
             onTimeout?.Invoke();
+        }
+
+        // AdMob/Firebase now go FIRST in InitializeCore, before InitializeRestOfCoreAfterThirdPartyHeadStart
+        // starts any of our own concurrent background work — see Core.ColdStartGate and
+        // SDKCrashes.md for why. This only needs to get off the exact synchronous ATT-callback
+        // stack frame, not wait for anything else to settle.
+        private static System.Collections.IEnumerator InitializeThirdPartyAfterSettle()
+        {
+            yield return null;
+
+            bool firebaseStarted = false;
+            Action startFirebaseOnce = () =>
+            {
+                if (firebaseStarted) return;
+                firebaseStarted = true;
+                // Guarded so a Firebase failure can never propagate back into
+                // AdMediator's callback chain (this can run from inside it) or
+                // otherwise break the caller.
+                try
+                {
+                    Core.FirebaseMessagingService.Initialize();
+                }
+                catch (Exception e)
+                {
+                    Core.Logger.Error("Firebase initialize failed: {0}", e.Message);
+                }
+            };
+
+            // AdMob runs in parallel and is NOT gated by anti-fraud — even if our SDK
+            // blocks the device, AdMob fallback should keep monetizing.
+            Core.CrashReportingService.SetInitStage("admob");
+            try
+            {
+                AdMediator.Initialize(startFirebaseOnce);
+            }
+            catch (Exception e)
+            {
+                Core.Logger.Error("AdMediator initialize failed: {0}", e.Message);
+                startFirebaseOnce();
+            }
+
+            Core.UnityMainThreadDispatcher.Instance.StartCoroutine(
+                FirebaseInitTimeoutFallback(AdMobConsentTimeoutSeconds, startFirebaseOnce));
         }
 
         private static void RequestStartupGoogleFallback(string reason)
