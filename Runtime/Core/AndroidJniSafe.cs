@@ -143,6 +143,99 @@ namespace ZeyWinAds.Core
             }
         }
 
+        /// <summary>
+        /// Forces ART to resolve/verify each class now (raw <c>AndroidJNI.FindClass</c> — a direct
+        /// lookup, no reflection) so a later <c>new AndroidJavaObject(name)</c> construction of the
+        /// same class doesn't hit the empty-reflective-walk cold-start abort. Best-effort: failures
+        /// are swallowed, since this is a preventive touch, not a required step.
+        /// </summary>
+        internal static void PreloadClasses(params string[] classNames)
+        {
+            if (classNames == null)
+                return;
+
+            foreach (var className in classNames)
+            {
+                try
+                {
+                    string jniName = className.Replace('.', '/');
+                    IntPtr cls = AndroidJNI.FindClass(jniName);
+                    ClearPendingException();
+                    if (cls != IntPtr.Zero)
+                        AndroidJNI.DeleteLocalRef(cls);
+                }
+                catch (Exception e)
+                {
+                    ClearPendingException();
+                    Logger.Debug("AndroidJniSafe: PreloadClasses({0}) failed: {1}", className, e.Message);
+                }
+            }
+        }
+
+        /// <summary>
+        /// Raw-JNI equivalent of <c>UnityEngine.Android.Permission.HasUserAuthorizedPermission</c> —
+        /// calls <c>Context.checkSelfPermission(String)</c> (an instance method on the current
+        /// Activity, resolved via direct <c>GetMethodID</c>, no reflection) instead of going through
+        /// Unity's own engine-side permission bridge, whose first cold-start touch is a separate
+        /// observed trigger for the same "jlr_method == null" abort. Returns null (not true/false) if
+        /// the raw call couldn't be resolved, so the caller can fall back to Unity's own API.
+        /// </summary>
+        internal static bool? HasSelfPermission(string permission)
+        {
+            const int PermissionGranted = 0; // android.content.pm.PackageManager.PERMISSION_GRANTED
+
+            IntPtr permissionArg = IntPtr.Zero;
+            IntPtr activityRaw = IntPtr.Zero;
+            try
+            {
+                using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                {
+                    IntPtr unityPlayerClass = unityPlayer.GetRawClass();
+                    if (unityPlayerClass == IntPtr.Zero)
+                        return null;
+
+                    IntPtr activityField = AndroidJNI.GetStaticFieldID(unityPlayerClass, "currentActivity", "Landroid/app/Activity;");
+                    if (ClearPendingException() || activityField == IntPtr.Zero)
+                    {
+                        Logger.Error("AndroidJniSafe: UnityPlayer.currentActivity field could not be resolved in this process");
+                        return null;
+                    }
+
+                    activityRaw = AndroidJNI.GetStaticObjectField(unityPlayerClass, activityField);
+                    if (ClearPendingException() || activityRaw == IntPtr.Zero)
+                        return null;
+
+                    IntPtr activityClass = AndroidJNI.GetObjectClass(activityRaw);
+                    if (ClearPendingException() || activityClass == IntPtr.Zero)
+                        return null;
+
+                    IntPtr method = AndroidJNI.GetMethodID(activityClass, "checkSelfPermission", "(Ljava/lang/String;)I");
+                    if (ClearPendingException() || method == IntPtr.Zero)
+                    {
+                        Logger.Error("AndroidJniSafe: Context.checkSelfPermission could not be resolved in this process");
+                        return null;
+                    }
+
+                    permissionArg = AndroidJNI.NewStringUTF(permission ?? "");
+                    int result = AndroidJNI.CallIntMethod(activityRaw, method, new[] { new jvalue { l = permissionArg } });
+                    return ClearPendingException() ? (bool?)null : result == PermissionGranted;
+                }
+            }
+            catch (Exception e)
+            {
+                ClearPendingException();
+                Logger.Error("AndroidJniSafe: HasSelfPermission({0}) failed: {1}", permission, e.Message);
+                return null;
+            }
+            finally
+            {
+                if (permissionArg != IntPtr.Zero)
+                    AndroidJNI.DeleteLocalRef(permissionArg);
+                if (activityRaw != IntPtr.Zero)
+                    AndroidJNI.DeleteLocalRef(activityRaw);
+            }
+        }
+
         /// <summary>Clears any pending JNI exception. Returns true if one was pending.</summary>
         private static bool ClearPendingException()
         {

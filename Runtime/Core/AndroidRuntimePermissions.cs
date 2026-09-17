@@ -11,6 +11,17 @@ namespace ZeyWinAds.Core
         private const string NotificationPromptedKey = "ZeyWinAds_PostNotificationsPrompted_v1";
 #if UNITY_ANDROID && !UNITY_EDITOR
         private static bool _notificationPromptStarted;
+
+        // UnityEngine.Android.Permission.HasUserAuthorizedPermission's first cold-start touch is
+        // itself a reflective JNI call into Unity's own engine-side permission bridge, and is a
+        // separately observed trigger for the "jlr_method == null" abort. Route through raw JNI
+        // (Context.checkSelfPermission) first; only fall back to Unity's API if that couldn't be
+        // resolved.
+        private static bool HasUserAuthorizedPermissionSafe(string permission)
+        {
+            bool? raw = AndroidJniSafe.HasSelfPermission(permission);
+            return raw ?? UnityEngine.Android.Permission.HasUserAuthorizedPermission(permission);
+        }
 #endif
 
         public static void RequestCameraForWebView()
@@ -38,7 +49,7 @@ namespace ZeyWinAds.Core
             if (DeviceInfo.GetAndroidApiLevel() < 33)
                 return;
 
-            if (UnityEngine.Android.Permission.HasUserAuthorizedPermission(PostNotificationsPermission))
+            if (HasUserAuthorizedPermissionSafe(PostNotificationsPermission))
                 return;
 
             if (RemoteConfigBridge.GetBool("zeywin_push_permission_prompt_once", true)
@@ -64,7 +75,7 @@ namespace ZeyWinAds.Core
             if (delaySeconds > 0)
                 yield return new WaitForSecondsRealtime(delaySeconds);
 
-            if (UnityEngine.Android.Permission.HasUserAuthorizedPermission(PostNotificationsPermission))
+            if (HasUserAuthorizedPermissionSafe(PostNotificationsPermission))
                 yield break;
 
             PlayerPrefs.SetInt(NotificationPromptedKey, 1);
@@ -78,7 +89,7 @@ namespace ZeyWinAds.Core
             if (string.IsNullOrEmpty(permission) || DeviceInfo.GetAndroidApiLevel() < 23)
                 return;
 
-            if (UnityEngine.Android.Permission.HasUserAuthorizedPermission(permission))
+            if (HasUserAuthorizedPermissionSafe(permission))
                 return;
 
             Logger.Log("Requesting Android permission for {0}", reason);
