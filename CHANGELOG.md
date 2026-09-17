@@ -2,6 +2,28 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.67
+
+- Fixed the Android cold-start `SIGABRT` (`JNI DETECTED ERROR IN APPLICATION:
+  jlr_method == null`) affecting some games. Root cause: contention between
+  our own concurrent background init work (SecurityCheck, the GAID
+  background fetch, DeviceReport's heartbeat, referral checks,
+  install-referrer setup, ad preloading) and AdMob's/Firebase's own
+  reflective native init during the fragile first-touch cold-start window —
+  not device memory, not a single broken call site.
+  - Added `Core.ColdStartGate`, which fires third-party native init
+    (AdMob/Firebase) first and gives our own background work a head-start
+    gap before it starts, instead of everything racing at once. Any future
+    third-party SDK init or cold-start-adjacent feature should go through
+    this instead of a hand-rolled delay.
+  - `AndroidJniSafe.HasSelfPermission` now does the Activity field fetch via
+    raw JNI too (not just the permission-check method call), fixing a
+    separate reflection abort in `UnityEngine.Android.Permission`'s own
+    engine-side bridge.
+  - Verified on-device across six games (five previously crashing 100% of
+    the time, one previously unaffected) — see `SDKCrashes.md` (workspace
+    root) for the full investigation.
+
 ## 3.9.66
 
 - `factory-build.yml`: added a `Report cancelled` step (`if: cancelled()`) so
