@@ -1,0 +1,136 @@
+apply plugin: 'com.android.application'
+apply from: 'setupSymbols.gradle'
+apply from: '../shared/keepUnitySymbols.gradle'
+apply from: '../shared/common.gradle'
+
+// Crashlytics Gradle plugin — the only real mechanism for uploading the R8
+// mapping file to Crashlytics. There is no working `firebase
+// crashlytics:mapping*:upload` CLI command (confirmed against firebase-tools:
+// https://github.com/firebase/firebase-tools/issues/7927) — native symbol
+// upload (a separate, already-working CI step, via
+// `firebase crashlytics:symbols:upload` in factory-build.yml) is unrelated to
+// this and left alone.
+//
+// v3 of this plugin REQUIRES com.google.gms.google-services as a prerequisite
+// (confirmed: v2.9.9, the last pre-v3 release, uses the legacy
+// `applicationVariants` AGP API that's been removed from the AGP version
+// Unity 6000.3 bundles — confirmed by an actual failed build this session, so
+// pinning to an older version is not viable here). Since Unity's own Firebase
+// integration doesn't apply google-services itself (it bakes
+// google-services.json into resources its own way — see
+// FactoryBuildPreprocessor.cs's "google-services.json gotcha" notes), a
+// separate build step (FactoryBuildPreprocessor's OnPostGenerateGradleAndroidProject)
+// copies google-services.json directly into this launcher module's directory
+// so the google-services plugin can find it as it normally expects.
+buildscript {
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.google.gms:google-services:4.4.1'
+        classpath 'com.google.firebase:firebase-crashlytics-gradle:3.0.6'
+    }
+}
+
+// Applied here, BEFORE the android{} block below — not at the bottom of the file (the usual
+// documented convention for simple top-level firebaseCrashlytics{} usage). That convention
+// doesn't work here: this file uses firebaseCrashlytics{} INSIDE
+// android.buildTypes.release{}, and Gradle evaluates the file top-to-bottom, so the plugin
+// must already be applied by the time that block is reached, or the firebaseCrashlytics()
+// extension method won't exist yet on BuildType (confirmed by an actual failed build this
+// session: "Could not find method firebaseCrashlytics() ... on BuildType").
+//
+// Conditional on google-services.json actually being present in this module directory —
+// FactoryGoogleServicesGradleStager (FactoryBuildPreprocessor.cs) copies it here before Gradle
+// runs, if it found one anywhere under Assets/. A project with no Firebase config at all (never
+// set up, or mid-setup) must still be able to build — hard-requiring the file here reproduced
+// two real failures this session ("File google-services.json is missing" /
+// "No matching client found for package name ..."). Without it, this whole block is skipped and
+// the build behaves exactly like Unity's own default launcher template: no google-services
+// baking, no Crashlytics mapping upload, but a working build.
+def hasGoogleServicesJson = file('google-services.json').exists()
+if (hasGoogleServicesJson) {
+    apply plugin: 'com.google.gms.google-services'
+    apply plugin: 'com.google.firebase.crashlytics'
+}
+
+dependencies {
+    implementation project(':unityLibrary')
+}
+
+android {
+    namespace "**NAMESPACE**"
+    ndkPath "**NDKPATH**"
+    ndkVersion "**NDKVERSION**"
+    compileSdk **APIVERSION**
+    buildToolsVersion "**BUILDTOOLS**"
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    defaultConfig {
+        minSdk **MINSDK**
+        targetSdk **TARGETSDK**
+        applicationId '**APPLICATIONID**'
+        ndk {
+            abiFilters **ABIFILTERS**
+            debugSymbolLevel **DEBUGSYMBOLLEVEL**
+        }
+        versionCode **VERSIONCODE**
+        versionName '**VERSIONNAME**'
+    }
+
+    androidResources {
+        noCompress = **BUILTIN_NOCOMPRESS** + unityStreamingAssets.tokenize(', ')
+        ignoreAssetsPattern = "!.svn:!.git:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~"
+    }**SIGN**
+
+    lint {
+        abortOnError false
+    }
+
+    buildTypes {
+        debug {
+            minifyEnabled **MINIFY_DEBUG**
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')**SIGNCONFIG**
+            jniDebuggable true
+        }
+        release {
+            minifyEnabled **MINIFY_RELEASE**
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt')**SIGNCONFIG**
+            // v3's firebaseCrashlytics{} moved here (per-variant, not top-level). Only callable
+            // when the crashlytics plugin was actually applied above — guarded by the same
+            // hasGoogleServicesJson check, since the extension method doesn't exist otherwise.
+            // Left empty deliberately: mapping-file upload is automatic in v3 once
+            // Minify + the plugin are both present, no toggle needed. Native symbol
+            // upload is explicitly left off here since it's already handled by the
+            // separate `firebase crashlytics:symbols:upload` CI step — enabling both
+            // would upload symbols twice through two different mechanisms.
+            if (hasGoogleServicesJson) {
+                firebaseCrashlytics {
+                    nativeSymbolUploadEnabled false
+                }
+            }
+        }
+    }**PACKAGING****PLAY_ASSET_PACKS****SPLITS**
+**BUILT_APK_LOCATION**
+    bundle {
+        language {
+            enableSplit false
+        }
+        density {
+            enableSplit false
+        }
+        abi {
+            enableSplit true
+        }
+        texture {
+            enableSplit true
+        }
+    }
+
+	**GOOGLE_PLAY_DEPENDENCIES**
+}**SPLITS_VERSION_CODE****LAUNCHER_SOURCE_BUILD_SETUP**
