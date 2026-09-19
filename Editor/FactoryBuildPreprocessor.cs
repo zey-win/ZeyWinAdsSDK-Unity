@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEditor.Build.Reporting;
@@ -38,7 +39,7 @@ namespace ZeyWinAds.Editor
     {
         public int callbackOrder => -100;
 
-        private const string LogPrefix = "[FactoryBuildPreprocessor]";
+        internal const string LogPrefix = "[FactoryBuildPreprocessor]";
         private const string GoogleMobileAdsSettingsPath = "Assets/GoogleMobileAds/Resources/GoogleMobileAdsSettings.asset";
 
         // Bundle id for builds that run WITHOUT a staged factory/ config — a developer building
@@ -169,9 +170,141 @@ namespace ZeyWinAds.Editor
             }
         }
 
+        // Minify (R8) Release should be on for every shipped build — see QATests/MinifyPolicy.cs
+        // for why. Applied here (not just gated on) so a build never fails over a setting this
+        // preprocessor can just fix itself — the QA gate stays as a backstop in case this method
+        // is ever bypassed, and as the check surfaced to the Test Runner / manual "Run QA Checks".
+        private static void EnsureMinifyEnabled()
+        {
+            if (PlayerSettings.Android.minifyRelease)
+                return;
+
+            PlayerSettings.Android.minifyRelease = true;
+            Debug.Log($"{LogPrefix} Enabled Android Minify Release (was off).");
+        }
+
+        // ZeyWinAds' JNI bridge (com.zeywinads.unity.*) is called by name from native/C# code
+        // (see Runtime/Core/AndroidJniSafe.cs), invisible to R8's static analysis — without this
+        // rule, a consuming game enabling Minify/R8 can have R8 silently strip or rename those
+        // classes, causing a NoSuchMethodError/ClassNotFoundException at runtime instead of a
+        // build failure. Unity auto-merges any file at this exact path into the release build's
+        // consumer proguard rules. Staged here (not committed per base repo) so it can't silently
+        // go missing on a project revert — ships identically to every consuming game, same
+        // reasoning as everything else in this preprocessor.
+        private const string ProguardKeepRulePath = "Assets/Plugins/Android/proguard-user.txt";
+        private const string ZeyWinAdsKeepRule = "-keep class com.zeywinads.unity.** { *; }";
+
+        // Idempotent: appends only if the rule isn't already present, so a game's own additional
+        // proguard-user.txt rules are preserved rather than overwritten. Runs unconditionally for
+        // every Android build (factory or local) — Minify safety shouldn't depend on whether a
+        // factory config happens to be staged.
+        private static void StageMinifyKeepRules()
+        {
+            Directory.CreateDirectory("Assets/Plugins/Android");
+
+            var existing = File.Exists(ProguardKeepRulePath) ? File.ReadAllText(ProguardKeepRulePath) : string.Empty;
+            if (existing.Contains(ZeyWinAdsKeepRule))
+                return;
+
+            var separator = existing.Length > 0 && !existing.EndsWith("\n") ? "\n" : string.Empty;
+            File.AppendAllText(ProguardKeepRulePath, separator + ZeyWinAdsKeepRule + "\n");
+            AssetDatabase.ImportAsset(ProguardKeepRulePath);
+            Debug.Log($"{LogPrefix} Ensured ZeyWinAds JNI keep rule is present in '{ProguardKeepRulePath}'.");
+        }
+
+        // play-services-ads (GoogleMobileAds) has an implicit runtime dependency on
+        // androidx.work.impl.WorkDatabase that Unity's Android Resolver doesn't pull in
+        // automatically — without it, the app crashes on every launch ("Failed to create an
+        // instance of androidx.work.impl.WorkDatabase" inside androidx.startup.InitializationProvider,
+        // confirmed on-device this session). Only staged for games that actually use
+        // com.google.ads.mobile — a game without AdMob never hits this crash and shouldn't carry
+        // an unexplained extra dependency. Idempotent, same pattern as StageMinifyKeepRules.
+        private const string WorkManagerDepsPath = "Assets/Editor/WorkManagerDependencies.xml";
+        private const string WorkManagerSpec = "androidx.work:work-runtime:2.11.2";
+        private const string AdMobPackageId = "com.google.ads.mobile";
+
+        private static void StageWorkManagerDependencyFix()
+        {
+            const string manifestPath = "Packages/manifest.json";
+            if (!File.Exists(manifestPath) || !File.ReadAllText(manifestPath).Contains(AdMobPackageId))
+                return; // This project doesn't use AdMob, so it can't hit this crash.
+
+            if (File.Exists(WorkManagerDepsPath) && File.ReadAllText(WorkManagerDepsPath).Contains("androidx.work:work-runtime"))
+                return; // Already present (possibly a different pinned version — don't clobber it).
+
+            Directory.CreateDirectory("Assets/Editor");
+            File.WriteAllText(WorkManagerDepsPath,
+                "<!-- play-services-ads (GoogleMobileAds) has an implicit runtime dependency on\n" +
+                "     androidx.work.impl.WorkDatabase that Unity's Android Resolver doesn't pull\n" +
+                "     in automatically, since it's never explicitly declared in\n" +
+                "     GoogleMobileAdsDependencies.xml. Without it, the app crashes on every\n" +
+                "     launch: \"Failed to create an instance of androidx.work.impl.WorkDatabase\"\n" +
+                "     inside androidx.startup.InitializationProvider. Declaring it explicitly\n" +
+                "     here ensures the full WorkManager runtime (including the Room-generated\n" +
+                "     WorkDatabase_Impl) is actually bundled. Auto-staged by FactoryBuildPreprocessor\n" +
+                "     — safe to edit the pinned version below, but don't delete this file. -->\n\n" +
+                "<dependencies>\n" +
+                "  <androidPackages>\n" +
+                $"    <androidPackage spec=\"{WorkManagerSpec}\">\n" +
+                "    </androidPackage>\n" +
+                "  </androidPackages>\n" +
+                "</dependencies>\n");
+            AssetDatabase.ImportAsset(WorkManagerDepsPath);
+            Debug.Log($"{LogPrefix} Staged '{WorkManagerDepsPath}' ({WorkManagerSpec}) — this project uses " +
+                $"{AdMobPackageId}, which needs it to avoid a WorkDatabase crash on launch.");
+        }
+
+        // Absolute path to this script on disk, resolved by the compiler at compile time — works
+        // correctly regardless of how the SDK package is installed (git package cache, local
+        // `file:` path for dev, embedded), since Unity recompiles from the package's current
+        // on-disk location every domain reload. Used to locate the bundled launcherTemplate.gradle
+        // sitting next to this file under GradleTemplates/, without a Resources-folder or
+        // AssetDatabase-GUID workaround.
+        private static string SdkTemplateSourcePath([CallerFilePath] string callerFilePath = "") =>
+            Path.Combine(Path.GetDirectoryName(callerFilePath), "GradleTemplates", "launcherTemplate.gradle");
+
+        private const string LauncherTemplatePath = "Assets/Plugins/Android/launcherTemplate.gradle";
+
+        // Stages the SDK's launcherTemplate.gradle (Crashlytics Gradle plugin applied +
+        // firebaseCrashlytics.mappingFileUploadEnabled) into the consuming game if it doesn't
+        // already have one of its own. Unity's default Android export has no launcherTemplate.gradle
+        // at all unless one exists at this path — Unity auto-uses it once it's there. Never
+        // overwrites a game's own customized launcher template; warns instead so the gap is visible
+        // rather than silently skipping mapping upload.
+        private static void StageCrashlyticsLauncherTemplate()
+        {
+            if (File.Exists(LauncherTemplatePath))
+            {
+                var contents = File.ReadAllText(LauncherTemplatePath);
+                if (!contents.Contains("com.google.firebase.crashlytics"))
+                    Debug.LogWarning($"{LogPrefix} '{LauncherTemplatePath}' already exists and doesn't " +
+                        "reference the Crashlytics Gradle plugin — not overwriting it, so automatic " +
+                        $"mapping-file upload is NOT wired in. Merge '{SdkTemplateSourcePath()}' in " +
+                        "manually if you want it.");
+                return;
+            }
+
+            Directory.CreateDirectory("Assets/Plugins/Android");
+            File.Copy(SdkTemplateSourcePath(), LauncherTemplatePath);
+            AssetDatabase.ImportAsset(LauncherTemplatePath);
+            Debug.Log($"{LogPrefix} Staged '{LauncherTemplatePath}' from the SDK — enables automatic " +
+                "Crashlytics mapping-file upload during release builds. " +
+                "NOTE: firebaseCrashlytics.googleServicesResourceRoot in this template is unverified " +
+                "against a real build yet — check the build log if mapping upload fails.");
+        }
+
         public void OnPreprocessBuild(BuildReport report)
         {
             var group = ActiveTargetGroup;
+
+            if (group == BuildTargetGroup.Android)
+            {
+                EnsureMinifyEnabled();
+                StageMinifyKeepRules();
+                StageWorkManagerDependencyFix();
+                StageCrashlyticsLauncherTemplate();
+            }
+
             var cfgPath = Path.Combine(Directory.GetCurrentDirectory(), "factory/factory-config.json");
             if (!File.Exists(cfgPath))
             {
@@ -398,5 +531,74 @@ namespace ZeyWinAds.Editor
             throw new BuildFailedException($"{LogPrefix} {reason}");
         }
     }
+
+#if UNITY_ANDROID
+    // The com.google.gms.google-services Gradle plugin (required by the Crashlytics Gradle
+    // plugin v3 — see launcherTemplate.gradle) expects a google-services.json sitting directly
+    // next to the launcher module's build.gradle, the same way a normal (non-Unity) Android
+    // project has it next to app/build.gradle. Unity's own Firebase integration doesn't put it
+    // there — it only bakes google-services.json into string resources via its own
+    // GenerateXmlFromGoogleServicesJson tool (see the "google-services.json gotcha" notes on
+    // FactoryBuildPreprocessor above). This runs after Unity generates the Gradle project (the
+    // launcher/unityLibrary folder structure exists by this point, unlike in
+    // OnPreprocessBuild) and copies the same canonical json Unity's own tooling uses.
+    //
+    // IPostGenerateGradleAndroidProject is deprecated in favor of OnModifyAndroidProjectFiles /
+    // AndroidProjectFilesModifier, but deliberately used here anyway: it's simpler, well
+    // understood, and Unity keeps it functional for a long transition window — safer than the
+    // newer, less-documented API for a first attempt at this specific wiring.
+    public class FactoryGoogleServicesGradleStager : IPostGenerateGradleAndroidProject
+    {
+        public int callbackOrder => 0;
+
+        public void OnPostGenerateGradleAndroidProject(string path)
+        {
+            // `path` is the generated unityLibrary module's directory; the launcher module is
+            // its sibling.
+            var launcherDir = Path.GetFullPath(Path.Combine(path, "..", "launcher"));
+            if (!Directory.Exists(launcherDir))
+            {
+                Debug.LogWarning($"{FactoryBuildPreprocessor.LogPrefix} Expected launcher module " +
+                    $"at '{launcherDir}' but it doesn't exist — skipping google-services.json " +
+                    "staging. Crashlytics mapping upload will fail without it.");
+                return;
+            }
+
+            var src = FindGoogleServicesJson();
+            if (src == null)
+            {
+                Debug.LogWarning($"{FactoryBuildPreprocessor.LogPrefix} No 'google-services.json' found " +
+                    "anywhere under Assets/ — skipping staging into the launcher module. Crashlytics " +
+                    "mapping upload will fail without it.");
+                return;
+            }
+
+            File.Copy(src, Path.Combine(launcherDir, "google-services.json"), true);
+            Debug.Log($"{FactoryBuildPreprocessor.LogPrefix} Copied '{src}' into the " +
+                $"launcher module ('{launcherDir}') for the google-services Gradle plugin.");
+        }
+
+        // Resolution order: Assets/Plugins/Android/google-services.json (the conventional
+        // per-project location a developer would drop a real Firebase config for local/non-factory
+        // builds) → Assets/google-services.json (the canonical location factory CI writes to,
+        // per FactoryBuildPreprocessor.PurgeStrayGoogleServicesJson — that method purges every
+        // other copy under Assets/, including Plugins/Android, so on a factory build this is
+        // exactly what's left) → any other google-services.json anywhere under Assets/, as a last
+        // resort for a project that hasn't adopted either convention yet.
+        private static string FindGoogleServicesJson()
+        {
+            const string pluginsAndroidSrc = "Assets/Plugins/Android/google-services.json";
+            if (File.Exists(pluginsAndroidSrc))
+                return pluginsAndroidSrc;
+
+            const string canonicalSrc = "Assets/google-services.json";
+            if (File.Exists(canonicalSrc))
+                return canonicalSrc;
+
+            return Directory.EnumerateFiles("Assets", "google-services.json", SearchOption.AllDirectories)
+                .FirstOrDefault();
+        }
+    }
+#endif
 }
 #endif

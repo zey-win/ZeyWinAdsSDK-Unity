@@ -2,6 +2,24 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.68
+
+- `FactoryBuildPreprocessor` now self-heals Minify and known crash fixes on
+  every Android build (factory or local), instead of only gating on them:
+  enables Minify Release if it's off, stages the WorkManager runtime
+  dependency fix for AdMob projects, and stages a new `launcherTemplate.gradle`
+  that applies the `google-services` + Crashlytics Gradle plugins so R8's
+  `mapping.txt` actually gets uploaded to Crashlytics (there is no working CLI
+  command for this upload).
+- `google-services.json` resolution for the above now checks
+  `Assets/Plugins/Android/` first, then `Assets/google-services.json`, then
+  anywhere else under `Assets/` — and the Gradle plugins are only applied when
+  one actually resolves, so a project with none configured still builds
+  instead of hard-failing.
+- Added `MinifyPolicy` and `CrashFixesPolicy` QA checks (with EditMode tests),
+  registered in `QaChecksRunner`, so both are build-blocking via the existing
+  `QaTestsPreProcessor`.
+
 ## 3.9.67
 
 - Fixed the Android cold-start `SIGABRT` (`JNI DETECTED ERROR IN APPLICATION:
