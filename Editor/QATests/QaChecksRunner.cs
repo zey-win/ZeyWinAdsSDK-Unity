@@ -30,6 +30,8 @@ namespace ZeyWinAds.Editor.QATests
                 new QaCheckResult("Min SDK version", ApiLevelPolicy.ValidateMinSdk()),
                 new QaCheckResult("Managed stripping level", StrippingLevelPolicy.ValidateStrippingLevel()),
                 new QaCheckResult("Android launcher icons", LauncherIconPolicy.ValidateAndroidIcons()),
+                new QaCheckResult("Minify Release", MinifyPolicy.ValidateMinifyRelease()),
+                new QaCheckResult("Known crash fixes present", CrashFixesPolicy.ValidateAll()),
                 // Future pre-build QA checks add another entry here.
             };
             return results;
