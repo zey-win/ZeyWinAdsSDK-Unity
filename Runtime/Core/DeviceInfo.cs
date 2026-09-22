@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace ZeyWinAds.Core
@@ -184,6 +185,39 @@ namespace ZeyWinAds.Core
             _cachedDeviceModel = null;
             _cachedOSVersion = null;
             _cachedLanguage = null;
+            _cachedIsGooglePlayGamesOnPC = null;
+        }
+
+        private static bool? _cachedIsGooglePlayGamesOnPC;
+
+        /// <summary>
+        /// True only when running inside Google Play Games on PC (the Android-emulation
+        /// runtime Google ships for Windows) - not "any Windows PC" in general. Detected via
+        /// the HPE_EXPERIENCE system feature, per Google's documented runtime-detection method.
+        /// </summary>
+        public static bool IsGooglePlayGamesOnPC()
+        {
+            if (_cachedIsGooglePlayGamesOnPC.HasValue)
+                return _cachedIsGooglePlayGamesOnPC.Value;
+
+            bool isPC = false;
+#if UNITY_ANDROID && !UNITY_EDITOR
+            try
+            {
+                using (var unityPlayer = new AndroidJavaClass("com.unity3d.player.UnityPlayer"))
+                using (var activity = unityPlayer.GetStatic<AndroidJavaObject>("currentActivity"))
+                using (var packageManager = activity.Call<AndroidJavaObject>("getPackageManager"))
+                {
+                    isPC = packageManager.Call<bool>("hasSystemFeature", "com.google.android.play.feature.HPE_EXPERIENCE");
+                }
+            }
+            catch (Exception e)
+            {
+                Logger.Warn("Failed to detect Google Play Games on PC: {0}", e.Message);
+            }
+#endif
+            _cachedIsGooglePlayGamesOnPC = isPC;
+            return isPC;
         }
 
         private static float GetScreenDiagonalInches()

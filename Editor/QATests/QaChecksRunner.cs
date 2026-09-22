@@ -32,6 +32,7 @@ namespace ZeyWinAds.Editor.QATests
                 new QaCheckResult("Android launcher icons", LauncherIconPolicy.ValidateAndroidIcons()),
                 new QaCheckResult("Minify Release", MinifyPolicy.ValidateMinifyRelease()),
                 new QaCheckResult("Known crash fixes present", CrashFixesPolicy.ValidateAll()),
+                new QaCheckResult("Play Games on PC manifest compatibility", PlayGamesOnPcPolicy.ValidateSourceManifest()),
                 // Future pre-build QA checks add another entry here.
             };
             return results;
