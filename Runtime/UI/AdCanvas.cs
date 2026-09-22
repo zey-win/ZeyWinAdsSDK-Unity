@@ -276,13 +276,22 @@ namespace ZeyWinAds.UI
 
         private IEnumerator LoadImageCoroutine(string url, Action<Texture2D> callback)
         {
-            using (var request = UnityWebRequestTexture.GetTexture(url))
+            // Plain UnityWebRequest + Texture2D.LoadImage(mipChain: false) instead of
+            // UnityWebRequestTexture.GetTexture()/DownloadHandlerTexture: the latter
+            // always generates a full mip chain, which costs ~25-33% extra memory per
+            // image for zero benefit here — every image loaded through this method
+            // (banner/popup media_url, native/interstitial/rewarded icon_url) is a
+            // fixed-size UI element, never viewed at varying scale/distance, so mips
+            // are pure waste. Confirmed via Memory Profiler: an 11.2MB native ad icon
+            // texture matched exactly the size of a mipmapped 1024x1024 RGBA32 image.
+            using (var request = UnityWebRequest.Get(url))
             {
                 yield return request.SendWebRequest();
 
                 if (request.result == UnityWebRequest.Result.Success)
                 {
-                    var texture = DownloadHandlerTexture.GetContent(request);
+                    var texture = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
+                    texture.LoadImage(request.downloadHandler.data);
                     callback?.Invoke(texture);
                 }
                 else
