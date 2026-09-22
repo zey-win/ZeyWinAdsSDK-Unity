@@ -1176,6 +1176,16 @@ allprojects {
 
             if (!plist.root.values.ContainsKey("NSMicrophoneUsageDescription"))
                 plist.root.SetString("NSMicrophoneUsageDescription", "Microphone access is required by web content.");
+
+            // Fallback only — unlike Camera/Microphone above this isn't tied to WebView
+            // content; it covers any consuming game that surfaces a "players near you"
+            // style feature without wiring its own NSLocationWhenInUseUsageDescription.
+            // Apple rejects a build outright if a location API is ever invoked with no
+            // usage string present at all, so every game gets a safe default rather than
+            // relying on each one remembering to set it.
+            if (!plist.root.values.ContainsKey("NSLocationWhenInUseUsageDescription"))
+                plist.root.SetString("NSLocationWhenInUseUsageDescription",
+                    "We use your location to connect you with nearby players and personalize your experience.");
         }
 
         private static void PatchIosPrivacy(PlistDocument plist, ZeyWinAdsSettings settings)
