@@ -2,6 +2,15 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.69
+
+- `AdMobBuildPostprocessor.PatchIosWebViewPermissions` now also sets a
+  `NSLocationWhenInUseUsageDescription` fallback on iOS builds (only if a
+  game hasn't already set its own) — same "fallback, never overrides"
+  pattern already used for Camera/Microphone. Without this, a game that
+  ever invokes a location API with no usage string present gets rejected
+  outright by App Store review; now every game gets a safe default.
+
 ## 3.9.68
 
 - `FactoryBuildPreprocessor` now self-heals Minify and known crash fixes on
