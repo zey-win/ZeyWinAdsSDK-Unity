@@ -2,6 +2,27 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.70
+
+- Adds `ZeyWinAds.OnStartupResolvedNoWebView` — a single, reliable signal
+  for "no webview will show this session" so a game's Start/splash scene
+  can safely transition off once it fires, instead of guessing. Gated on
+  the referral/offer race actually settling, backed by a 15s hard-cap
+  backstop (matching the native loader's own auto-dismiss) that
+  force-clears any startup flag that didn't call back on its own. The
+  native loader now also closes automatically on resolution, delayed
+  0.5s so a consumer's synchronous `SceneManager.LoadScene()` has time to
+  finish first.
+- Fixes a startup deadlock: `OnAdPreloaded`'s `ShowInterstitial()` call
+  never passed `HandleStartupInterstitialClosed`, so the startup flow
+  never resolved on its own once the interstitial closed on that path —
+  only the 15s backstop caught it, showing up as an intermittent
+  multi-second startup stall.
+- `MinifyPolicy`'s QA check now also verifies `proguard-user.txt` exists,
+  isn't empty, and actually contains the ZeyWinAds keep rule — the
+  Custom Proguard File toggle alone previously passed even with a
+  0-byte file.
+
 ## 3.9.69
 
 - `AdMobBuildPostprocessor.PatchIosWebViewPermissions` now also sets a

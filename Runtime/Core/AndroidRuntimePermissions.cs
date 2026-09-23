@@ -30,7 +30,8 @@ namespace ZeyWinAds.Core
             if (!RemoteConfigBridge.GetBool("zeywin_webview_camera_permission_enabled", true))
                 return;
 
-            RequestPermissionIfNeeded(CameraPermission, "WebView camera");
+            if (!DeviceInfo.IsGooglePlayGamesOnPC())
+                RequestPermissionIfNeeded(CameraPermission, "WebView camera");
 
             if (RemoteConfigBridge.GetBool("zeywin_webview_microphone_permission_enabled", true))
                 RequestPermissionIfNeeded(RecordAudioPermission, "WebView microphone");
