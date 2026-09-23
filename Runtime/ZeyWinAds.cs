@@ -72,9 +72,20 @@ namespace ZeyWinAds
         private static Coroutine _startupLoadingTimeoutCoroutine;
         private static int _startupLoadingGeneration;
         private static string _startupFallbackReason;
+        private static bool _startupResolvedNoWebView;
+        private static bool _webViewWillShowThisSession;
+        private static Coroutine _noWebViewResolutionBackstopCoroutine;
+        private static Coroutine _hideLoaderAfterNoWebViewDelayCoroutine;
         private const int DefaultPopupFirstShowDelaySeconds = 20;
         private const int DefaultPopupRepeatDelaySeconds = 60;
         private const float StartupLoadingMaxVisibleSeconds = 8f;
+
+        // Matches ZeyWinAdsStartupOverlay's native 15s auto-dismiss.
+        private const float NoWebViewResolutionHardCapSeconds = 15f;
+
+        // Gives a consumer's synchronous SceneManager.LoadScene() time to finish before
+        // the loader reveals whatever's underneath.
+        private const float NoWebViewLoaderCloseDelaySeconds = 0.5f;
         private const float AdMobConsentTimeoutSeconds = 8f;
         private static int _popupFirstShowDelaySeconds = DefaultPopupFirstShowDelaySeconds;
         private static int _popupRepeatDelaySeconds = DefaultPopupRepeatDelaySeconds;
@@ -92,6 +103,15 @@ namespace ZeyWinAds
         public static event Action<int> OnRewardEarned;
         public static event Action OnBannerHidden;
         public static event Action<string> OnWebViewLocked;
+        /// <summary>
+        /// Fires exactly once per app session the moment the startup flow has
+        /// definitively resolved that no webview will be shown — covering every
+        /// terminal path (local/server block, referral no-match, startup ad flow
+        /// completing, the 8s hard-timeout backstop, and the Google-fallback
+        /// poll/cooldown exhausting silently). Mirrors OnWebViewLocked: exactly
+        /// one of these two ever fires per session — whichever resolves first.
+        /// </summary>
+        public static event Action<string> OnStartupResolvedNoWebView;
 
         // Tracks whether an ad of each type has successfully loaded at least once since app
         // start, independent of whether it has since been shown/consumed. A subscriber to
@@ -114,6 +134,22 @@ namespace ZeyWinAds
         }
         public static event Action OnWebViewUnlocked;
         public static event Action<string> OnDeviceBlocked;
+
+        /// <summary>
+        /// True once OnStartupResolvedNoWebView has fired this session. A late
+        /// subscriber (e.g. a Start-scene controller whose Awake() runs after
+        /// ZeyWinAdsAutoInitializer's BeforeSceneLoad init already resolved —
+        /// possible on very fast paths like a local device block) should check
+        /// this immediately after subscribing, since it may have already missed
+        /// the event.
+        /// </summary>
+        public static bool HasStartupResolvedNoWebView => _startupResolvedNoWebView;
+
+        /// <summary>
+        /// The reason passed to the OnStartupResolvedNoWebView event, or null if
+        /// it hasn't fired yet this session.
+        /// </summary>
+        public static string StartupNoWebViewReason { get; private set; }
 
         /// <summary>
         /// Fired when the user taps a push notification. deeplink may be an
@@ -361,6 +397,7 @@ namespace ZeyWinAds
                 BlockDevice(blockReason);
                 HideStartupLoading();
                 ShowGoogleFallback(blockReason);
+                MarkStartupResolvedNoWebView(blockReason);
 
                 // Still resolve route so DeviceReport can send
                 Core.ProxyConfig.Resolve(() =>
@@ -403,7 +440,13 @@ namespace ZeyWinAds
                     reason, Time.realtimeSinceStartup);
                 HideStartupLoading();
                 ShowGoogleFallback(reason);
+                return;
             }
+
+            // _startupReferralCheckPending is already false here (cleared above) —
+            // this only actually resolves if the offer/interstitial flow has also
+            // settled, same as every other terminal point.
+            TryResolveNoWebViewIfSettled("referral_no_match");
         }
 
         private static void StartStartupEligibilityAudit(bool hasSim, string simCountry, string detectedPackages, bool deviceClean)
@@ -470,6 +513,7 @@ namespace ZeyWinAds
 
             StartAutomaticSurfacePreload();
 
+            StartNoWebViewResolutionBackstop();
             StartStartupReferralCheck();
             StartStartupOfferFlow();
         }
@@ -500,6 +544,7 @@ namespace ZeyWinAds
             _cachedPopup = null;
             BlockDevice(reason);
             RequestStartupGoogleFallback(reason);
+            MarkStartupResolvedNoWebView(reason);
         }
 
         private static void BlockDevice(string reason)
@@ -615,6 +660,7 @@ namespace ZeyWinAds
             _startupLoadingGeneration++;
             _startupLoadingTimeoutCoroutine = null;
             LoadingOverlay.ForceHide();
+            TryResolveNoWebViewIfSettled("startup_timeout_8s");
         }
 
         /// <summary>
@@ -692,6 +738,7 @@ namespace ZeyWinAds
             if (!AdMediator.CanShowAutoFullscreen(out float remainingSeconds))
             {
                 Core.Logger.Log("Google fallback skipped by auto-show cooldown: {0}s remaining", Mathf.CeilToInt(remainingSeconds));
+                TryResolveNoWebViewIfSettled(reason);
                 return;
             }
 
@@ -728,6 +775,7 @@ namespace ZeyWinAds
                     {
                         Core.Logger.Log("Google fallback skipped by auto-show cooldown: {0}s remaining", Mathf.CeilToInt(remainingSeconds));
                         _googleFallbackCoroutine = null;
+                        TryResolveNoWebViewIfSettled(reason);
                         yield break;
                     }
 
@@ -745,6 +793,7 @@ namespace ZeyWinAds
             Core.Logger.Warn("[BlackScreenQA] Google fallback was requested but no AdMob interstitial became ready after the full {0:0.#}s wait: {1}. Screen was blank this entire time.",
                 timeoutSeconds, reason);
             _googleFallbackCoroutine = null;
+            TryResolveNoWebViewIfSettled(reason);
         }
 
         private static void HandleStartupInterstitialClosed()
@@ -753,6 +802,7 @@ namespace ZeyWinAds
                 Time.realtimeSinceStartup);
             _startupInterstitialOpening = false;
             HideStartupLoading();
+            TryResolveNoWebViewIfSettled("startup_ad_flow_complete");
         }
 
         // CrashGuard disabled: collects/sends a full device fingerprint + behavioral
@@ -790,8 +840,113 @@ namespace ZeyWinAds
             _webViewEventsSubscribed = true;
         }
 
+        /// <summary>
+        /// Last-resort guarantee that startup always resolves. The flags
+        /// TryResolveNoWebViewIfSettled gates on don't always get cleared on their own
+        /// (e.g. AdLoader.PreloadAd silently drops a request under ad-request suspension) —
+        /// this force-clears all of them at the 15s hard cap, matching the native loader's
+        /// own auto-dismiss.
+        /// </summary>
+        private static void StartNoWebViewResolutionBackstop()
+        {
+            if (_noWebViewResolutionBackstopCoroutine != null)
+                return;
+
+            _noWebViewResolutionBackstopCoroutine = UnityMainThreadDispatcher.Instance.StartCoroutine(
+                NoWebViewResolutionBackstopRoutine());
+        }
+
+        private static void StopNoWebViewResolutionBackstop()
+        {
+            if (_noWebViewResolutionBackstopCoroutine == null)
+                return;
+
+            UnityMainThreadDispatcher.Instance.StopCoroutine(_noWebViewResolutionBackstopCoroutine);
+            _noWebViewResolutionBackstopCoroutine = null;
+        }
+
+        private static System.Collections.IEnumerator NoWebViewResolutionBackstopRoutine()
+        {
+            yield return new WaitForSecondsRealtime(NoWebViewResolutionHardCapSeconds);
+            _noWebViewResolutionBackstopCoroutine = null;
+
+            if (_startupResolvedNoWebView || _webViewWillShowThisSession || WebViewLock.IsLocked)
+                yield break;
+
+            if (_startupOfferPending || _startupInterstitialOpening || _startupReferralCheckPending)
+            {
+                Core.Logger.Warn("[BlackScreenQA] No-webview backstop firing at t={0:0.00}s (15s hard cap): flow never called back " +
+                    "(_startupOfferPending={1}, _startupInterstitialOpening={2}, _startupReferralCheckPending={3}) — force-clearing and resolving anyway.",
+                    Time.realtimeSinceStartup, _startupOfferPending, _startupInterstitialOpening, _startupReferralCheckPending);
+                _startupOfferPending = false;
+                _startupInterstitialOpening = false;
+                _startupReferralCheckPending = false;
+            }
+
+            MarkStartupResolvedNoWebView("startup_backstop_hard_cap_15s");
+        }
+
+        /// <summary>
+        /// Gate for the race between the referral check and the ad/interstitial flow —
+        /// only resolves once both have settled. Block paths (local/server) skip this and
+        /// call MarkStartupResolvedNoWebView directly, since a block is permanent.
+        /// </summary>
+        private static void TryResolveNoWebViewIfSettled(string reason)
+        {
+            if (_startupReferralCheckPending || _startupOfferPending || _startupInterstitialOpening)
+                return;
+
+            MarkStartupResolvedNoWebView(reason);
+        }
+
+        /// <summary>
+        /// Single funnel for "no webview will be shown this session" — the mirror of
+        /// HandleWebViewLocked. Idempotent; whichever happens first wins.
+        /// </summary>
+        private static void MarkStartupResolvedNoWebView(string reason)
+        {
+            if (_startupResolvedNoWebView || _webViewWillShowThisSession || WebViewLock.IsLocked)
+                return;
+
+            _startupResolvedNoWebView = true;
+            StartupNoWebViewReason = string.IsNullOrEmpty(reason) ? "unknown" : reason;
+            StopNoWebViewResolutionBackstop();
+            Core.Logger.Log("[BlackScreenQA] Startup resolved: no webview will be shown (reason={0}). t={1:0.00}s.",
+                StartupNoWebViewReason, Time.realtimeSinceStartup);
+
+            // Delayed, not immediate: gives a consumer's synchronous SceneManager.LoadScene()
+            // (called from its OnStartupResolvedNoWebView handler) time to finish before the
+            // loader reveals what's underneath. Unity is single-threaded, so this wait can't
+            // elapse mid-load — the loader only closes once both are done.
+            _hideLoaderAfterNoWebViewDelayCoroutine = UnityMainThreadDispatcher.Instance.StartCoroutine(
+                HideLoaderAfterNoWebViewDelay());
+
+            OnStartupResolvedNoWebView?.Invoke(StartupNoWebViewReason);
+        }
+
+        private static System.Collections.IEnumerator HideLoaderAfterNoWebViewDelay()
+        {
+            yield return new WaitForSecondsRealtime(NoWebViewLoaderCloseDelaySeconds);
+            _hideLoaderAfterNoWebViewDelayCoroutine = null;
+
+            Core.Logger.Log("[BlackScreenQA] HideLoaderAfterNoWebViewDelay firing now, t={0:0.00}s (delay was {1:0.00}s).",
+                Time.realtimeSinceStartup, NoWebViewLoaderCloseDelaySeconds);
+
+            // ForceHide, not Hide: the native loader was shown outside LoadingOverlay's
+            // ref-counting, so Hide() would no-op here.
+            LoadingOverlay.ForceHide();
+        }
+
         private static void HandleWebViewLocked(string url)
         {
+            if (_startupResolvedNoWebView)
+            {
+                Core.Logger.Warn("[BlackScreenQA] WebView locked after startup had already resolved 'no webview' (reason={0}) — pre-existing race in the startup flow, game may already be transitioning scenes.",
+                    StartupNoWebViewReason);
+            }
+            _webViewWillShowThisSession = true;
+            StopNoWebViewResolutionBackstop();
+
             if (_startupLoadingVisible)
             {
                 _startupOfferPending = false;
@@ -1899,7 +2054,9 @@ namespace ZeyWinAds
             {
                 _startupOfferPending = false;
                 _startupInterstitialOpening = true;
-                ShowInterstitial();
+                // Without this callback, nothing resolves the startup flow once this
+                // interstitial closes — it'd sit stuck until the 15s backstop.
+                ShowInterstitial(HandleStartupInterstitialClosed);
                 return;
             }
 
@@ -2171,6 +2328,17 @@ namespace ZeyWinAds
             AdMediator.Reset();
 
             DeviceInfo.ClearCache();
+
+            _startupResolvedNoWebView = false;
+            _webViewWillShowThisSession = false;
+            StartupNoWebViewReason = null;
+            StopNoWebViewResolutionBackstop();
+
+            if (_hideLoaderAfterNoWebViewDelayCoroutine != null)
+            {
+                UnityMainThreadDispatcher.Instance.StopCoroutine(_hideLoaderAfterNoWebViewDelayCoroutine);
+                _hideLoaderAfterNoWebViewDelayCoroutine = null;
+            }
         }
 
         #endregion
