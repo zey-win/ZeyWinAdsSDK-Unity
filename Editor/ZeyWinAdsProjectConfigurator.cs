@@ -101,17 +101,6 @@ namespace ZeyWinAds.Editor
 
             PlayerSettings.SplashScreen.show = false;
             PlayerSettings.SplashScreen.showUnityLogo = false;
-
-            bool enableAutorotation = !TryGet(args, "enableAutorotation", out string autorotate)
-                || ParseBool(autorotate, true);
-            if (enableAutorotation)
-            {
-                PlayerSettings.defaultInterfaceOrientation = UIOrientation.AutoRotation;
-                PlayerSettings.allowedAutorotateToPortrait = true;
-                PlayerSettings.allowedAutorotateToPortraitUpsideDown = true;
-                PlayerSettings.allowedAutorotateToLandscapeLeft = true;
-                PlayerSettings.allowedAutorotateToLandscapeRight = true;
-            }
         }
 
         private static void ApplyLowQualitySettings()
