@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using ZeyWinAds.Core;
 using Logger = ZeyWinAds.Core.Logger;
 
 namespace ZeyWinAds.UI
@@ -16,7 +17,15 @@ namespace ZeyWinAds.UI
         private static Image _image;
         private static int _depth;
 
-        public static void Show(string reason)
+        // GMA close/fail events arrive on a Java thread; SetActive there throws and leaves the
+        // opaque backdrop covering the game. Marshal so callers needn't care.
+        public static void Show(string reason) => UnityMainThreadDispatcher.RunOnMainThread(() => ShowOnMain(reason));
+
+        public static void Hide(string reason) => UnityMainThreadDispatcher.RunOnMainThread(() => HideOnMain(reason));
+
+        public static void ForceHide(string reason) => UnityMainThreadDispatcher.RunOnMainThread(() => ForceHideOnMain(reason));
+
+        private static void ShowOnMain(string reason)
         {
             _depth++;
             Ensure();
@@ -26,7 +35,7 @@ namespace ZeyWinAds.UI
             Logger.Debug("[AdMob] Fullscreen themed backdrop shown: {0}", SafeReason(reason));
         }
 
-        public static void Hide(string reason)
+        private static void HideOnMain(string reason)
         {
             if (_depth > 0)
                 _depth--;
@@ -36,7 +45,7 @@ namespace ZeyWinAds.UI
             Logger.Debug("[AdMob] Fullscreen themed backdrop hidden: {0}", SafeReason(reason));
         }
 
-        public static void ForceHide(string reason)
+        private static void ForceHideOnMain(string reason)
         {
             _depth = 0;
             if (_root != null)
