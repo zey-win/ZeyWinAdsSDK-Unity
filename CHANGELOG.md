@@ -2,6 +2,38 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.73
+
+- Fixes AdMob interstitial and rewarded ads not being reloaded after they
+  were shown. The min-interval throttle also blocked reloading an ad that
+  had just been consumed, so an ad closed less than 60s after the previous
+  request was never reloaded and the next show did nothing; a throttled
+  preload was also dropped outright. Interstitial and rewarded ads now
+  reload immediately after they are shown or fail to show, and a throttled
+  preload schedules one retry for when the throttle window ends.
+- Adds `AdMediator.PreloadAdMobInterstitial()` and
+  `AdMediator.PreloadAdMobRewarded()`. They are called when ZeyWin has
+  nothing ready, so the AdMob fallback is loading too.
+- Stops logging identifying values. `DeviceIdentity` no longer prints the
+  hashed Android ID / IDFV fallback id or the real advertising ID, and
+  `UniWebViewSafety` no longer prints the offer URL, which can carry click
+  and sub ids. `GAID_RESULT source=real|fallback|none` is still logged once
+  per launch, without the value.
+- Removes the temporary `[BlackScreenQA]` startup diagnostic logging. The
+  warning for a WebView that locks after startup already resolved "no
+  webview" stays.
+- Documents two changes that are in the `v3.9.72` tag but were missing from
+  its entry below:
+  - Google's UMP consent flow now always runs before AdMob requests ads, in
+    every app. The `enableUmpConsent` setting is removed (8 of 19 games had
+    it switched off). The form is only shown where UMP requires it, for
+    example in the EEA and UK.
+  - **Breaking:** `ZeyWinAds.Editor.ZeyWinAdsAndroidBuilder` and its
+    "Build Android APK/AAB From Args" menu items are removed. Factory builds
+    go through `FactoryBuildPreprocessor` and `factory-build.yml`; any
+    external script that runs `BuildFromCommandLine` with `-executeMethod`
+    must be updated.
+
 ## 3.9.72
 
 - Fixes a white screen that stayed over the game after an AdMob interstitial
