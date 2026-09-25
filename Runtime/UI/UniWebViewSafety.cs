@@ -91,7 +91,7 @@ namespace ZeyWinAds.UI
 
             if (ShouldOpenExternally(url) || LooksLikeDownload(url))
             {
-                Logger.Debug("Opening WebView URL externally: {0}", url);
+                Logger.Debug("Opening WebView URL externally");
                 Application.OpenURL(url);
                 return false;
             }

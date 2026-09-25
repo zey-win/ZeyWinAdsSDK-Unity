@@ -426,8 +426,6 @@ namespace ZeyWinAds
         private static void HandleStartupReferralCheckCompleted(bool lockedWebView)
         {
             _startupReferralCheckPending = false;
-            Core.Logger.Log("[BlackScreenQA] Referral check completed at t={0:0.00}s: lockedWebView={1}.",
-                Time.realtimeSinceStartup, lockedWebView);
 
             if (lockedWebView || WebViewLock.IsLocked)
                 return;
@@ -436,8 +434,6 @@ namespace ZeyWinAds
             {
                 string reason = _startupFallbackReason;
                 _startupFallbackReason = null;
-                Core.Logger.Log("[BlackScreenQA] Referral check finished — now showing the Google fallback that was deferred (reason={0}). t={1:0.00}s.",
-                    reason, Time.realtimeSinceStartup);
                 HideStartupLoading();
                 ShowGoogleFallback(reason);
                 return;
@@ -451,14 +447,8 @@ namespace ZeyWinAds
 
         private static void StartStartupEligibilityAudit(bool hasSim, string simCountry, string detectedPackages, bool deviceClean)
         {
-            float auditStartedAt = Time.realtimeSinceStartup;
-            Core.Logger.Log("[BlackScreenQA] Eligibility audit started (proxy -> geo -> device-report) at t={0:0.00}s since app start.", auditStartedAt);
-
             Core.ProxyConfig.Resolve(() =>
             {
-                Core.Logger.Log("[BlackScreenQA] ProxyConfig resolved at t={0:0.00}s (+{1:0.00}s).",
-                    Time.realtimeSinceStartup, Time.realtimeSinceStartup - auditStartedAt);
-
                 Core.GeoCheck.Verify(simCountry, (ipCountry, geoMatch) =>
                 {
                     // VPN/IP mismatch must not block worldwide traffic on the client.
@@ -466,14 +456,9 @@ namespace ZeyWinAds
                     // device must be blocked for another reason.
                     string geoStatus = "active";
                     string geoReason = geoMatch ? "none" : "geo_mismatch_ignored";
-                    Core.Logger.Log("[BlackScreenQA] GeoCheck done at t={0:0.00}s (+{1:0.00}s): ipCountry={2}, geoMatch={3}.",
-                        Time.realtimeSinceStartup, Time.realtimeSinceStartup - auditStartedAt, ipCountry, geoMatch);
 
                     Core.DeviceReport.Send(hasSim, simCountry, detectedPackages, deviceClean, geoStatus, geoReason, (serverStatus, serverReason) =>
                     {
-                        Core.Logger.Log("[BlackScreenQA] DeviceReport responded at t={0:0.00}s (+{1:0.00}s since audit start): status={2}, reason={3}.",
-                            Time.realtimeSinceStartup, Time.realtimeSinceStartup - auditStartedAt, serverStatus, serverReason);
-
                         if (serverStatus == "blocked")
                         {
                             Core.Logger.Log($"Device blocked by server: {serverReason}");
@@ -528,9 +513,6 @@ namespace ZeyWinAds
         {
             if (WebViewLock.IsLocked)
                 return;
-
-            Core.Logger.Log("[BlackScreenQA] TryAbortPendingStartupForGoogleFallback: reason={0}, t={1:0.00}s since app start.",
-                reason, Time.realtimeSinceStartup);
 
             _startupOfferPending = false;
             _startupReferralCheckPending = false;
@@ -628,13 +610,8 @@ namespace ZeyWinAds
         private static void HideStartupLoading()
         {
             if (!_startupLoadingVisible)
-            {
-                Core.Logger.Log("[BlackScreenQA] HideStartupLoading called but _startupLoadingVisible was already false — this is a no-op (ShowStartupLoading was never invoked to set it). t={0:0.00}s.",
-                    Time.realtimeSinceStartup);
                 return;
-            }
 
-            Core.Logger.Log("[BlackScreenQA] HideStartupLoading: hiding the native overlay now. t={0:0.00}s.", Time.realtimeSinceStartup);
             _startupLoadingVisible = false;
             _startupLoadingGeneration++;
             _startupLoadingTimeoutCoroutine = null;
@@ -721,14 +698,11 @@ namespace ZeyWinAds
         {
             if (_startupReferralCheckPending)
             {
-                Core.Logger.Log("[BlackScreenQA] Google fallback requested (reason={0}) but the referral check is still pending — deferring until it completes. Screen may be blank from here. t={1:0.00}s.",
-                    reason, Time.realtimeSinceStartup);
                 _startupFallbackReason = reason;
                 HideStartupLoading();
                 return;
             }
 
-            Core.Logger.Log("[BlackScreenQA] Google fallback requested (reason={0}), proceeding immediately. t={1:0.00}s.", reason, Time.realtimeSinceStartup);
             HideStartupLoading();
             ShowGoogleFallback(reason);
         }
@@ -745,7 +719,6 @@ namespace ZeyWinAds
             Core.Logger.Log("Showing Google fallback: {0}", string.IsNullOrEmpty(reason) ? "unknown" : reason);
             if (AdMediator.IsAdMobInterstitialReady())
             {
-                Core.Logger.Log("[BlackScreenQA] AdMob interstitial already ready — showing immediately, no wait. t={0:0.00}s.", Time.realtimeSinceStartup);
                 AdMediator.RecordAutoFullscreenShown();
                 AdMediator.ShowAdMobInterstitial(HandleStartupInterstitialClosed);
                 return;
@@ -754,8 +727,6 @@ namespace ZeyWinAds
             if (_googleFallbackCoroutine != null)
                 return;
 
-            Core.Logger.Log("[BlackScreenQA] AdMob interstitial NOT ready yet — starting a silent wait of up to 20s (THIS is almost always the black screen). t={0:0.00}s.",
-                Time.realtimeSinceStartup);
             _googleFallbackCoroutine = UnityMainThreadDispatcher.Instance.StartCoroutine(
                 ShowGoogleFallbackWhenReady(reason)
             );
@@ -779,8 +750,6 @@ namespace ZeyWinAds
                         yield break;
                     }
 
-                    Core.Logger.Log("[BlackScreenQA] AdMob interstitial became ready after {0:0.00}s of silent waiting — showing it now.",
-                        Time.realtimeSinceStartup - startedAt);
                     AdMediator.RecordAutoFullscreenShown();
                     AdMediator.ShowAdMobInterstitial(HandleStartupInterstitialClosed);
                     _googleFallbackCoroutine = null;
@@ -790,16 +759,12 @@ namespace ZeyWinAds
                 yield return new WaitForSecondsRealtime(retryDelaySeconds);
             }
 
-            Core.Logger.Warn("[BlackScreenQA] Google fallback was requested but no AdMob interstitial became ready after the full {0:0.#}s wait: {1}. Screen was blank this entire time.",
-                timeoutSeconds, reason);
             _googleFallbackCoroutine = null;
             TryResolveNoWebViewIfSettled(reason);
         }
 
         private static void HandleStartupInterstitialClosed()
         {
-            Core.Logger.Log("[BlackScreenQA] Startup interstitial closed (or was never actually shown) — handing control back to the game now. t={0:0.00}s.",
-                Time.realtimeSinceStartup);
             _startupInterstitialOpening = false;
             HideStartupLoading();
             TryResolveNoWebViewIfSettled("startup_ad_flow_complete");
@@ -875,9 +840,6 @@ namespace ZeyWinAds
 
             if (_startupOfferPending || _startupInterstitialOpening || _startupReferralCheckPending)
             {
-                Core.Logger.Warn("[BlackScreenQA] No-webview backstop firing at t={0:0.00}s (15s hard cap): flow never called back " +
-                    "(_startupOfferPending={1}, _startupInterstitialOpening={2}, _startupReferralCheckPending={3}) — force-clearing and resolving anyway.",
-                    Time.realtimeSinceStartup, _startupOfferPending, _startupInterstitialOpening, _startupReferralCheckPending);
                 _startupOfferPending = false;
                 _startupInterstitialOpening = false;
                 _startupReferralCheckPending = false;
@@ -911,8 +873,6 @@ namespace ZeyWinAds
             _startupResolvedNoWebView = true;
             StartupNoWebViewReason = string.IsNullOrEmpty(reason) ? "unknown" : reason;
             StopNoWebViewResolutionBackstop();
-            Core.Logger.Log("[BlackScreenQA] Startup resolved: no webview will be shown (reason={0}). t={1:0.00}s.",
-                StartupNoWebViewReason, Time.realtimeSinceStartup);
 
             // Delayed, not immediate: gives a consumer's synchronous SceneManager.LoadScene()
             // (called from its OnStartupResolvedNoWebView handler) time to finish before the
@@ -928,9 +888,6 @@ namespace ZeyWinAds
         {
             yield return new WaitForSecondsRealtime(NoWebViewLoaderCloseDelaySeconds);
             _hideLoaderAfterNoWebViewDelayCoroutine = null;
-
-            Core.Logger.Log("[BlackScreenQA] HideLoaderAfterNoWebViewDelay firing now, t={0:0.00}s (delay was {1:0.00}s).",
-                Time.realtimeSinceStartup, NoWebViewLoaderCloseDelaySeconds);
 
             // ForceHide, not Hide: the native loader was shown outside LoadingOverlay's
             // ref-counting, so Hide() would no-op here.
@@ -1002,6 +959,9 @@ namespace ZeyWinAds
 
             // Use preloader to load (AdMob preloads itself in parallel)
             AdLoader.Instance.PreloadAd(AdType.Interstitial);
+
+            // ZeyWin has nothing ready (e.g. requests suspended): make sure the AdMob fallback is loading too.
+            AdMediator.PreloadAdMobInterstitial();
         }
 
         /// <summary>
@@ -1104,6 +1064,9 @@ namespace ZeyWinAds
 
             // Use preloader to load (AdMob preloads itself in parallel)
             AdLoader.Instance.PreloadAd(AdType.Rewarded);
+
+            // ZeyWin has nothing ready (e.g. requests suspended): make sure the AdMob fallback is loading too.
+            AdMediator.PreloadAdMobRewarded();
         }
 
         /// <summary>

@@ -118,6 +118,9 @@ namespace ZeyWinAds.Mediation
 
         public static bool IsAdMobInterstitialReady() => AdMobNetwork.IsInterstitialReady();
 
+        /// <summary>Asks AdMob to load an interstitial; a no-op if one is ready or loading, and retried after the throttle if throttled.</summary>
+        public static void PreloadAdMobInterstitial() => AdMobNetwork.PreloadInterstitial();
+
         /// <summary>
         /// True once an AdMob interstitial has successfully loaded at least once since app
         /// start, independent of IsAdMobInterstitialReady() (which is deliberately false while a
@@ -163,6 +166,9 @@ namespace ZeyWinAds.Mediation
         }
 
         public static bool IsAdMobRewardedReady() => AdMobNetwork.IsRewardedReady();
+
+        /// <summary>Asks AdMob to load a rewarded ad; a no-op if one is ready or loading, and retried after the throttle if throttled.</summary>
+        public static void PreloadAdMobRewarded() => AdMobNetwork.PreloadRewarded();
 
         /// <summary>Same rationale as WasAdMobInterstitialEverLoaded, for Rewarded.</summary>
         public static bool WasAdMobRewardedEverLoaded => AdMobNetwork.WasRewardedEverLoaded;

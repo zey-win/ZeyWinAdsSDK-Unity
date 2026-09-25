@@ -49,20 +49,20 @@ namespace ZeyWinAds.Core
             string uid = SystemInfo.deviceUniqueIdentifier;
             if (!string.IsNullOrEmpty(uid) && uid != SystemInfo.unsupportedIdentifier)
             {
-                Logger.Log("GetFastDeviceId: resolved Android fallback id 'aid_{0}' (SystemInfo.deviceUniqueIdentifier)", uid);
+                Logger.Log("GetFastDeviceId: resolved Android fallback id (SystemInfo.deviceUniqueIdentifier)");
                 return "aid_" + uid;
             }
-            Logger.Warn("GetFastDeviceId: SystemInfo.deviceUniqueIdentifier unavailable (value='{0}'), falling back to random UUID", uid);
+            Logger.Warn("GetFastDeviceId: SystemInfo.deviceUniqueIdentifier unavailable, falling back to random UUID");
 #elif UNITY_IOS && !UNITY_EDITOR
             // identifierForVendor via Unity's own engine - same value _ZeyWinAds_GetIDFV
             // used to return natively, no prefix (matches prior behavior exactly).
             string uid = SystemInfo.deviceUniqueIdentifier;
             if (!string.IsNullOrEmpty(uid) && uid != SystemInfo.unsupportedIdentifier)
             {
-                Logger.Log("GetFastDeviceId: resolved iOS fallback id '{0}' (SystemInfo.deviceUniqueIdentifier / IDFV)", uid);
+                Logger.Log("GetFastDeviceId: resolved iOS fallback id (SystemInfo.deviceUniqueIdentifier / IDFV)");
                 return uid;
             }
-            Logger.Warn("GetFastDeviceId: SystemInfo.deviceUniqueIdentifier unavailable (value='{0}'), falling back to random UUID", uid);
+            Logger.Warn("GetFastDeviceId: SystemInfo.deviceUniqueIdentifier unavailable, falling back to random UUID");
 #endif
 
             return GetOrCreateFallbackId();
@@ -109,11 +109,11 @@ namespace ZeyWinAds.Core
             if (!string.IsNullOrEmpty(uid) && uid != SystemInfo.unsupportedIdentifier)
             {
                 fallback = "aid_" + uid;
-                Logger.Log("GAID_RESULT source=fallback value={0}", fallback);
+                Logger.Log("GAID_RESULT source=fallback");
             }
             else
             {
-                Logger.Warn("GAID_RESULT source=none (GAID and SystemInfo.deviceUniqueIdentifier both unavailable, value='{0}')", uid);
+                Logger.Warn("GAID_RESULT source=none (GAID and SystemInfo.deviceUniqueIdentifier both unavailable)");
             }
 
             _cachedGAID = fallback;
@@ -164,7 +164,7 @@ namespace ZeyWinAds.Core
 
                     if (!string.IsNullOrEmpty(gaid))
                     {
-                        Logger.Log("GAID_RESULT source=real value={0}", gaid);
+                        Logger.Log("GAID_RESULT source=real");
                         _cachedGAID = gaid;
                         UnityMainThreadDispatcher.Instance.Enqueue(() => callback?.Invoke(gaid));
                         return;

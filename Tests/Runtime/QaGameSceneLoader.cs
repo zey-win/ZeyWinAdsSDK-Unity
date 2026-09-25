@@ -11,7 +11,7 @@ namespace ZeyWinAds.Tests.Runtime
     // build has no game scene loaded at all — so it must be loaded at the same point, at boot, not
     // after the fact once some later event decides "no offer." There's no single reliable "no
     // offer, reveal now" signal to hook (the offer/eligibility decision chain has several exit
-    // paths — see AdAudioController/ZeyWinAds.cs's [BlackScreenQA] logging), so instead of chasing
+    // paths — see the startup flow in ZeyWinAds.cs), so instead of chasing
     // that, load the game scene as early as possible so it's already there the moment nothing
     // else covers it — same effect a normal build gets for free.
     //
