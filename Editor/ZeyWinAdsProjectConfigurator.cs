@@ -167,9 +167,6 @@ namespace ZeyWinAds.Editor
             if (TryGet(args, "enableAdMob", out string enableAdMob))
                 settings.enableAdMob = ParseBool(enableAdMob, settings.enableAdMob);
 
-            if (TryGet(args, "enableUmpConsent", out string enableUmp))
-                settings.enableUmpConsent = ParseBool(enableUmp, settings.enableUmpConsent);
-
             if (TryGetAnyOrEnv(args, out string appId, new[] { "adMobAppId", "admobAppId", "admobAndroidAppId" }, "ADMOB_APP_ID"))
                 ApplyAdMobAndroidAppId(settings, appId, "project configuration");
 
