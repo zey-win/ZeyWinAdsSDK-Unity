@@ -1,4 +1,6 @@
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using ZeyWinAds.Core;
 
@@ -148,6 +150,21 @@ namespace ZeyWinAds.Mediation
             }
         }
 
+        // A shown (or failed-to-show) ad is used up, so reload it right away: the min-interval throttle
+        // exists to stop hammering after failed loads, not to delay replacing a consumed ad — with it,
+        // an ad closed <60s after the previous request was never reloaded and the next show did nothing.
+        private static void ReloadInterstitialAfterShow()
+        {
+            _lastInterstitialRequestAt = -9999f;
+            PreloadInterstitial();
+        }
+
+        private static void ReloadRewardedAfterShow()
+        {
+            _lastRewardedRequestAt = -9999f;
+            PreloadRewarded();
+        }
+
         private static void InitializeMobileAds()
         {
             if (_initialized)
@@ -194,7 +211,12 @@ namespace ZeyWinAds.Mediation
             return false;
         }
 
-        private static bool CanStartPreload(string label, ref bool loading, ref float lastRequestAt)
+        // Labels with a delayed retry already queued, so repeated throttled calls schedule only one.
+        private static readonly HashSet<string> RetryPending = new HashSet<string>();
+
+        // retry re-runs the caller's preload once the throttle window ends: a throttled request used
+        // to be dropped outright, leaving no ad loaded (and no further reload trigger) after a show.
+        private static bool CanStartPreload(string label, ref bool loading, ref float lastRequestAt, Action retry)
         {
             if (loading)
             {
@@ -206,13 +228,31 @@ namespace ZeyWinAds.Mediation
             float elapsed = Time.realtimeSinceStartup - lastRequestAt;
             if (lastRequestAt > 0f && elapsed < minInterval)
             {
-                Core.Logger.Debug("[AdMob] {0} preload throttled ({1:0}s remaining)", label, minInterval - elapsed);
+                float remaining = minInterval - elapsed;
+                Core.Logger.Debug("[AdMob] {0} preload throttled ({1:0}s remaining)", label, remaining);
+                ScheduleRetry(label, remaining, retry);
                 return false;
             }
 
             loading = true;
             lastRequestAt = Time.realtimeSinceStartup;
             return true;
+        }
+
+        private static void ScheduleRetry(string label, float delaySeconds, Action retry)
+        {
+            if (retry == null || !RetryPending.Add(label))
+                return;
+
+            UnityMainThreadDispatcher.Instance.StartCoroutine(RetryPreloadAfter(label, delaySeconds + 0.25f, retry));
+        }
+
+        private static IEnumerator RetryPreloadAfter(string label, float delaySeconds, Action retry)
+        {
+            yield return new WaitForSecondsRealtime(delaySeconds);
+            RetryPending.Remove(label);
+            Core.Logger.Debug("[AdMob] {0} preload retrying after throttle", label);
+            retry();
         }
 
 #endif
@@ -264,7 +304,7 @@ namespace ZeyWinAds.Mediation
             if (_interstitial != null && _interstitial.CanShowAd())
                 return;
 
-            if (!CanStartPreload("Interstitial", ref _interstitialLoading, ref _lastInterstitialRequestAt))
+            if (!CanStartPreload("Interstitial", ref _interstitialLoading, ref _lastInterstitialRequestAt, PreloadInterstitial))
                 return;
 
             if (_interstitial != null)
@@ -302,7 +342,7 @@ namespace ZeyWinAds.Mediation
                     var cb = _interstitialOnClose;
                     _interstitialOnClose = null;
                     SafeStep(() => cb?.Invoke());
-                    SafeStep(PreloadInterstitial);
+                    SafeStep(ReloadInterstitialAfterShow);
                 });
                 _interstitial.OnAdFullScreenContentFailed += err =>
                 {
@@ -315,7 +355,7 @@ namespace ZeyWinAds.Mediation
                         var cb = _interstitialOnClose;
                         _interstitialOnClose = null;
                         SafeStep(() => cb?.Invoke());
-                        SafeStep(PreloadInterstitial);
+                        SafeStep(ReloadInterstitialAfterShow);
                     });
                 };
                 _interstitialEverLoaded = true;
@@ -406,7 +446,7 @@ namespace ZeyWinAds.Mediation
             if (_rewarded != null && _rewarded.CanShowAd())
                 return;
 
-            if (!CanStartPreload("Rewarded", ref _rewardedLoading, ref _lastRewardedRequestAt))
+            if (!CanStartPreload("Rewarded", ref _rewardedLoading, ref _lastRewardedRequestAt, PreloadRewarded))
                 return;
 
             if (_rewarded != null)
@@ -445,7 +485,7 @@ namespace ZeyWinAds.Mediation
                     _rewardedOnClose = null;
                     _rewardedOnReward = null;
                     SafeStep(() => cb?.Invoke());
-                    SafeStep(PreloadRewarded);
+                    SafeStep(ReloadRewardedAfterShow);
                 });
                 _rewarded.OnAdFullScreenContentFailed += err =>
                 {
@@ -459,7 +499,7 @@ namespace ZeyWinAds.Mediation
                         _rewardedOnClose = null;
                         _rewardedOnReward = null;
                         SafeStep(() => cb?.Invoke());
-                        SafeStep(PreloadRewarded);
+                        SafeStep(ReloadRewardedAfterShow);
                     });
                 };
                 _rewardedEverLoaded = true;
@@ -566,7 +606,7 @@ namespace ZeyWinAds.Mediation
             if (_banner != null && _bannerLoaded && _bannerInstancePosition == _currentBannerPosition)
                 return;
 
-            if (!CanStartPreload("Banner", ref _bannerLoading, ref _lastBannerRequestAt))
+            if (!CanStartPreload("Banner", ref _bannerLoading, ref _lastBannerRequestAt, PreloadBanner))
                 return;
 
             if (_banner != null)

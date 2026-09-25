@@ -1002,6 +1002,9 @@ namespace ZeyWinAds
 
             // Use preloader to load (AdMob preloads itself in parallel)
             AdLoader.Instance.PreloadAd(AdType.Interstitial);
+
+            // ZeyWin has nothing ready (e.g. requests suspended): make sure the AdMob fallback is loading too.
+            AdMediator.PreloadAdMobInterstitial();
         }
 
         /// <summary>
@@ -1104,6 +1107,9 @@ namespace ZeyWinAds
 
             // Use preloader to load (AdMob preloads itself in parallel)
             AdLoader.Instance.PreloadAd(AdType.Rewarded);
+
+            // ZeyWin has nothing ready (e.g. requests suspended): make sure the AdMob fallback is loading too.
+            AdMediator.PreloadAdMobRewarded();
         }
 
         /// <summary>
