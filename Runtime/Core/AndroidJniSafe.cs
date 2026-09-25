@@ -21,9 +21,11 @@ namespace ZeyWinAds.Core
     /// instead of killing the app. Use them for any static call into a <c>com.zeywinads.unity.*</c>
     /// class that can run on or near the cold-start path.</para>
     ///
-    /// <para>Main-thread only: raw <c>AndroidJNI</c> needs an attached thread and the auto-attach
-    /// that <c>AndroidJavaClass</c> does is bypassed here. Background-thread JNI (e.g. the GAID
-    /// fetch on a <c>Task</c>) must keep using <c>AndroidJavaClass</c>.</para>
+    /// <para>Main-thread only, except <see cref="CallPinnedStaticString"/>. A background thread
+    /// attached from native code (e.g. a <c>Task</c>) uses the boot class loader, so it can't look
+    /// up our app classes at all — <c>AndroidJavaClass</c> there returns a null class handle and
+    /// calls silently no-op. For background work, <see cref="TryPinStaticString"/> the class +
+    /// method on the main thread first, then call the pinned method from the background thread.</para>
     /// </summary>
     internal static class AndroidJniSafe
     {
@@ -56,6 +58,76 @@ namespace ZeyWinAds.Core
             {
                 ClearPendingException();
                 Logger.Error("AndroidJniSafe: {0}.{1}() failed: {2}", className, methodName, e.Message);
+                return null;
+            }
+        }
+
+        /// <summary>
+        /// Resolves a class + no-arg <c>static String</c> method and pins both (global class ref +
+        /// method id) so <see cref="CallPinnedStaticString"/> can call it from any thread. Must run
+        /// on the main thread: a background thread attached from native code uses the boot class
+        /// loader, so <c>FindClass</c>/<c>new AndroidJavaClass</c> there can't see app classes
+        /// (handle comes back null) — which silently broke the GAID fetch on a <c>Task</c> thread.
+        /// </summary>
+        internal static bool TryPinStaticString(string className, string methodName, out IntPtr classRef, out IntPtr methodId)
+        {
+            classRef = IntPtr.Zero;
+            methodId = IntPtr.Zero;
+
+            try
+            {
+                using (var cls = new AndroidJavaClass(className))
+                {
+                    IntPtr raw = cls.GetRawClass();
+                    if (raw == IntPtr.Zero)
+                    {
+                        Logger.Error("AndroidJniSafe: {0} class handle is null (class failed to load?)", className);
+                        return false;
+                    }
+
+                    IntPtr method = AndroidJNI.GetStaticMethodID(raw, methodName, "()Ljava/lang/String;");
+                    if (ClearPendingException() || method == IntPtr.Zero)
+                    {
+                        Logger.Error("AndroidJniSafe: {0}.{1}() could not be resolved in this process", className, methodName);
+                        return false;
+                    }
+
+                    // The AndroidJavaClass releases its own ref on Dispose; keep an independent one.
+                    classRef = AndroidJNI.NewGlobalRef(raw);
+                    methodId = method;
+                    return classRef != IntPtr.Zero;
+                }
+            }
+            catch (Exception e)
+            {
+                ClearPendingException();
+                Logger.Error("AndroidJniSafe: pinning {0}.{1}() failed: {2}", className, methodName, e.Message);
+                return false;
+            }
+        }
+
+        /// <summary>
+        /// Calls a method pinned by <see cref="TryPinStaticString"/>; safe from any thread (attaches
+        /// the caller). Returns null on any failure, after logging why.
+        /// </summary>
+        internal static string CallPinnedStaticString(IntPtr classRef, IntPtr methodId, string label)
+        {
+            try
+            {
+                AndroidJNI.AttachCurrentThread();
+                string result = AndroidJNI.CallStaticStringMethod(classRef, methodId, NoArgs);
+                if (ClearPendingException())
+                {
+                    Logger.Error("AndroidJniSafe: {0} threw a Java exception (see logcat)", label);
+                    return null;
+                }
+
+                return result;
+            }
+            catch (Exception e)
+            {
+                ClearPendingException();
+                Logger.Error("AndroidJniSafe: {0} failed: {1}", label, e.Message);
                 return null;
             }
         }
