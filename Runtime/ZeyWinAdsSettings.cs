@@ -23,9 +23,8 @@ namespace ZeyWinAds
         [Tooltip("Master switch. When disabled, AdMob fallback is never used.")]
         public bool enableAdMob = true;
 
-        [Tooltip("Runs Google UMP consent flow before AdMob starts requesting ads.")]
-        public bool enableUmpConsent = true;
-
+        // No enableUmpConsent switch: the Google UMP consent flow always runs before AdMob starts
+        // requesting ads, so consent state is collected in every app.
         [Tooltip("Sets UMP TagForUnderAgeOfConsent.")]
         public bool tagForUnderAgeOfConsent = false;
 

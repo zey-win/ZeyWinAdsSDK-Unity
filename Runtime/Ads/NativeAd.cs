@@ -58,6 +58,7 @@ namespace ZeyWinAds.Ads
         private Vector2 _cardRestPosition = Vector2.zero;
         private BannerVariant _bannerVariant = BannerVariant.IconLeading;
         private bool _canRotateVariant;
+        private Texture2D _iconTexture;
         private static Font _preferredFont;
 
         private enum BannerVariant
@@ -236,12 +237,22 @@ namespace ZeyWinAds.Ads
 
                 _canvas.LoadImage(AdData.icon_url, (texture) =>
                 {
-                    if (texture != null && iconImage != null)
+                    if (texture == null)
+                        return;
+
+                    if (iconImage == null)
                     {
-                        iconImage.texture = texture;
-                        iconImage.color = Color.white;
+                        // Layout was rebuilt while this download was in flight; the newer
+                        // build loads its own icon, so drop this one instead of holding both.
+                        _canvas?.ReleaseTexture(texture);
+                        return;
                     }
-                });
+
+                    ReleaseIconTexture();
+                    _iconTexture = texture;
+                    iconImage.texture = texture;
+                    iconImage.color = Color.white;
+                }, AdImageLoader.IconMaxSize);
 
                 if (swapIconAndCta)
                     contentRight += iconSize + 16f;
@@ -447,6 +458,15 @@ namespace ZeyWinAds.Ads
                 layout.BodyLines,
                 Mathf.RoundToInt(layout.BottomRelax),
                 _bannerVariant);
+        }
+
+        // Each rebuild (variant rotation, SetPosition) re-downloads the icon; Unity never frees a
+        // Texture2D when its RawImage is destroyed, so the previous one must be released by hand.
+        private void ReleaseIconTexture()
+        {
+            if (_iconTexture != null)
+                _canvas?.ReleaseTexture(_iconTexture);
+            _iconTexture = null;
         }
 
         private LayoutMetrics CalculateLayoutMetrics()
@@ -1002,10 +1022,11 @@ namespace ZeyWinAds.Ads
 
             if (_canvas != null)
             {
-                _canvas.Destroy();
+                _canvas.Destroy(); // frees the icon texture with the rest of the canvas' textures
                 _canvas = null;
             }
 
+            _iconTexture = null;
             _container = null;
             _containerRect = null;
             _cardRect = null;

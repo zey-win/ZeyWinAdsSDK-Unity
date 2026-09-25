@@ -2,6 +2,43 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.72
+
+- Fixes a white screen that stayed over the game after an AdMob interstitial
+  or rewarded ad closed. Google Mobile Ads raises its events on a Java
+  thread; hiding the fullscreen backdrop (`SetActive`) from there threw, so
+  the opaque backdrop stayed up and the game's `onClose` / next preload
+  never ran. Every AdMob callback (close/fail, reward, load, banner, UMP
+  consent) now marshals onto the main thread via the new
+  `UnityMainThreadDispatcher.RunOnMainThread`, each close/fail step is
+  guarded so one failure can't skip the rest, and the backdrop marshals
+  itself. This also fixes game reward callbacks that threw off-thread.
+- Fixes a per-show memory leak in native banners (8-10 MB each time): ad
+  image textures were never destroyed. `AdCanvas` now owns and frees every
+  texture it loads, `HideNative()` destroys the banner instead of orphaning
+  it, and `NativeAd` releases the previous icon on each 15s rebuild.
+- Ad icons (native, interstitial, rewarded) are now decoded through the new
+  `AdImageLoader`: no mip chain, non-readable, capped at 512px on the
+  longest side (~1 MB instead of 8-10 MB). Banner/popup media keep their
+  source resolution.
+- `Samples~/CustomNativeBanner/CustomNativeBannerView.cs` uses the same
+  loader and destroys its icon texture when swapped or destroyed. It's
+  copied into each game, so existing games must overwrite their copy.
+- Fixes the Google advertising ID (GAID) silently never resolving on some
+  devices: the fetch ran `AndroidJavaClass.CallStatic` on a background `Task`
+  thread, which is attached with the boot class loader and can't find app
+  classes, so the call returned null without running and every launch fell
+  back to the hashed Android ID. The class + method are now resolved on the
+  main thread and pinned (`AndroidJniSafe.TryPinStaticString` /
+  `CallPinnedStaticString`), then called from the background thread.
+- Fixes an empty device id being handed to `GetGAID` callers when no GAID was
+  available (since 3.9.65): the `aid_` fallback read
+  `SystemInfo.deviceUniqueIdentifier` off the main thread, which throws. It
+  now resolves on the main thread. `GAID_RESULT source=real|fallback|none` is
+  logged once per launch to make this easy to verify.
+- Includes the configurator fix tagged as v3.9.71 (no longer overrides the
+  project's orientation settings), which shipped without a version bump.
+
 ## 3.9.70
 
 - Adds `ZeyWinAds.OnStartupResolvedNoWebView` — a single, reliable signal

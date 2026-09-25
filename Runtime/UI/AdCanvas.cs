@@ -1,7 +1,7 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Networking;
 using UnityEngine.UI;
 using ZeyWinAds.Core;
 using Logger = ZeyWinAds.Core.Logger;
@@ -18,6 +18,7 @@ namespace ZeyWinAds.UI
         private CanvasScaler _scaler;
         private GraphicRaycaster _raycaster;
         private GameObject _root;
+        private readonly List<Texture2D> _ownedTextures = new List<Texture2D>();
 
         /// <summary>
         /// Gets the canvas transform
@@ -262,7 +263,9 @@ namespace ZeyWinAds.UI
         /// </summary>
         /// <param name="url">URL of the image</param>
         /// <param name="callback">Called with the loaded texture (or null on failure)</param>
-        public void LoadImage(string url, Action<Texture2D> callback)
+        /// <param name="maxSize">Max side in px (0 = source resolution). Use
+        /// <see cref="AdImageLoader.IconMaxSize"/> for icons.</param>
+        public void LoadImage(string url, Action<Texture2D> callback, int maxSize = 0)
         {
             if (string.IsNullOrEmpty(url))
             {
@@ -271,35 +274,25 @@ namespace ZeyWinAds.UI
                 return;
             }
 
-            StartCoroutine(LoadImageCoroutine(url, callback));
+            StartCoroutine(AdImageLoader.Load(url, texture =>
+            {
+                // Textures outlive the RawImage that shows them, so this canvas owns and frees them.
+                if (texture != null)
+                    _ownedTextures.Add(texture);
+                callback?.Invoke(texture);
+            }, maxSize));
         }
 
-        private IEnumerator LoadImageCoroutine(string url, Action<Texture2D> callback)
+        /// <summary>
+        /// Frees a texture returned by <see cref="LoadImage"/> before the canvas itself goes away.
+        /// </summary>
+        public void ReleaseTexture(Texture2D texture)
         {
-            // Plain UnityWebRequest + Texture2D.LoadImage(mipChain: false) instead of
-            // UnityWebRequestTexture.GetTexture()/DownloadHandlerTexture: the latter
-            // always generates a full mip chain, which costs ~25-33% extra memory per
-            // image for zero benefit here — every image loaded through this method
-            // (banner/popup media_url, native/interstitial/rewarded icon_url) is a
-            // fixed-size UI element, never viewed at varying scale/distance, so mips
-            // are pure waste. Confirmed via Memory Profiler: an 11.2MB native ad icon
-            // texture matched exactly the size of a mipmapped 1024x1024 RGBA32 image.
-            using (var request = UnityWebRequest.Get(url))
-            {
-                yield return request.SendWebRequest();
+            if (texture == null)
+                return;
 
-                if (request.result == UnityWebRequest.Result.Success)
-                {
-                    var texture = new Texture2D(2, 2, TextureFormat.RGBA32, mipChain: false);
-                    texture.LoadImage(request.downloadHandler.data);
-                    callback?.Invoke(texture);
-                }
-                else
-                {
-                    Logger.Warn("Failed to load image: {0}", request.error);
-                    callback?.Invoke(null);
-                }
-            }
+            _ownedTextures.Remove(texture);
+            UnityEngine.Object.Destroy(texture);
         }
 
         /// <summary>
@@ -316,6 +309,13 @@ namespace ZeyWinAds.UI
 
         private void OnDestroy()
         {
+            for (int i = 0; i < _ownedTextures.Count; i++)
+            {
+                if (_ownedTextures[i] != null)
+                    UnityEngine.Object.Destroy(_ownedTextures[i]);
+            }
+            _ownedTextures.Clear();
+
             _canvas = null;
             _scaler = null;
             _raycaster = null;

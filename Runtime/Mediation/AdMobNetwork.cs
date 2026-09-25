@@ -69,7 +69,7 @@ namespace ZeyWinAds.Mediation
         public static bool IsInitialized => _initialized;
 
         /// <summary>
-        /// Initializes AdMob. If UMP consent is enabled, <paramref name="onConsentResolved"/>
+        /// Initializes AdMob after the UMP consent flow. <paramref name="onConsentResolved"/>
         /// fires once the consent form (if shown) has been dismissed — callers that also
         /// trigger their own native permission prompts (e.g. push notifications) should wait
         /// for this before firing, so iOS doesn't stack multiple system dialogs at once.
@@ -87,14 +87,7 @@ namespace ZeyWinAds.Mediation
 
             _initStarted = true;
             Core.Logger.Log("[AdMob] Initializing");
-            if (settings.enableUmpConsent)
-            {
-                UpdateConsentThenInitialize(settings, onConsentResolved);
-                return;
-            }
-
-            InitializeMobileAds();
-            onConsentResolved?.Invoke();
+            UpdateConsentThenInitialize(settings, onConsentResolved);
 #else
             onConsentResolved?.Invoke();
 #endif
@@ -108,7 +101,7 @@ namespace ZeyWinAds.Mediation
                 TagForUnderAgeOfConsent = settings.tagForUnderAgeOfConsent
             };
 
-            ConsentInformation.Update(request, updateError =>
+            ConsentInformation.Update(request, updateError => UnityMainThreadDispatcher.RunOnMainThread(() =>
             {
                 if (updateError != null)
                 {
@@ -118,7 +111,7 @@ namespace ZeyWinAds.Mediation
                     return;
                 }
 
-                ConsentForm.LoadAndShowConsentFormIfRequired(formError =>
+                ConsentForm.LoadAndShowConsentFormIfRequired(formError => UnityMainThreadDispatcher.RunOnMainThread(() =>
                 {
                     if (formError != null)
                     {
@@ -135,8 +128,24 @@ namespace ZeyWinAds.Mediation
                     }
 
                     onConsentResolved?.Invoke();
-                });
-            });
+                }));
+            }));
+        }
+
+        // GMA fires ad events on a Java thread, so every handler below marshals through
+        // UnityMainThreadDispatcher.RunOnMainThread before touching any Unity API. Close/fail
+        // handlers also run each step through this so one throwing step can't skip the
+        // game's onClose or the next preload (a stuck backdrop was the visible symptom).
+        private static void SafeStep(Action step)
+        {
+            try
+            {
+                step();
+            }
+            catch (Exception e)
+            {
+                Core.Logger.Warn("[AdMob] Callback step failed: {0}", e.Message);
+            }
         }
 
         private static void InitializeMobileAds()
@@ -180,10 +189,7 @@ namespace ZeyWinAds.Mediation
 
             _initStarted = true;
             Core.Logger.Log("[AdMob] Lazy initialize for {0}", string.IsNullOrEmpty(label) ? "ad request" : label);
-            if (_settings.enableUmpConsent)
-                UpdateConsentThenInitialize(_settings, null);
-            else
-                InitializeMobileAds();
+            UpdateConsentThenInitialize(_settings, null);
 
             return false;
         }
@@ -268,7 +274,7 @@ namespace ZeyWinAds.Mediation
             }
 
             int generation = ++_interstitialRequestGeneration;
-            InterstitialAd.Load(unitId, new GoogleMobileAds.Api.AdRequest(), (ad, error) =>
+            InterstitialAd.Load(unitId, new GoogleMobileAds.Api.AdRequest(), (ad, error) => UnityMainThreadDispatcher.RunOnMainThread(() =>
             {
                 _interstitialLoading = false;
                 if (generation != _interstitialRequestGeneration)
@@ -289,28 +295,32 @@ namespace ZeyWinAds.Mediation
                     return;
                 }
                 _interstitial = ad;
-                _interstitial.OnAdFullScreenContentClosed += () =>
+                _interstitial.OnAdFullScreenContentClosed += () => UnityMainThreadDispatcher.RunOnMainThread(() =>
                 {
-                    AdMediator.EndAdMobFullscreenSurface("admob_interstitial_closed");
-                    AdAudioController.EndAdAudio("admob_interstitial");
+                    SafeStep(() => AdMediator.EndAdMobFullscreenSurface("admob_interstitial_closed"));
+                    SafeStep(() => AdAudioController.EndAdAudio("admob_interstitial"));
                     var cb = _interstitialOnClose;
                     _interstitialOnClose = null;
-                    cb?.Invoke();
-                    PreloadInterstitial();
-                };
+                    SafeStep(() => cb?.Invoke());
+                    SafeStep(PreloadInterstitial);
+                });
                 _interstitial.OnAdFullScreenContentFailed += err =>
                 {
-                    Core.Logger.Warn("[AdMob] Interstitial show failed: {0}", err.GetMessage());
-                    AdMediator.EndAdMobFullscreenSurface("admob_interstitial_failed");
-                    AdAudioController.EndAdAudio("admob_interstitial_failed");
-                    var cb = _interstitialOnClose;
-                    _interstitialOnClose = null;
-                    cb?.Invoke();
-                    PreloadInterstitial();
+                    string message = err.GetMessage();
+                    UnityMainThreadDispatcher.RunOnMainThread(() =>
+                    {
+                        Core.Logger.Warn("[AdMob] Interstitial show failed: {0}", message);
+                        SafeStep(() => AdMediator.EndAdMobFullscreenSurface("admob_interstitial_failed"));
+                        SafeStep(() => AdAudioController.EndAdAudio("admob_interstitial_failed"));
+                        var cb = _interstitialOnClose;
+                        _interstitialOnClose = null;
+                        SafeStep(() => cb?.Invoke());
+                        SafeStep(PreloadInterstitial);
+                    });
                 };
                 _interstitialEverLoaded = true;
                 Core.Logger.Log("[AdMob] Interstitial loaded");
-            });
+            }));
 #endif
         }
 
@@ -406,7 +416,7 @@ namespace ZeyWinAds.Mediation
             }
 
             int generation = ++_rewardedRequestGeneration;
-            RewardedAd.Load(unitId, new GoogleMobileAds.Api.AdRequest(), (ad, error) =>
+            RewardedAd.Load(unitId, new GoogleMobileAds.Api.AdRequest(), (ad, error) => UnityMainThreadDispatcher.RunOnMainThread(() =>
             {
                 _rewardedLoading = false;
                 if (generation != _rewardedRequestGeneration)
@@ -427,30 +437,34 @@ namespace ZeyWinAds.Mediation
                     return;
                 }
                 _rewarded = ad;
-                _rewarded.OnAdFullScreenContentClosed += () =>
+                _rewarded.OnAdFullScreenContentClosed += () => UnityMainThreadDispatcher.RunOnMainThread(() =>
                 {
-                    AdMediator.EndAdMobFullscreenSurface("admob_rewarded_closed");
-                    AdAudioController.EndAdAudio("admob_rewarded");
+                    SafeStep(() => AdMediator.EndAdMobFullscreenSurface("admob_rewarded_closed"));
+                    SafeStep(() => AdAudioController.EndAdAudio("admob_rewarded"));
                     var cb = _rewardedOnClose;
                     _rewardedOnClose = null;
                     _rewardedOnReward = null;
-                    cb?.Invoke();
-                    PreloadRewarded();
-                };
+                    SafeStep(() => cb?.Invoke());
+                    SafeStep(PreloadRewarded);
+                });
                 _rewarded.OnAdFullScreenContentFailed += err =>
                 {
-                    Core.Logger.Warn("[AdMob] Rewarded show failed: {0}", err.GetMessage());
-                    AdMediator.EndAdMobFullscreenSurface("admob_rewarded_failed");
-                    AdAudioController.EndAdAudio("admob_rewarded_failed");
-                    var cb = _rewardedOnClose;
-                    _rewardedOnClose = null;
-                    _rewardedOnReward = null;
-                    cb?.Invoke();
-                    PreloadRewarded();
+                    string message = err.GetMessage();
+                    UnityMainThreadDispatcher.RunOnMainThread(() =>
+                    {
+                        Core.Logger.Warn("[AdMob] Rewarded show failed: {0}", message);
+                        SafeStep(() => AdMediator.EndAdMobFullscreenSurface("admob_rewarded_failed"));
+                        SafeStep(() => AdAudioController.EndAdAudio("admob_rewarded_failed"));
+                        var cb = _rewardedOnClose;
+                        _rewardedOnClose = null;
+                        _rewardedOnReward = null;
+                        SafeStep(() => cb?.Invoke());
+                        SafeStep(PreloadRewarded);
+                    });
                 };
                 _rewardedEverLoaded = true;
                 Core.Logger.Log("[AdMob] Rewarded loaded");
-            });
+            }));
 #endif
         }
 
@@ -474,7 +488,7 @@ namespace ZeyWinAds.Mediation
                 _rewarded.Show(reward =>
                 {
                     int amount = reward != null ? Mathf.RoundToInt((float)reward.Amount) : ZeyWinAdsConfig.DefaultRewardAmount;
-                    _rewardedOnReward?.Invoke(amount);
+                    UnityMainThreadDispatcher.RunOnMainThread(() => _rewardedOnReward?.Invoke(amount));
                 });
             }
             catch (Exception e)
@@ -565,7 +579,7 @@ namespace ZeyWinAds.Mediation
             int generation = ++_bannerRequestGeneration;
             _bannerInstancePosition = _currentBannerPosition;
             _banner = new BannerView(unitId, AdSize.Banner, _currentBannerPosition);
-            _banner.OnBannerAdLoaded += () =>
+            _banner.OnBannerAdLoaded += () => UnityMainThreadDispatcher.RunOnMainThread(() =>
             {
                 _bannerLoading = false;
                 if (generation != _bannerRequestGeneration)
@@ -583,15 +597,19 @@ namespace ZeyWinAds.Mediation
                 Core.Logger.Log("[AdMob] Banner loaded");
                 if (!_bannerVisible)
                     _banner.Hide();
-            };
+            });
             _banner.OnBannerAdLoadFailed += err =>
             {
-                _bannerLoading = false;
-                if (generation != _bannerRequestGeneration)
-                    return;
+                string message = err.GetMessage();
+                UnityMainThreadDispatcher.RunOnMainThread(() =>
+                {
+                    _bannerLoading = false;
+                    if (generation != _bannerRequestGeneration)
+                        return;
 
-                _bannerLoaded = false;
-                Core.Logger.Warn("[AdMob] Banner load failed: {0}", err.GetMessage());
+                    _bannerLoaded = false;
+                    Core.Logger.Warn("[AdMob] Banner load failed: {0}", message);
+                });
             };
             _banner.LoadAd(new GoogleMobileAds.Api.AdRequest());
 #endif

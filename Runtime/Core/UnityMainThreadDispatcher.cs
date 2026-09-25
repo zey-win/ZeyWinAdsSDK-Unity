@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Concurrent;
+using System.Threading;
 using UnityEngine;
 
 namespace ZeyWinAds.Core
@@ -12,6 +13,36 @@ namespace ZeyWinAds.Core
     {
         private static UnityMainThreadDispatcher _instance;
         private readonly ConcurrentQueue<Action> _queue = new ConcurrentQueue<Action>();
+
+        private static int _mainThreadId = -1;
+
+        // Also creates the instance now: its getter builds a GameObject, which throws if
+        // first touched from a background (e.g. Google Mobile Ads callback) thread.
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
+        private static void CaptureMainThread()
+        {
+            _mainThreadId = Thread.CurrentThread.ManagedThreadId;
+            _ = Instance;
+        }
+
+        /// <summary>
+        /// Runs the action inline on the main thread, or queues it for the next Update
+        /// when called from any other thread. Use for every native SDK callback (GMA
+        /// fires its ad events on a Java thread) before touching a Unity API.
+        /// </summary>
+        public static void RunOnMainThread(Action action)
+        {
+            if (action == null)
+                return;
+
+            if (_mainThreadId == -1 || Thread.CurrentThread.ManagedThreadId == _mainThreadId)
+            {
+                action();
+                return;
+            }
+
+            Instance.Enqueue(action);
+        }
 
         public static UnityMainThreadDispatcher Instance
         {

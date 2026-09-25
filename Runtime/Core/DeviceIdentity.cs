@@ -97,6 +97,30 @@ namespace ZeyWinAds.Core
             return _fallbackId;
         }
 
+#if UNITY_ANDROID && !UNITY_EDITOR
+        private static IntPtr _gaidClassRef = IntPtr.Zero;
+        private static IntPtr _gaidMethodId = IntPtr.Zero;
+
+        // Same hashed Android ID GetFastDeviceId() uses, so both paths agree on one fallback value.
+        private static void DeliverAndroidFallbackGaid(Action<string> callback)
+        {
+            string fallback = "";
+            string uid = SystemInfo.deviceUniqueIdentifier;
+            if (!string.IsNullOrEmpty(uid) && uid != SystemInfo.unsupportedIdentifier)
+            {
+                fallback = "aid_" + uid;
+                Logger.Log("GAID_RESULT source=fallback value={0}", fallback);
+            }
+            else
+            {
+                Logger.Warn("GAID_RESULT source=none (GAID and SystemInfo.deviceUniqueIdentifier both unavailable, value='{0}')", uid);
+            }
+
+            _cachedGAID = fallback;
+            callback?.Invoke(fallback);
+        }
+#endif
+
         /// <summary>
         /// Gets the Google Advertising ID asynchronously.
         /// Calls back on the main thread.
@@ -110,48 +134,46 @@ namespace ZeyWinAds.Core
             }
 
 #if UNITY_ANDROID && !UNITY_EDITOR
-            Task.Run(() =>
+            // getGAID() must run off the main thread (it blocks on an IPC), but a Task thread is
+            // attached with the boot class loader and can't look up our class (handle came back
+            // null, so the call silently returned null and every device used the fallback id).
+            // So resolve + pin the class here on the main thread, then call the pinned method
+            // from the background thread.
+            UnityMainThreadDispatcher.RunOnMainThread(() =>
             {
-                string gaid = "";
-                try
+                if (_gaidClassRef == IntPtr.Zero &&
+                    !AndroidJniSafe.TryPinStaticString(DeviceClass, "getGAID", out _gaidClassRef, out _gaidMethodId))
                 {
-                    // Background thread: keep AndroidJavaClass (it auto-attaches the thread;
-                    // raw AndroidJNI does not). The cold-start FromReflectedMethod abort is a
-                    // main-thread-only concern, so this call site stays as-is.
-                    using (var cls = new AndroidJavaClass(DeviceClass))
+                    DeliverAndroidFallbackGaid(callback);
+                    return;
+                }
+
+                IntPtr classRef = _gaidClassRef;
+                IntPtr methodId = _gaidMethodId;
+                Task.Run(() =>
+                {
+                    string gaid = "";
+                    try
                     {
-                        gaid = cls.CallStatic<string>("getGAID") ?? "";
+                        gaid = AndroidJniSafe.CallPinnedStaticString(classRef, methodId, DeviceClass + ".getGAID()") ?? "";
+                    }
+                    catch (Exception e)
+                    {
+                        Logger.Error("Failed to get GAID: {0}", e.Message);
                     }
 
                     if (!string.IsNullOrEmpty(gaid))
                     {
-                        Logger.Log("GetGAID: resolved real GAID '{0}'", gaid);
+                        Logger.Log("GAID_RESULT source=real value={0}", gaid);
+                        _cachedGAID = gaid;
+                        UnityMainThreadDispatcher.Instance.Enqueue(() => callback?.Invoke(gaid));
+                        return;
                     }
-                    else
-                    {
-                        // getGAID() is GAID-only now (no embedded native fallback) - fall
-                        // back to the same hashed Android ID GetFastDeviceId() uses, so both
-                        // paths agree on one value instead of Java and C# each computing
-                        // their own fallback.
-                        string uid = SystemInfo.deviceUniqueIdentifier;
-                        if (!string.IsNullOrEmpty(uid) && uid != SystemInfo.unsupportedIdentifier)
-                        {
-                            gaid = "aid_" + uid;
-                            Logger.Log("GetGAID: GAID unavailable, resolved fallback id 'aid_{0}' (SystemInfo.deviceUniqueIdentifier)", uid);
-                        }
-                        else
-                        {
-                            Logger.Warn("GetGAID: GAID and SystemInfo.deviceUniqueIdentifier both unavailable (value='{0}')", uid);
-                        }
-                    }
-                }
-                catch (Exception e)
-                {
-                    Logger.Error("Failed to get GAID: {0}", e.Message);
-                }
 
-                _cachedGAID = gaid;
-                UnityMainThreadDispatcher.Instance.Enqueue(() => callback?.Invoke(gaid));
+                    // getGAID() is GAID-only (no native fallback); SystemInfo is main-thread only,
+                    // so the fallback id is resolved back on the main thread.
+                    UnityMainThreadDispatcher.Instance.Enqueue(() => DeliverAndroidFallbackGaid(callback));
+                });
             });
 #elif UNITY_IOS && !UNITY_EDITOR
             string idfa = "";
