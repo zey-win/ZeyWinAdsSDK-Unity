@@ -1569,7 +1569,9 @@ namespace ZeyWinAds
 
             if (_activeNative != null)
             {
-                _activeNative.Hide(); // also releases the mediator surface claim
+                // Destroy, not Hide: the reference is dropped right here, so a merely-hidden
+                // instance (with its DontDestroyOnLoad canvas + icon texture) would leak forever.
+                _activeNative.Destroy(); // also releases the mediator surface claim
                 _activeNative = null;
             }
 

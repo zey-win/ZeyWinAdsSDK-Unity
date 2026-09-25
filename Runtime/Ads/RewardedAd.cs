@@ -263,7 +263,7 @@ namespace ZeyWinAds.Ads
                         iconImage.texture = texture;
                         iconImage.color = Color.white;
                     }
-                });
+                }, AdImageLoader.IconMaxSize);
             }
 
             float textLeft = pad + iconSize + pad;

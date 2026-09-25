@@ -1,6 +1,5 @@
 using System.Collections;
 using UnityEngine;
-using UnityEngine.Networking;
 using UnityEngine.UI;
 using ZeyWinAds.Core;
 
@@ -32,6 +31,7 @@ public class CustomNativeBannerView : MonoBehaviour
     private System.Action _registerClick;
     private Coroutine _iconLoadRoutine;
     private string _loadedIconUrl;
+    private Texture2D _iconTexture;
 
     private void Awake()
     {
@@ -76,18 +76,39 @@ public class CustomNativeBannerView : MonoBehaviour
 
     private IEnumerator LoadIcon(string url)
     {
-        using (var request = UnityWebRequestTexture.GetTexture(url))
-        {
-            yield return request.SendWebRequest();
+        Texture2D texture = null;
+        yield return ZeyWinAds.UI.AdImageLoader.Load(url, loaded => texture = loaded, ZeyWinAds.UI.AdImageLoader.IconMaxSize);
 
-            if (request.result == UnityWebRequest.Result.Success && iconImage != null)
+        if (texture != null)
+        {
+            if (iconImage != null)
             {
-                iconImage.texture = DownloadHandlerTexture.GetContent(request);
+                ReleaseIconTexture();
+                _iconTexture = texture;
+                iconImage.texture = texture;
                 _loadedIconUrl = url;
+            }
+            else
+            {
+                Destroy(texture);
             }
         }
 
         _iconLoadRoutine = null;
+    }
+
+    // Unity never frees a Texture2D when its RawImage is replaced or destroyed — every icon
+    // swapped out (or the whole banner going away) has to be destroyed by hand or it leaks.
+    private void ReleaseIconTexture()
+    {
+        if (_iconTexture != null)
+            Destroy(_iconTexture);
+        _iconTexture = null;
+    }
+
+    private void OnDestroy()
+    {
+        ReleaseIconTexture();
     }
 
     public void HandleClick()
