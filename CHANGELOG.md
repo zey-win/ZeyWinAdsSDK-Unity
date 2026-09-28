@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.74
+
+- Adds a Gradle/R8 cache (`.gradle-home`, redirected via `GRADLE_USER_HOME` on the
+  `game-ci/unity-builder` step) to the factory build workflow, content-addressed the same way as
+  the existing `Library` cache so an SDK bump, editor upgrade, or gradle-template change can't
+  leave it silently serving a stale cache.
+- Adds diagnostics to the factory build workflow for hard build failures: a background monitor
+  samples memory/disk/top processes throughout the Unity/Gradle build, and a step right after it
+  (runs whether the build succeeded or failed) checks `dmesg` for kernel OOM-killer activity and
+  publishes both to the run's step summary and as a downloadable artifact.
+
 ## 3.9.73
 
 - Fixes AdMob interstitial and rewarded ads not being reloaded after they
