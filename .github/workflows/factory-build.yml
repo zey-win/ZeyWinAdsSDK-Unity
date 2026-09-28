@@ -99,11 +99,54 @@ jobs:
           restore-keys: |
             Library-Android-
 
+      # Gradle/R8 cache — separate from the Library cache above and on purpose narrower-scoped:
+      # this only ever misses on a Library-cache miss too, but Library alone doesn't help Gradle's
+      # own assemble/minify work, which is the slow part once minifyRelease is on. Content-addressed
+      # the same way the Library key was fixed (see CLAUDE.md's "actions/cache key gotcha") — a
+      # static key would silently keep serving a stale Gradle/R8 cache forever after an SDK bump,
+      # an editor upgrade, or a gradle template edit, so hash everything that can invalidate it:
+      # dependency versions (manifest/lock), the Unity/AGP toolchain (ProjectVersion.txt), and any
+      # custom gradle templates + proguard rules a game ships under Assets/Plugins/Android.
+      - uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.gradle-home
+          key: Gradle-${{ hashFiles('Packages/manifest.json', 'Packages/packages-lock.json', 'ProjectSettings/ProjectVersion.txt', 'Assets/Plugins/Android/*.gradle', 'Assets/Plugins/Android/*.properties', 'Assets/Plugins/Android/proguard-user.txt') }}
+          restore-keys: |
+            Gradle-
+
+      # Runs on the host (not inside the unity-builder container), so it keeps sampling for the
+      # whole build regardless of what happens inside. Fully detached (redirected fds + disown)
+      # so it doesn't hold this step open — GitHub Actions treats a step as "still running" for
+      # as long as anything holds its stdout/stderr pipe open.
+      - name: Start resource monitor
+        run: |
+          MON_LOG="$RUNNER_TEMP/resource-monitor.log"
+          echo "MON_LOG=$MON_LOG" >> "$GITHUB_ENV"
+          (
+            while true; do
+              echo "=== $(date -u +%FT%TZ) ==="
+              free -h
+              echo "--- disk ---"
+              df -h / "$GITHUB_WORKSPACE" 2>/dev/null
+              echo "--- top memory processes ---"
+              ps -eo pid,ppid,%mem,%cpu,rss,cmd --sort=-%mem | head -12
+              echo
+              sleep 20
+            done
+          ) > "$MON_LOG" 2>&1 < /dev/null &
+          disown
+
       - uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          # Redirects Gradle's cache/config dir into the cached path above. Unity invokes its
+          # bundled Gradle wrapper as a subprocess inside the unity-builder container, which
+          # inherits this step's env and (Gradle's own convention) honors GRADLE_USER_HOME to
+          # relocate ~/.gradle. Keeping it under $GITHUB_WORKSPACE means it's on the bind-mounted
+          # workspace, so the host-side actions/cache step above can actually see what got written.
+          GRADLE_USER_HOME: ${{ github.workspace }}/.gradle-home
         with:
           targetPlatform: Android
           versioning: Custom
@@ -115,6 +158,51 @@ jobs:
           androidKeystorePass: ${{ env.KS_PASS }}
           androidKeyaliasName: ${{ env.KEY_ALIAS }}
           androidKeyaliasPass: ${{ env.KEY_PASS }}
+
+      # Runs whether the build above succeeded or failed — this is what a hard failure (the
+      # runner going unresponsive, not a normal Gradle/Unity error) has been missing: something
+      # that captures memory/disk over time and checks whether the kernel OOM-killer fired,
+      # since a plain step failure alone doesn't say why. `continue-on-error: true` because
+      # diagnostics must never be why the job's real result changes. Won't help if the runner
+      # itself gets torn down before this step gets a chance to run (that's the one failure mode
+      # nothing inside the job can observe) — but does help for a normal build/Gradle error, and
+      # for any hang that stops short of a full runner death.
+      - name: "Diagnostics: resource usage + kernel OOM check"
+        if: always()
+        continue-on-error: true
+        run: |
+          {
+            echo "## Build diagnostics"
+            echo ""
+            echo "### Resource usage during the build (last samples)"
+            echo '```'
+            if [ -f "$MON_LOG" ]; then tail -c 8000 "$MON_LOG"; else echo "no monitor log found"; fi
+            echo '```'
+            echo ""
+            echo "### Kernel OOM-killer check (dmesg)"
+            echo '```'
+            if sudo dmesg -T 2>/dev/null | grep -iE "killed process|out of memory|oom" | tail -40; then
+              :
+            else
+              echo "no OOM-killer activity found"
+            fi
+            echo '```'
+            echo ""
+            echo "### Disk usage now"
+            echo '```'
+            df -h /
+            echo '```'
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload build diagnostics
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-diagnostics-${{ inputs.build_id }}
+          path: ${{ env.MON_LOG }}
+          retention-days: 2
+          if-no-files-found: ignore
 
       - name: Locate build artifact
         run: |
