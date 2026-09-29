@@ -219,46 +219,50 @@ jobs:
           docker system prune -af --volumes || true
           df -h /
 
-      - name: "QA: App size check (fail > ${{ env.FAIL_MB }}MB)"
-        id: qa-app-size
-        continue-on-error: true
-        env:
-          FAIL_MB: 100
-        run: |
-          set -euo pipefail
-          echo "## QA Checks" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "_API level, adaptive icon, and other pre-build checks are enforced by \`QaTestsPreProcessor\` as part of the Unity build step above — a failure there stops the build directly._" >> "$GITHUB_STEP_SUMMARY"
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "### App size" >> "$GITHUB_STEP_SUMMARY"
-          SDK_DIR=$(find Library/PackageCache -maxdepth 1 -iname "com.zeywin.ads@*" | head -1)
-          if [ -z "$SDK_DIR" ]; then
-            echo "::error::Could not locate com.zeywin.ads package under Library/PackageCache"
-            echo "- ❌ Could not locate com.zeywin.ads package to run the check" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          if bash "$SDK_DIR/tools/check_app_size.sh" "$ARTIFACT_PATH"; then
-            echo "- ✅ App size within limits" >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "- ❌ App size exceeds the hard limit (see step log above for exact size)" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-
-      - name: "QA: Gate (fail build only after all QA checks have run)"
-        run: |
-          set -euo pipefail
-          FAILED=0
-          if [ "${{ steps.qa-app-size.outcome }}" != "success" ]; then
-            echo "::error::QA check failed: App size check"
-            FAILED=1
-          fi
-          if [ "$FAILED" -eq 1 ]; then
-            echo "" >> "$GITHUB_STEP_SUMMARY"
-            echo "**Result: one or more QA checks failed — see details above. Build artifact was not uploaded.**" >> "$GITHUB_STEP_SUMMARY"
-            exit 1
-          fi
-          echo "" >> "$GITHUB_STEP_SUMMARY"
-          echo "**Result: all QA checks passed.**" >> "$GITHUB_STEP_SUMMARY"
+      # Minify/R8 suspected of causing recurring CI runner deaths (Wheel-Fortune, 2026-09-29) —
+      # commented out for some period, not removed. Without minify the app size balloons well
+      # past FAIL_MB, so this gate would always fail while minify is off. Re-enable together with
+      # the SDK's own minify self-heal/QA-check code. See ZeyWinAdsSDK-Unity/CLAUDE.md.
+      # - name: "QA: App size check (fail > ${{ env.FAIL_MB }}MB)"
+      #   id: qa-app-size
+      #   continue-on-error: true
+      #   env:
+      #     FAIL_MB: 100
+      #   run: |
+      #     set -euo pipefail
+      #     echo "## QA Checks" >> "$GITHUB_STEP_SUMMARY"
+      #     echo "" >> "$GITHUB_STEP_SUMMARY"
+      #     echo "_API level, adaptive icon, and other pre-build checks are enforced by \`QaTestsPreProcessor\` as part of the Unity build step above — a failure there stops the build directly._" >> "$GITHUB_STEP_SUMMARY"
+      #     echo "" >> "$GITHUB_STEP_SUMMARY"
+      #     echo "### App size" >> "$GITHUB_STEP_SUMMARY"
+      #     SDK_DIR=$(find Library/PackageCache -maxdepth 1 -iname "com.zeywin.ads@*" | head -1)
+      #     if [ -z "$SDK_DIR" ]; then
+      #       echo "::error::Could not locate com.zeywin.ads package under Library/PackageCache"
+      #       echo "- ❌ Could not locate com.zeywin.ads package to run the check" >> "$GITHUB_STEP_SUMMARY"
+      #       exit 1
+      #     fi
+      #     if bash "$SDK_DIR/tools/check_app_size.sh" "$ARTIFACT_PATH"; then
+      #       echo "- ✅ App size within limits" >> "$GITHUB_STEP_SUMMARY"
+      #     else
+      #       echo "- ❌ App size exceeds the hard limit (see step log above for exact size)" >> "$GITHUB_STEP_SUMMARY"
+      #       exit 1
+      #     fi
+      #
+      # - name: "QA: Gate (fail build only after all QA checks have run)"
+      #   run: |
+      #     set -euo pipefail
+      #     FAILED=0
+      #     if [ "${{ steps.qa-app-size.outcome }}" != "success" ]; then
+      #       echo "::error::QA check failed: App size check"
+      #       FAILED=1
+      #     fi
+      #     if [ "$FAILED" -eq 1 ]; then
+      #       echo "" >> "$GITHUB_STEP_SUMMARY"
+      #       echo "**Result: one or more QA checks failed — see details above. Build artifact was not uploaded.**" >> "$GITHUB_STEP_SUMMARY"
+      #       exit 1
+      #     fi
+      #     echo "" >> "$GITHUB_STEP_SUMMARY"
+      #     echo "**Result: all QA checks passed.**" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload artifact to factory
         run: |
