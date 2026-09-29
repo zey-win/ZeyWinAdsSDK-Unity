@@ -2,6 +2,17 @@
 
 All notable changes to this package are documented in this file.
 
+## 3.9.75
+
+- Temporarily disables the factory build's Minify/R8 self-heal (`EnsureMinifyEnabled`,
+  `StageCrashlyticsLauncherTemplate`) and its two build-blocking QA checks ("Minify Release",
+  "Custom proguard file"), plus the CI app-size gate that would otherwise always fail with minify
+  off. R8's whole-program analysis is suspected of causing recurring dead-runner factory build
+  failures on at least one game; disabling it is the current mitigation while a root cause isn't
+  yet confirmed. The JNI keep-rule staging (`StageMinifyKeepRules`) stays active regardless, since
+  a separate crash-fix QA check requires it unconditionally. All of this is commented out, not
+  removed, and is meant to be re-enabled together once resolved.
+
 ## 3.9.74
 
 - Adds a Gradle/R8 cache (`.gradle-home`, redirected via `GRADLE_USER_HOME` on the
