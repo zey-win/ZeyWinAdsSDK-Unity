@@ -299,10 +299,18 @@ namespace ZeyWinAds.Editor
 
             if (group == BuildTargetGroup.Android)
             {
-                EnsureMinifyEnabled();
+                // Minify/R8 suspected of causing recurring CI runner deaths (Wheel-Fortune,
+                // 2026-09-29) — commented out for some period, not removed. See
+                // ZeyWinAdsSDK-Unity/CLAUDE.md before re-enabling.
+                // EnsureMinifyEnabled();
+                // StageMinifyKeepRules() stays ACTIVE even with minify off: CrashFixesPolicy
+                // requires the JNI keep rule unconditionally (guards against a future minify
+                // re-enable shipping without it), and the rule is a harmless no-op while R8
+                // never runs. Only EnsureMinifyEnabled/StageCrashlyticsLauncherTemplate are
+                // actually minify-gated.
                 StageMinifyKeepRules();
                 StageWorkManagerDependencyFix();
-                StageCrashlyticsLauncherTemplate();
+                // StageCrashlyticsLauncherTemplate();
             }
 
             var cfgPath = Path.Combine(Directory.GetCurrentDirectory(), "factory/factory-config.json");
